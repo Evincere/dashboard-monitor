@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -7,6 +8,7 @@ import {
   MessageSquare,
   Settings,
   Flame,
+  FileArchive,
 } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
@@ -42,6 +44,11 @@ const menuItems = [
     href: '/database',
     label: 'Base de Datos',
     icon: Database,
+  },
+   {
+    href: '/backups',
+    label: 'Backups',
+    icon: FileArchive,
   },
 ];
 

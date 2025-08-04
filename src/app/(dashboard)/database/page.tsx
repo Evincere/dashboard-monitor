@@ -1,8 +1,9 @@
+
 'use client';
 
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
-import { Database, Circle, Sparkles, Loader, FileQuestion } from 'lucide-react';
+import { Database, Circle, Sparkles, Loader, FileQuestion, FileArchive, FolderArchive } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import {
@@ -16,6 +17,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { handleGenerateSuggestions } from '@/lib/actions';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { Separator } from '@/components/ui/separator';
 
 const dbStatus = {
   connected: true,
@@ -30,6 +32,21 @@ const tableStats = [
   { table: 'documentos', rows: '15,829' },
   { table: 'evaluaciones', rows: '782' },
 ];
+
+const backupStats = {
+    lastBackup: '2024-07-30 02:00:00',
+    recentBackups: [
+        { date: '2024-07-30', size: '2.1 GB' },
+        { date: '2024-07-29', size: '2.1 GB' },
+        { date: '2024-07-28', size: '2.0 GB' },
+    ]
+}
+
+const docStats = {
+    totalDocs: '15,829',
+    totalSize: '25.3 GB'
+}
+
 
 const initialState = {
   suggestions: null,
@@ -145,6 +162,75 @@ export default function DatabasePage() {
                     <SubmitButton />
                 </form>
             </Card>
+
+             <Card className="bg-card/60 backdrop-blur-sm border-white/10 shadow-lg">
+                <CardHeader>
+                    <CardTitle className="font-headline flex items-center gap-2">
+                        <FileArchive />
+                        Gestión de Backups
+                    </CardTitle>
+                    <CardDescription>
+                        Crea y gestiona las copias de seguridad de la base de datos.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="flex items-center justify-between p-4 bg-background/50 rounded-lg">
+                        <div>
+                            <p className="text-sm text-muted-foreground">Último backup</p>
+                            <p className="font-mono text-foreground">{backupStats.lastBackup}</p>
+                        </div>
+                        <Button variant="outline">Crear Backup Ahora</Button>
+                    </div>
+                     <div>
+                        <h4 className="mb-2 text-sm font-medium text-muted-foreground">Backups Recientes</h4>
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Fecha</TableHead>
+                                    <TableHead className="text-right">Tamaño</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {backupStats.recentBackups.map((backup) => (
+                                <TableRow key={backup.date}>
+                                    <TableCell className="font-mono">{backup.date}</TableCell>
+                                    <TableCell className="text-right font-mono">{backup.size}</TableCell>
+                                </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
+                </CardContent>
+            </Card>
+
+             <Card className="bg-card/60 backdrop-blur-sm border-white/10 shadow-lg">
+                <CardHeader>
+                    <CardTitle className="font-headline flex items-center gap-2">
+                        <FolderArchive />
+                        Gestión de Documentación
+                    </CardTitle>
+                    <CardDescription>
+                        Administra los documentos subidos por los usuarios en los concursos.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4 text-center">
+                        <div className="p-4 bg-background/50 rounded-lg">
+                            <p className="text-sm text-muted-foreground">Total de Documentos</p>
+                            <p className="text-2xl font-bold font-headline">{docStats.totalDocs}</p>
+                        </div>
+                        <div className="p-4 bg-background/50 rounded-lg">
+                            <p className="text-sm text-muted-foreground">Espacio Utilizado</p>
+                            <p className="text-2xl font-bold font-headline">{docStats.totalSize}</p>
+                        </div>
+                    </div>
+                     <Separator className="my-4 bg-border/50" />
+                    <div className="flex justify-center">
+                         <Button>Gestionar Documentos</Button>
+                    </div>
+                </CardContent>
+            </Card>
+
         </div>
       </div>
     </div>
