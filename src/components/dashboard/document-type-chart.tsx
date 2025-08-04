@@ -32,7 +32,7 @@ const chartConfig = {
 
 export function DocumentTypeChart() {
   return (
-    <Card className="bg-card/60 backdrop-blur-sm border-white/10 shadow-lg">
+    <Card className="bg-card/60 backdrop-blur-sm border-white/10 shadow-lg h-full">
       <CardHeader>
         <CardTitle className="font-headline">Documentos por Categoría</CardTitle>
         <CardDescription>Distribución de los tipos de documentos subidos</CardDescription>
@@ -61,4 +61,3 @@ export function DocumentTypeChart() {
     </Card>
   )
 }
-

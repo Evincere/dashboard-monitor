@@ -7,6 +7,7 @@ import { MetricCard } from '@/components/dashboard/metric-card';
 import { UserGrowthChart } from '@/components/dashboard/user-growth-chart';
 import { ContestStatusChart } from '@/components/dashboard/contest-status-chart';
 import { DocumentTypeChart } from '@/components/dashboard/document-type-chart';
+import { RecentActivityWidget } from '@/components/dashboard/recent-activity-widget';
 
 function getRandomInt(min: number, max: number) {
   min = Math.ceil(min);
@@ -46,15 +47,18 @@ export default function DashboardPage() {
         <MetricCard title="Inscripciones" value={metrics.inscriptions.toLocaleString('es')} icon={UserCheck} />
         <MetricCard title="Almacenamiento Total" value={`${metrics.storageUsed.toLocaleString('es')} GB`} icon={HardDrive} />
       </div>
-      <div className="grid gap-4 md:gap-8 lg:grid-cols-5">
-        <div className="lg:col-span-3">
+      <div className="grid gap-4 md:gap-8 lg:grid-cols-3">
+        <div className="lg:col-span-2">
             <UserGrowthChart />
         </div>
-        <div className="lg:col-span-2">
-            <ContestStatusChart />
+        <div className="lg:col-span-1">
+            <RecentActivityWidget />
         </div>
-        <div className="lg:col-span-5">
+        <div className="lg:col-span-2">
             <DocumentTypeChart />
+        </div>
+        <div className="lg:col-span-1">
+            <ContestStatusChart />
         </div>
       </div>
     </main>
