@@ -3,6 +3,7 @@
 
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
+import Link from 'next/link';
 import { Database, Circle, Sparkles, Loader, FileQuestion, FileArchive, FolderArchive } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -179,7 +180,9 @@ export default function DatabasePage() {
                             <p className="text-sm text-muted-foreground">Último backup</p>
                             <p className="font-mono text-foreground">{backupStats.lastBackup}</p>
                         </div>
-                        <Button variant="outline">Crear Backup Ahora</Button>
+                        <Link href="/backups">
+                          <Button variant="outline">Ir a Backups</Button>
+                        </Link>
                     </div>
                      <div>
                         <h4 className="mb-2 text-sm font-medium text-muted-foreground">Backups Recientes</h4>
@@ -226,7 +229,9 @@ export default function DatabasePage() {
                     </div>
                      <Separator className="my-4 bg-border/50" />
                     <div className="flex justify-center">
-                         <Button>Gestionar Documentos</Button>
+                        <Link href="/documents">
+                           <Button>Gestionar Documentos</Button>
+                        </Link>
                     </div>
                 </CardContent>
             </Card>

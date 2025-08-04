@@ -9,6 +9,7 @@ import {
   Settings,
   Flame,
   FileArchive,
+  FolderKanban,
 } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
@@ -49,6 +50,11 @@ const menuItems = [
     href: '/backups',
     label: 'Backups',
     icon: FileArchive,
+  },
+  {
+    href: '/documents',
+    label: 'Documentos',
+    icon: FolderKanban,
   },
 ];
 
