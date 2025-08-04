@@ -81,7 +81,7 @@ const defaultNewContest: Omit<Contest, 'id'> & { startDate: Date | null; endDate
 
 export default function ContestsPage() {
     const [contests, setContests] = useState<Contest[]>(() =>
-        initialContestData.map(c => ({...c, startDate: new Date(c.startDate), endDate: new Date(c.endDate)}))
+        initialContestData.map(c => ({...c, startDate: new Date(c.startDate + 'T00:00:00'), endDate: new Date(c.endDate + 'T00:00:00')}))
     );
     const [editingContest, setEditingContest] = useState<Contest | null>(null);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -440,9 +440,3 @@ export default function ContestsPage() {
         </Dialog>
     </>
     );
-
-    
-
-    
-
-    
