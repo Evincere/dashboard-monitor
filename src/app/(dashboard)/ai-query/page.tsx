@@ -1,6 +1,6 @@
 'use client';
 
-import { useFormState, useFormStatus } from 'react-dom';
+import { useActionState, useFormStatus } from 'react';
 import { BrainCircuit, Loader, Wand2, Star, Clock } from 'lucide-react';
 import { handleAiQuery } from '@/lib/actions';
 import { Button } from '@/components/ui/button';
@@ -26,7 +26,7 @@ function SubmitButton() {
 }
 
 export default function AiQueryPage() {
-  const [state, formAction] = useFormState(handleAiQuery, initialState);
+  const [state, formAction] = useActionState(handleAiQuery, initialState);
 
   return (
     <div className="flex flex-col h-full p-4 md:p-8">

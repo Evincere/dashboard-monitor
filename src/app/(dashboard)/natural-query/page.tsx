@@ -1,6 +1,6 @@
 'use client';
 
-import { useFormState, useFormStatus } from 'react-dom';
+import { useActionState, useFormStatus } from 'react';
 import { MessageSquare, Loader, Send, Code } from 'lucide-react';
 import { handleNaturalQuery } from '@/lib/actions';
 import { Button } from '@/components/ui/button';
@@ -24,7 +24,7 @@ function SubmitButton() {
 }
 
 export default function NaturalQueryPage() {
-  const [state, formAction] = useFormState(handleNaturalQuery, initialState);
+  const [state, formAction] = useActionState(handleNaturalQuery, initialState);
 
   return (
     <div className="flex flex-col h-full p-4 md:p-8">
