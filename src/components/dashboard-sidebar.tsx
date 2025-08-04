@@ -68,7 +68,7 @@ export function DashboardSidebar() {
         <SidebarMenu>
           {menuItems.map((item) => (
             <SidebarMenuItem key={item.href}>
-              <Link href={item.href} legacyBehavior passHref>
+              <Link href={item.href}>
                 <SidebarMenuButton
                   isActive={pathname === item.href}
                   className="font-medium"
@@ -84,7 +84,7 @@ export function DashboardSidebar() {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <Link href={settingsItem.href} legacyBehavior passHref>
+            <Link href={settingsItem.href}>
               <SidebarMenuButton
                 isActive={pathname === settingsItem.href}
                 className="font-medium"
