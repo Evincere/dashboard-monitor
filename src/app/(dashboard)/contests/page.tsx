@@ -72,25 +72,49 @@ const initialContests: Contest[] = [
     { id: 'contest-004', name: 'Secretario de Juzgado', status: 'Abierto', startDate: new Date('2024-08-15'), endDate: new Date('2024-09-30') },
 ];
 
+const defaultNewContest: Omit<Contest, 'id'> = {
+    name: '',
+    status: 'Abierto',
+    startDate: new Date(),
+    endDate: new Date(),
+};
+
 export default function ContestsPage() {
     const [contests, setContests] = useState<Contest[]>(initialContests);
     const [editingContest, setEditingContest] = useState<Contest | null>(null);
-    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [newContest, setNewContest] = useState(defaultNewContest);
     const { toast } = useToast();
 
     const handleEditClick = (contest: Contest) => {
         setEditingContest({ ...contest });
-        setIsModalOpen(true);
+        setIsEditModalOpen(true);
     };
 
     const handleSaveContest = () => {
         if (!editingContest) return;
         setContests(contests.map(c => c.id === editingContest.id ? editingContest : c));
-        setIsModalOpen(false);
+        setIsEditModalOpen(false);
         setEditingContest(null);
         toast({
             title: 'Concurso Actualizado',
             description: 'Los datos del concurso se han guardado correctamente.',
+            className: 'bg-green-600 border-green-600 text-white'
+        });
+    };
+
+    const handleCreateContest = () => {
+        const contestToAdd = {
+            id: `contest-${Date.now()}`,
+            ...newContest
+        };
+        setContests([contestToAdd, ...contests]);
+        setIsCreateModalOpen(false);
+        setNewContest(defaultNewContest);
+         toast({
+            title: 'Concurso Creado',
+            description: 'El nuevo concurso ha sido creado exitosamente.',
             className: 'bg-green-600 border-green-600 text-white'
         });
     };
@@ -130,7 +154,7 @@ export default function ContestsPage() {
                         Crea, visualiza y administra los concursos del sistema.
                     </p>
                 </div>
-                <Button>
+                <Button onClick={() => setIsCreateModalOpen(true)}>
                     <Plus />
                     <span>Crear Nuevo Concurso</span>
                 </Button>
@@ -190,8 +214,10 @@ export default function ContestsPage() {
                 </CardContent>
             </Card>
         </div>
+
+        {/* Edit Contest Modal */}
         {editingContest && (
-            <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+            <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
                 <DialogContent className="sm:max-w-[480px]">
                     <DialogHeader>
                         <DialogTitle>Editar Concurso</DialogTitle>
@@ -285,12 +311,109 @@ export default function ContestsPage() {
                         </div>
                     </div>
                     <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
+                        <Button type="button" variant="outline" onClick={() => setIsEditModalOpen(false)}>Cancelar</Button>
                         <Button type="submit" onClick={handleSaveContest}>Guardar Cambios</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
         )}
+
+         {/* Create Contest Modal */}
+        <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+            <DialogContent className="sm:max-w-[480px]">
+                <DialogHeader>
+                    <DialogTitle>Crear Nuevo Concurso</DialogTitle>
+                    <DialogDescription>
+                        Completa los datos para crear un nuevo concurso.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="create-name" className="text-right">
+                            Nombre
+                        </Label>
+                        <Input
+                            id="create-name"
+                            value={newContest.name}
+                            onChange={(e) => setNewContest({ ...newContest, name: e.target.value })}
+                            className="col-span-3"
+                            placeholder="Ej: Juez de Paz"
+                        />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="create-status" className="text-right">
+                            Estado
+                        </Label>
+                        <Select
+                            value={newContest.status}
+                            onValueChange={(value: ContestStatus) => setNewContest({ ...newContest, status: value })}
+                        >
+                            <SelectTrigger className="col-span-3">
+                                <SelectValue placeholder="Seleccionar estado" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="Abierto">Abierto</SelectItem>
+                                <SelectItem value="En Evaluación">En Evaluación</SelectItem>
+                                <SelectItem value="Finalizado">Finalizado</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label className="text-right">
+                            Fecha Inicio
+                        </Label>
+                         <Popover>
+                            <PopoverTrigger asChild>
+                            <Button
+                                variant={"outline"}
+                                className={cn("col-span-3 justify-start text-left font-normal", !newContest.startDate && "text-muted-foreground")}
+                            >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {newContest.startDate ? format(newContest.startDate, "PPP") : <span>Elige una fecha</span>}
+                            </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0">
+                            <Calendar
+                                mode="single"
+                                selected={newContest.startDate}
+                                onSelect={(date) => date && setNewContest({...newContest, startDate: date})}
+                                initialFocus
+                            />
+                            </PopoverContent>
+                        </Popover>
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label className="text-right">
+                            Fecha Fin
+                        </Label>
+                         <Popover>
+                            <PopoverTrigger asChild>
+                            <Button
+                                variant={"outline"}
+                                className={cn("col-span-3 justify-start text-left font-normal", !newContest.endDate && "text-muted-foreground")}
+                            >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {newContest.endDate ? format(newContest.endDate, "PPP") : <span>Elige una fecha</span>}
+                            </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0">
+                            <Calendar
+                                mode="single"
+                                selected={newContest.endDate}
+                                onSelect={(date) => date && setNewContest({...newContest, endDate: date})}
+                                initialFocus
+                            />
+                            </PopoverContent>
+                        </Popover>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => setIsCreateModalOpen(false)}>Cancelar</Button>
+                    <Button type="submit" onClick={handleCreateContest}>Crear Concurso</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     </>
     );
-}
+
+    
