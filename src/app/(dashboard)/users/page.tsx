@@ -52,23 +52,24 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
-type UserRole = 'Administrador' | 'Evaluador' | 'Usuario';
+type UserRole = 'ROLE_ADMIN' | 'ROLE_USER';
 
 interface User {
-    id: string;
+    id: string; // binary(16) -> string
     name: string;
     username: string;
     email: string;
     role: UserRole;
-    registrationDate: string;
+    registrationDate: string; // created_at
+    status: 'ACTIVE' | 'BLOCKED' | 'INACTIVE';
 }
 
 const initialUsers: User[] = [
-    { id: 'user-001', name: 'Juan Pérez', username: 'jperez', email: 'juan.perez@example.com', role: 'Usuario', registrationDate: '2024-07-01' },
-    { id: 'user-002', name: 'María Gómez', username: 'mgomez', email: 'maria.gomez@example.com', role: 'Usuario', registrationDate: '2024-07-03' },
-    { id: 'user-003', name: 'Carlos López', username: 'clopez', email: 'carlos.lopez@example.com', role: 'Administrador', registrationDate: '2024-06-28' },
-    { id: 'user-004', name: 'Ana Martinez', username: 'amartinez', email: 'ana.martinez@example.com', role: 'Usuario', registrationDate: '2024-07-05' },
-    { id: 'user-005', name: 'Luis Fernández', username: 'lfernandez', email: 'luis.fernandez@example.com', role: 'Evaluador', registrationDate: '2024-07-02' },
+    { id: 'uuid-user-001', name: 'Juan Pérez', username: 'jperez', email: 'juan.perez@example.com', role: 'ROLE_USER', registrationDate: '2024-07-01', status: 'ACTIVE' },
+    { id: 'uuid-user-002', name: 'María Gómez', username: 'mgomez', email: 'maria.gomez@example.com', role: 'ROLE_USER', registrationDate: '2024-07-03', status: 'ACTIVE' },
+    { id: 'uuid-user-003', name: 'Carlos López', username: 'clopez', email: 'carlos.lopez@example.com', role: 'ROLE_ADMIN', registrationDate: '2024-06-28', status: 'INACTIVE' },
+    { id: 'uuid-user-004', name: 'Ana Martinez', username: 'amartinez', email: 'ana.martinez@example.com', role: 'ROLE_USER', registrationDate: '2024-07-05', status: 'BLOCKED' },
+    { id: 'uuid-user-005', name: 'Luis Fernández', username: 'lfernandez', email: 'luis.fernandez@example.com', role: 'ROLE_USER', registrationDate: '2024-07-02', status: 'ACTIVE' },
 ];
 
 export default function UsersPage() {
@@ -108,6 +109,15 @@ export default function UsersPage() {
         user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         user.email.toLowerCase().includes(searchTerm.toLowerCase())
     );
+
+    const getStatusBadgeVariant = (status: User['status']) => {
+        switch (status) {
+            case 'ACTIVE': return 'default';
+            case 'INACTIVE': return 'secondary';
+            case 'BLOCKED': return 'destructive';
+            default: return 'outline';
+        }
+    }
 
     return (
     <>
@@ -153,6 +163,7 @@ export default function UsersPage() {
                         <TableRow>
                             <TableHead>Nombre</TableHead>
                             <TableHead>Rol</TableHead>
+                            <TableHead>Estado</TableHead>
                             <TableHead>Fecha de Registro</TableHead>
                             <TableHead className="text-right">Acciones</TableHead>
                         </TableRow>
@@ -171,7 +182,8 @@ export default function UsersPage() {
                                         </div>
                                     </div>
                                 </TableCell>
-                                <TableCell><Badge variant={user.role === 'Administrador' ? 'default' : (user.role === 'Evaluador' ? 'secondary' : 'outline')}>{user.role}</Badge></TableCell>
+                                <TableCell><Badge variant={user.role === 'ROLE_ADMIN' ? 'default' : 'secondary'}>{user.role.replace('ROLE_', '')}</Badge></TableCell>
+                                <TableCell><Badge variant={getStatusBadgeVariant(user.status)}>{user.status}</Badge></TableCell>
                                 <TableCell className="font-mono">{user.registrationDate}</TableCell>
                                 <TableCell className="text-right space-x-2">
                                     <Link href={`/documents?user=${user.username}`} passHref legacyBehavior>
@@ -261,9 +273,8 @@ export default function UsersPage() {
                                 <SelectValue placeholder="Seleccionar rol" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="Administrador">Administrador</SelectItem>
-                                    <SelectItem value="Evaluador">Evaluador</SelectItem>
-                                    <SelectItem value="Usuario">Usuario</SelectItem>
+                                    <SelectItem value="ROLE_ADMIN">ADMIN</SelectItem>
+                                    <SelectItem value="ROLE_USER">USER</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -278,5 +289,3 @@ export default function UsersPage() {
     </>
     );
 }
-
-    

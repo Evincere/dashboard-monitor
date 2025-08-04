@@ -17,23 +17,23 @@ function getRandomInt(min: number, max: number) {
 
 export default function DashboardPage() {
   const [metrics, setMetrics] = useState({
-    activeUsers: 1254,
-    activeContests: 23,
-    processedDocs: 15829,
-    inscriptions: 2341,
+    activeUsers: 150,
+    activeContests: 1,
+    processedDocs: 499,
+    inscriptions: 87,
     storageUsed: 25.3,
   });
 
   useEffect(() => {
     const interval = setInterval(() => {
       setMetrics((prevMetrics) => ({
-        activeUsers: prevMetrics.activeUsers + getRandomInt(-2, 3),
+        activeUsers: prevMetrics.activeUsers,
         activeContests: prevMetrics.activeContests,
-        processedDocs: prevMetrics.processedDocs + getRandomInt(1, 5),
-        inscriptions: prevMetrics.inscriptions + getRandomInt(0, 2),
+        processedDocs: prevMetrics.processedDocs + getRandomInt(0, 1),
+        inscriptions: prevMetrics.inscriptions,
         storageUsed: prevMetrics.storageUsed
       }));
-    }, 3000); // Update every 3 seconds
+    }, 5000); // Update every 5 seconds
 
     return () => clearInterval(interval);
   }, []);
@@ -41,7 +41,7 @@ export default function DashboardPage() {
   return (
     <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
        <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-5">
-        <MetricCard title="Usuarios Activos" value={metrics.activeUsers.toLocaleString('es')} icon={Users} />
+        <MetricCard title="Usuarios Registrados" value={metrics.activeUsers.toLocaleString('es')} icon={Users} />
         <MetricCard title="Concursos Activos" value={metrics.activeContests.toLocaleString('es')} icon={Library} />
         <MetricCard title="Documentos Procesados" value={metrics.processedDocs.toLocaleString('es')} icon={FileText} />
         <MetricCard title="Inscripciones" value={metrics.inscriptions.toLocaleString('es')} icon={UserCheck} />
@@ -64,3 +64,4 @@ export default function DashboardPage() {
     </main>
   );
 }
+

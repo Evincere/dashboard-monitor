@@ -35,16 +35,26 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 
-const initialDocuments = [
-    { id: 'doc-001', name: 'CV_Juan_Perez.pdf', user: 'jperez', contest: 'Juez de Cámara', uploadDate: '2024-07-15', size: '1.2 MB' },
-    { id: 'doc-002', name: 'Titulo_Abogado_Maria_Gomez.pdf', user: 'mgomez', contest: 'Fiscal Auxiliar', uploadDate: '2024-07-14', size: '850 KB' },
-    { id: 'doc-003', name: 'Certificado_Antecedentes_Carlos_Lopez.jpg', user: 'clopez', contest: 'Defensor Oficial', uploadDate: '2024-07-12', size: '2.5 MB' },
-    { id: 'doc-004', name: 'DNI_Ana_Martinez.pdf', user: 'amartinez', contest: 'Juez de Cámara', uploadDate: '2024-07-15', size: '500 KB' },
-    { id: 'doc-005', name: 'Postgrado_Derecho_Penal_Luis_Fernandez.pdf', user: 'lfernandez', contest: 'Fiscal Auxiliar', uploadDate: '2024-07-13', size: '3.1 MB' },
+interface Document {
+    id: string; // binary(16)
+    name: string;
+    user: string; // From user_entity
+    document_type: string; // From document_types
+    uploadDate: string;
+    status: 'PENDING' | 'APPROVED' | 'REJECTED';
+    size: string;
+}
+
+const initialDocuments: Document[] = [
+    { id: 'doc-uuid-001', name: 'CV_Juan_Perez.pdf', user: 'jperez', document_type: 'CV', uploadDate: '2024-07-15', size: '1.2 MB', status: 'APPROVED' },
+    { id: 'doc-uuid-002', name: 'Titulo_Abogado_Maria_Gomez.pdf', user: 'mgomez', document_type: 'TITULO_GRADO', uploadDate: '2024-07-14', size: '850 KB', status: 'PENDING' },
+    { id: 'doc-uuid-003', name: 'Cert_Antecedentes_Carlos_Lopez.jpg', user: 'clopez', document_type: 'CERT_ANTECEDENTES', uploadDate: '2024-07-12', size: '2.5 MB', status: 'REJECTED' },
+    { id: 'doc-uuid-004', name: 'DNI_Ana_Martinez.pdf', user: 'amartinez', document_type: 'DNI', uploadDate: '2024-07-15', size: '500 KB', status: 'APPROVED' },
+    { id: 'doc-uuid-005', name: 'Postgrado_Derecho_Penal_Luis_Fernandez.pdf', user: 'lfernandez', document_type: 'TITULO_POSGRADO', uploadDate: '2024-07-13', size: '3.1 MB', status: 'APPROVED' },
 ];
 
 const docStats = {
-    totalDocs: '15,829',
+    totalDocs: '499',
     totalSize: '25.3 GB'
 };
 
@@ -70,10 +80,19 @@ function DocumentsPageContent() {
         });
     };
 
+    const getStatusBadgeVariant = (status: Document['status']) => {
+        switch (status) {
+            case 'APPROVED': return 'default';
+            case 'PENDING': return 'secondary';
+            case 'REJECTED': return 'destructive';
+            default: return 'outline';
+        }
+    }
+
     const filteredDocuments = documents.filter(doc =>
         doc.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         doc.user.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        doc.contest.toLowerCase().includes(searchTerm.toLowerCase())
+        doc.document_type.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     return (
@@ -107,7 +126,7 @@ function DocumentsPageContent() {
             <Card className="bg-card/60 backdrop-blur-sm border-white/10 shadow-lg md:col-span-2">
                 <CardHeader>
                     <CardTitle className="font-headline">Buscar Documentos</CardTitle>
-                    <CardDescription>Filtre por nombre de archivo, usuario o concurso.</CardDescription>
+                    <CardDescription>Filtre por nombre de archivo, usuario o tipo de documento.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <div className="relative">
@@ -134,9 +153,9 @@ function DocumentsPageContent() {
                     <TableRow>
                         <TableHead>Nombre del Archivo</TableHead>
                         <TableHead>Usuario</TableHead>
-                        <TableHead>Concurso</TableHead>
+                        <TableHead>Tipo de Documento</TableHead>
+                        <TableHead>Estado</TableHead>
                         <TableHead>Fecha de Carga</TableHead>
-                        <TableHead>Tamaño</TableHead>
                         <TableHead className="text-right">Acciones</TableHead>
                     </TableRow>
                     </TableHeader>
@@ -145,9 +164,9 @@ function DocumentsPageContent() {
                             <TableRow key={doc.id}>
                             <TableCell className="font-medium">{doc.name}</TableCell>
                             <TableCell><Badge variant="secondary">{doc.user}</Badge></TableCell>
-                            <TableCell>{doc.contest}</TableCell>
+                            <TableCell>{doc.document_type}</TableCell>
+                             <TableCell><Badge variant={getStatusBadgeVariant(doc.status)}>{doc.status}</Badge></TableCell>
                             <TableCell className="font-mono">{doc.uploadDate}</TableCell>
-                            <TableCell className="font-mono">{doc.size}</TableCell>
                             <TableCell className="text-right space-x-2">
                                 <Button variant="outline" size="icon">
                                     <Eye className="h-4 w-4" />
@@ -197,4 +216,3 @@ export default function DocumentsPage() {
         </Suspense>
     );
 }
-    

@@ -55,34 +55,30 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 
 
-type ContestStatus = 'Abierto' | 'En Evaluación' | 'Finalizado';
+type ContestStatus = 'ACTIVE' | 'ARCHIVED' | 'CANCELLED' | 'DRAFT';
 
 interface Contest {
-    id: string;
-    name: string;
+    id: number;
+    title: string;
     status: ContestStatus;
-    startDate: Date;
-    endDate: Date;
+    inscription_start_date: Date;
+    inscription_end_date: Date;
 }
 
-const initialContestData = [
-    { id: 'contest-001', name: 'Juez de Cámara', status: 'Abierto' as ContestStatus, startDate: '2024-08-01', endDate: '2024-09-15' },
-    { id: 'contest-002', name: 'Fiscal Auxiliar', status: 'En Evaluación' as ContestStatus, startDate: '2024-07-10', endDate: '2024-08-20' },
-    { id: 'contest-003', name: 'Defensor Oficial', status: 'Finalizado' as ContestStatus, startDate: '2024-05-01', endDate: '2024-06-30' },
-    { id: 'contest-004', name: 'Secretario de Juzgado', status: 'Abierto' as ContestStatus, startDate: '2024-08-15', endDate: '2024-09-30' },
+const initialContestData: Contest[] = [
+    { id: 1, title: 'MULTIFUERO', status: 'ACTIVE', inscription_start_date: new Date('2024-07-01T00:00:00'), inscription_end_date: new Date('2024-12-31T23:59:59') },
 ];
 
-const defaultNewContest: Omit<Contest, 'id'> & { startDate: Date | null; endDate: Date | null } = {
-    name: '',
-    status: 'Abierto',
-    startDate: null,
-    endDate: null,
+const defaultNewContest: Omit<Contest, 'id'> & { inscription_start_date: Date | null; inscription_end_date: Date | null } = {
+    title: '',
+    status: 'ACTIVE',
+    inscription_start_date: null,
+    inscription_end_date: null,
 };
 
+
 export default function ContestsPage() {
-    const [contests, setContests] = useState<Contest[]>(() =>
-        initialContestData.map(c => ({...c, startDate: new Date(c.startDate + 'T00:00:00'), endDate: new Date(c.endDate + 'T00:00:00')}))
-    );
+    const [contests, setContests] = useState<Contest[]>(initialContestData);
     const [editingContest, setEditingContest] = useState<Contest | null>(null);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -94,8 +90,8 @@ export default function ContestsPage() {
         if (isCreateModalOpen) {
             setNewContest(prev => ({
                 ...prev,
-                startDate: new Date(),
-                endDate: new Date(),
+                inscription_start_date: new Date(),
+                inscription_end_date: new Date(),
             }));
         }
     }, [isCreateModalOpen]);
@@ -118,7 +114,7 @@ export default function ContestsPage() {
     };
 
     const handleCreateContest = () => {
-        if (!newContest.name || !newContest.startDate || !newContest.endDate) {
+        if (!newContest.title || !newContest.inscription_start_date || !newContest.inscription_end_date) {
              toast({
                 title: 'Error',
                 description: 'Por favor, complete todos los campos para crear el concurso.',
@@ -128,11 +124,11 @@ export default function ContestsPage() {
         }
 
         const contestToAdd: Contest = {
-            id: `contest-${Date.now()}`,
-            name: newContest.name,
+            id: Date.now(),
+            title: newContest.title,
             status: newContest.status,
-            startDate: newContest.startDate,
-            endDate: newContest.endDate,
+            inscription_start_date: newContest.inscription_start_date,
+            inscription_end_date: newContest.inscription_end_date,
         };
         setContests([contestToAdd, ...contests]);
         setIsCreateModalOpen(false);
@@ -144,7 +140,7 @@ export default function ContestsPage() {
         });
     };
     
-    const handleDelete = (id: string) => {
+    const handleDelete = (id: number) => {
         setContests(contests.filter(contest => contest.id !== id));
         toast({
             title: 'Concurso Eliminado',
@@ -155,12 +151,12 @@ export default function ContestsPage() {
 
     const getStatusBadge = (status: ContestStatus) => {
         switch (status) {
-            case 'Abierto':
+            case 'ACTIVE':
                 return 'default';
-            case 'En Evaluación':
+            case 'ARCHIVED':
                 return 'secondary';
-            case 'Finalizado':
-                return 'outline';
+            case 'CANCELLED':
+                return 'destructive';
             default:
                 return 'outline';
         }
@@ -190,20 +186,20 @@ export default function ContestsPage() {
                     <Table>
                         <TableHeader>
                         <TableRow>
-                            <TableHead>Nombre del Concurso</TableHead>
+                            <TableHead>Título del Concurso</TableHead>
                             <TableHead>Estado</TableHead>
-                            <TableHead>Fecha de Inicio</TableHead>
-                            <TableHead>Fecha de Fin</TableHead>
+                            <TableHead>Fecha de Inicio Inscripción</TableHead>
+                            <TableHead>Fecha de Fin Inscripción</TableHead>
                             <TableHead className="text-right">Acciones</TableHead>
                         </TableRow>
                         </TableHeader>
                         <TableBody>
                             {contests.map((contest) => (
                                 <TableRow key={contest.id}>
-                                <TableCell className="font-medium">{contest.name}</TableCell>
+                                <TableCell className="font-medium">{contest.title}</TableCell>
                                 <TableCell><Badge variant={getStatusBadge(contest.status)}>{contest.status}</Badge></TableCell>
-                                <TableCell className="font-mono">{format(contest.startDate, 'dd/MM/yyyy')}</TableCell>
-                                <TableCell className="font-mono">{format(contest.endDate, 'dd/MM/yyyy')}</TableCell>
+                                <TableCell className="font-mono">{format(contest.inscription_start_date, 'dd/MM/yyyy HH:mm')}</TableCell>
+                                <TableCell className="font-mono">{format(contest.inscription_end_date, 'dd/MM/yyyy HH:mm')}</TableCell>
                                 <TableCell className="text-right space-x-2">
                                     <Button variant="outline" size="icon" onClick={() => handleEditClick(contest)}>
                                         <Edit className="h-4 w-4" />
@@ -220,7 +216,7 @@ export default function ContestsPage() {
                                         <AlertDialogHeader>
                                         <AlertDialogTitle>¿Está seguro de eliminar este concurso?</AlertDialogTitle>
                                         <AlertDialogDescription>
-                                            Esta acción no se puede deshacer. El concurso '{contest.name}' será eliminado permanentemente.
+                                            Esta acción no se puede deshacer. El concurso '{contest.title}' será eliminado permanentemente.
                                         </AlertDialogDescription>
                                         </AlertDialogHeader>
                                         <AlertDialogFooter>
@@ -253,12 +249,12 @@ export default function ContestsPage() {
                     <div className="grid gap-4 py-4">
                         <div className="grid grid-cols-4 items-center gap-4">
                             <Label htmlFor="name" className="text-right">
-                                Nombre
+                                Título
                             </Label>
                             <Input
                                 id="name"
-                                value={editingContest.name}
-                                onChange={(e) => setEditingContest({ ...editingContest, name: e.target.value })}
+                                value={editingContest.title}
+                                onChange={(e) => setEditingContest({ ...editingContest, title: e.target.value })}
                                 className="col-span-3"
                             />
                         </div>
@@ -274,9 +270,10 @@ export default function ContestsPage() {
                                 <SelectValue placeholder="Seleccionar estado" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="Abierto">Abierto</SelectItem>
-                                    <SelectItem value="En Evaluación">En Evaluación</SelectItem>
-                                    <SelectItem value="Finalizado">Finalizado</SelectItem>
+                                    <SelectItem value="ACTIVE">Activo</SelectItem>
+                                    <SelectItem value="ARCHIVED">Archivado</SelectItem>
+                                    <SelectItem value="CANCELLED">Cancelado</SelectItem>
+                                    <SelectItem value="DRAFT">Borrador</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -290,18 +287,18 @@ export default function ContestsPage() {
                                     variant={"outline"}
                                     className={cn(
                                     "col-span-3 justify-start text-left font-normal",
-                                    !editingContest.startDate && "text-muted-foreground"
+                                    !editingContest.inscription_start_date && "text-muted-foreground"
                                     )}
                                 >
                                     <CalendarIcon className="mr-2 h-4 w-4" />
-                                    {editingContest.startDate ? format(editingContest.startDate, "PPP") : <span>Elige una fecha</span>}
+                                    {editingContest.inscription_start_date ? format(editingContest.inscription_start_date, "PPP") : <span>Elige una fecha</span>}
                                 </Button>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-auto p-0">
                                 <Calendar
                                     mode="single"
-                                    selected={editingContest.startDate}
-                                    onSelect={(date) => date && setEditingContest({...editingContest, startDate: date})}
+                                    selected={editingContest.inscription_start_date}
+                                    onSelect={(date) => date && setEditingContest({...editingContest, inscription_start_date: date})}
                                     initialFocus
                                 />
                                 </PopoverContent>
@@ -317,18 +314,18 @@ export default function ContestsPage() {
                                     variant={"outline"}
                                     className={cn(
                                     "col-span-3 justify-start text-left font-normal",
-                                    !editingContest.endDate && "text-muted-foreground"
+                                    !editingContest.inscription_end_date && "text-muted-foreground"
                                     )}
                                 >
                                     <CalendarIcon className="mr-2 h-4 w-4" />
-                                    {editingContest.endDate ? format(editingContest.endDate, "PPP") : <span>Elige una fecha</span>}
+                                    {editingContest.inscription_end_date ? format(editingContest.inscription_end_date, "PPP") : <span>Elige una fecha</span>}
                                 </Button>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-auto p-0">
                                 <Calendar
                                     mode="single"
-                                    selected={editingContest.endDate}
-                                    onSelect={(date) => date && setEditingContest({...editingContest, endDate: date})}
+                                    selected={editingContest.inscription_end_date}
+                                    onSelect={(date) => date && setEditingContest({...editingContest, inscription_end_date: date})}
                                     initialFocus
                                 />
                                 </PopoverContent>
@@ -355,12 +352,12 @@ export default function ContestsPage() {
                 <div className="grid gap-4 py-4">
                     <div className="grid grid-cols-4 items-center gap-4">
                         <Label htmlFor="create-name" className="text-right">
-                            Nombre
+                            Título
                         </Label>
                         <Input
                             id="create-name"
-                            value={newContest.name}
-                            onChange={(e) => setNewContest({ ...newContest, name: e.target.value })}
+                            value={newContest.title}
+                            onChange={(e) => setNewContest({ ...newContest, title: e.target.value })}
                             className="col-span-3"
                             placeholder="Ej: Juez de Paz"
                         />
@@ -376,10 +373,11 @@ export default function ContestsPage() {
                             <SelectTrigger className="col-span-3">
                                 <SelectValue placeholder="Seleccionar estado" />
                             </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="Abierto">Abierto</SelectItem>
-                                <SelectItem value="En Evaluación">En Evaluación</SelectItem>
-                                <SelectItem value="Finalizado">Finalizado</SelectItem>
+                             <SelectContent>
+                                <SelectItem value="ACTIVE">Activo</SelectItem>
+                                <SelectItem value="ARCHIVED">Archivado</SelectItem>
+                                <SelectItem value="CANCELLED">Cancelado</SelectItem>
+                                <SelectItem value="DRAFT">Borrador</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
@@ -391,17 +389,17 @@ export default function ContestsPage() {
                             <PopoverTrigger asChild>
                             <Button
                                 variant={"outline"}
-                                className={cn("col-span-3 justify-start text-left font-normal", !newContest.startDate && "text-muted-foreground")}
+                                className={cn("col-span-3 justify-start text-left font-normal", !newContest.inscription_start_date && "text-muted-foreground")}
                             >
                                 <CalendarIcon className="mr-2 h-4 w-4" />
-                                {newContest.startDate ? format(newContest.startDate, "PPP") : <span>Elige una fecha...</span>}
+                                {newContest.inscription_start_date ? format(newContest.inscription_start_date, "PPP") : <span>Elige una fecha...</span>}
                             </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-0">
                             <Calendar
                                 mode="single"
-                                selected={newContest.startDate ?? undefined}
-                                onSelect={(date) => date && setNewContest({...newContest, startDate: date})}
+                                selected={newContest.inscription_start_date ?? undefined}
+                                onSelect={(date) => date && setNewContest({...newContest, inscription_start_date: date})}
                                 initialFocus
                             />
                             </PopoverContent>
@@ -415,17 +413,17 @@ export default function ContestsPage() {
                             <PopoverTrigger asChild>
                             <Button
                                 variant={"outline"}
-                                className={cn("col-span-3 justify-start text-left font-normal", !newContest.endDate && "text-muted-foreground")}
+                                className={cn("col-span-3 justify-start text-left font-normal", !newContest.inscription_end_date && "text-muted-foreground")}
                             >
                                 <CalendarIcon className="mr-2 h-4 w-4" />
-                                {newContest.endDate ? format(newContest.endDate, "PPP") : <span>Elige una fecha...</span>}
+                                {newContest.inscription_end_date ? format(newContest.inscription_end_date, "PPP") : <span>Elige una fecha...</span>}
                             </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-0">
                             <Calendar
                                 mode="single"
-                                selected={newContest.endDate ?? undefined}
-                                onSelect={(date) => date && setNewContest({...newContest, endDate: date})}
+                                selected={newContest.inscription_end_date ?? undefined}
+                                onSelect={(date) => date && setNewContest({...newContest, inscription_end_date: date})}
                                 initialFocus
                             />
                             </PopoverContent>
@@ -440,3 +438,4 @@ export default function ContestsPage() {
         </Dialog>
     </>
     );
+}
