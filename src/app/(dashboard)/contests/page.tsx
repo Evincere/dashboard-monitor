@@ -65,11 +65,11 @@ interface Contest {
     endDate: Date;
 }
 
-const initialContests: Contest[] = [
-    { id: 'contest-001', name: 'Juez de Cámara', status: 'Abierto', startDate: new Date('2024-08-01'), endDate: new Date('2024-09-15') },
-    { id: 'contest-002', name: 'Fiscal Auxiliar', status: 'En Evaluación', startDate: new Date('2024-07-10'), endDate: new Date('2024-08-20') },
-    { id: 'contest-003', name: 'Defensor Oficial', status: 'Finalizado', startDate: new Date('2024-05-01'), endDate: new Date('2024-06-30') },
-    { id: 'contest-004', name: 'Secretario de Juzgado', status: 'Abierto', startDate: new Date('2024-08-15'), endDate: new Date('2024-09-30') },
+const initialContestData = [
+    { id: 'contest-001', name: 'Juez de Cámara', status: 'Abierto' as ContestStatus, startDate: '2024-08-01', endDate: '2024-09-15' },
+    { id: 'contest-002', name: 'Fiscal Auxiliar', status: 'En Evaluación' as ContestStatus, startDate: '2024-07-10', endDate: '2024-08-20' },
+    { id: 'contest-003', name: 'Defensor Oficial', status: 'Finalizado' as ContestStatus, startDate: '2024-05-01', endDate: '2024-06-30' },
+    { id: 'contest-004', name: 'Secretario de Juzgado', status: 'Abierto' as ContestStatus, startDate: '2024-08-15', endDate: '2024-09-30' },
 ];
 
 const defaultNewContest: Omit<Contest, 'id'> & { startDate: Date | null; endDate: Date | null } = {
@@ -80,7 +80,9 @@ const defaultNewContest: Omit<Contest, 'id'> & { startDate: Date | null; endDate
 };
 
 export default function ContestsPage() {
-    const [contests, setContests] = useState<Contest[]>(initialContests);
+    const [contests, setContests] = useState<Contest[]>(() =>
+        initialContestData.map(c => ({...c, startDate: new Date(c.startDate), endDate: new Date(c.endDate)}))
+    );
     const [editingContest, setEditingContest] = useState<Contest | null>(null);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -89,11 +91,13 @@ export default function ContestsPage() {
 
     useEffect(() => {
         // Set dates only on the client side to avoid hydration mismatch
-        setNewContest(prev => ({
-            ...prev,
-            startDate: new Date(),
-            endDate: new Date(),
-        }));
+        if (isCreateModalOpen) {
+            setNewContest(prev => ({
+                ...prev,
+                startDate: new Date(),
+                endDate: new Date(),
+            }));
+        }
     }, [isCreateModalOpen]);
 
     const handleEditClick = (contest: Contest) => {
@@ -114,7 +118,14 @@ export default function ContestsPage() {
     };
 
     const handleCreateContest = () => {
-        if (!newContest.startDate || !newContest.endDate) return;
+        if (!newContest.name || !newContest.startDate || !newContest.endDate) {
+             toast({
+                title: 'Error',
+                description: 'Por favor, complete todos los campos para crear el concurso.',
+                variant: 'destructive',
+            });
+            return;
+        }
 
         const contestToAdd: Contest = {
             id: `contest-${Date.now()}`,
@@ -429,6 +440,8 @@ export default function ContestsPage() {
         </Dialog>
     </>
     );
+
+    
 
     
 
