@@ -4,7 +4,7 @@
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 import Link from 'next/link';
-import { Database, Circle, Sparkles, Loader, FileQuestion, FileArchive, FolderArchive } from 'lucide-react';
+import { Database, Circle, Sparkles, Loader, FileQuestion, FileArchive, FolderArchive, HelpCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import {
@@ -132,7 +132,7 @@ export default function DatabasePage() {
             <Card className="bg-card/60 backdrop-blur-sm border-white/10 shadow-lg flex flex-col">
                 <CardHeader>
                     <CardTitle className="font-headline flex items-center gap-2">
-                        <FileQuestion />
+                        <HelpCircle />
                         Sugerencias de Consultas IA
                     </CardTitle>
                     <CardDescription>

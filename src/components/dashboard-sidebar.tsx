@@ -11,6 +11,11 @@ import {
   FileArchive,
   FolderKanban,
   Users,
+  BarChart3,
+  FileText,
+  User,
+  FileClock,
+  BookUser
 } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
@@ -30,7 +35,7 @@ const menuItems = [
   {
     href: '/',
     label: 'Dashboard',
-    icon: LayoutDashboard,
+    icon: BarChart3,
   },
   {
     href: '/ai-query',
@@ -50,17 +55,17 @@ const menuItems = [
    {
     href: '/backups',
     label: 'Backups',
-    icon: FileArchive,
+    icon: FileClock,
   },
   {
     href: '/documents',
     label: 'Documentos',
-    icon: FolderKanban,
+    icon: FileText,
   },
   {
     href: '/users',
     label: 'Usuarios',
-    icon: Users,
+    icon: BookUser,
   }
 ];
 
