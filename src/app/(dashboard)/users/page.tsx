@@ -174,7 +174,7 @@ export default function UsersPage() {
                                 <TableCell><Badge variant={user.role === 'Administrador' ? 'default' : (user.role === 'Evaluador' ? 'secondary' : 'outline')}>{user.role}</Badge></TableCell>
                                 <TableCell className="font-mono">{user.registrationDate}</TableCell>
                                 <TableCell className="text-right space-x-2">
-                                    <Link href={`/documents?user=${user.username}`} passHref>
+                                    <Link href={`/documents?user=${user.username}`} passHref legacyBehavior>
                                         <Button variant="outline" size="icon" asChild>
                                             <a>
                                                 <Files className="h-4 w-4" />
