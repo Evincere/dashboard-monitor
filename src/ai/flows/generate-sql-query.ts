@@ -10,6 +10,7 @@
  */
 
 import {ai} from '@/ai/genkit';
+import { executeQuery, getDbSchema } from '@/services/database';
 import {z} from 'genkit';
 
 const GenerateSqlQueryInputSchema = z.object({
@@ -19,7 +20,7 @@ export type GenerateSqlQueryInput = z.infer<typeof GenerateSqlQueryInputSchema>;
 
 const GenerateSqlQueryOutputSchema = z.object({
   sqlQuery: z.string().describe('The generated SQL query.'),
-  answer: z.string().describe('The answer from the database.'),
+  answer: z.string().describe('The answer from the database, as a JSON string.'),
 });
 export type GenerateSqlQueryOutput = z.infer<typeof GenerateSqlQueryOutputSchema>;
 
@@ -27,31 +28,47 @@ export async function generateSqlQuery(input: GenerateSqlQueryInput): Promise<Ge
   return generateSqlQueryFlow(input);
 }
 
-const generateSqlQueryPrompt = ai.definePrompt({
-  name: 'generateSqlQueryPrompt',
-  input: {schema: GenerateSqlQueryInputSchema},
-  output: {schema: GenerateSqlQueryOutputSchema},
-  prompt: `You are a SQL expert. Translate the following natural language question into a SQL query that can be executed against a MySQL database.
-
-Question: {{{question}}}
-
-SQL Query:`, // DO NOT include the answer here, that is obtained by running this query.
-});
-
 const generateSqlQueryFlow = ai.defineFlow(
   {
     name: 'generateSqlQueryFlow',
     inputSchema: GenerateSqlQueryInputSchema,
     outputSchema: GenerateSqlQueryOutputSchema,
   },
-  async input => {
-    const {output} = await generateSqlQueryPrompt(input);
-    // Here, you would execute the SQL query against the database
-    // and then return the result in the answer field.
-    // For now, we'll just return a placeholder.
-    return {
-      sqlQuery: output?.sqlQuery ?? 'SELECT * FROM users;',
-      answer: 'This is a placeholder answer from the database.',
-    };
+  async ({ question }) => {
+    const dbSchema = await getDbSchema();
+    const schemaString = JSON.stringify(dbSchema, null, 2);
+
+    const prompt = `You are a SQL expert. Translate the following natural language question into a SQL query that can be executed against a MySQL database.
+Use the following database schema to construct the query. The schema is provided in JSON format.
+
+Database Schema:
+${schemaString}
+
+Question: ${question}
+
+SQL Query:`;
+
+    const llmResponse = await ai.generate({
+        prompt: prompt,
+        config: {
+            temperature: 0.3
+        }
+    });
+
+    const sqlQuery = llmResponse.text.trim().replace(/```sql\n?|```/g, '').replace(/[\r\n]/g, ' ');
+
+    try {
+        const results = await executeQuery(sqlQuery);
+        return {
+            sqlQuery: sqlQuery,
+            answer: JSON.stringify(results, null, 2),
+        };
+    } catch (error: any) {
+        console.error('Error executing SQL query:', error);
+        return {
+            sqlQuery: sqlQuery,
+            answer: `Error executing query: ${error.message}`,
+        };
+    }
   }
 );

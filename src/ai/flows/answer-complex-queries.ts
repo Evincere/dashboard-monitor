@@ -10,7 +10,9 @@
  */
 
 import {ai} from '@/ai/genkit';
+import { executeQuery, getDbSchema } from '@/services/database';
 import {z} from 'genkit';
+import { summarizeQueryResults } from './summarize-query-results';
 
 const AnswerComplexQueriesInputSchema = z.object({
   question: z.string().describe('The complex, open-ended question about the MPD contest system.'),
@@ -28,18 +30,6 @@ export async function answerComplexQueries(input: AnswerComplexQueriesInput): Pr
   return answerComplexQueriesFlow(input);
 }
 
-const answerComplexQueriesPrompt = ai.definePrompt({
-  name: 'answerComplexQueriesPrompt',
-  input: {schema: AnswerComplexQueriesInputSchema},
-  output: {schema: AnswerComplexQueriesOutputSchema},
-  prompt: `You are an AI assistant that answers complex, open-ended questions about the MPD contest system.
-
-  The user will ask a question, and you must decompose it into sub-queries, execute them, and provide a detailed, synthesized response.
-
-  Question: {{{question}}}
-
-  Answer:`, // DO NOT include the answer here, that is obtained by running this query.
-});
 
 const answerComplexQueriesFlow = ai.defineFlow(
   {
@@ -47,17 +37,105 @@ const answerComplexQueriesFlow = ai.defineFlow(
     inputSchema: AnswerComplexQueriesInputSchema,
     outputSchema: AnswerComplexQueriesOutputSchema,
   },
-  async input => {
+  async ({ question }) => {
     const startTime = Date.now();
-    const {output} = await answerComplexQueriesPrompt(input);
+    const dbSchema = await getDbSchema();
+    const schemaString = JSON.stringify(dbSchema, null, 2);
+
+    const plannerPrompt = ai.definePrompt({
+        name: 'complexQueryPlannerPrompt',
+        input: { schema: z.object({ question: z.string(), schema: z.string() }) },
+        output: { schema: z.object({ 
+            plan: z.string().describe("A step-by-step plan to answer the question."),
+            subQueries: z.array(z.object({
+                id: z.string().describe("A unique identifier for the sub-query (e.g., 'q1')."),
+                query: z.string().describe("A specific SQL query to execute."),
+                dependency: z.string().optional().describe("The ID of a sub-query this query depends on (e.g., 'q1')."),
+                description: z.string().describe("A description of what this query is trying to achieve."),
+            })),
+        }) },
+        prompt: `You are an expert AI assistant that answers complex, open-ended questions about a database.
+Your task is to decompose a complex user question into a series of smaller, executable SQL sub-queries.
+You will be given the database schema to help you construct the queries.
+
+Your plan should outline how you will use the results of these sub-queries to construct a final, synthesized answer.
+
+Database Schema:
+{{{schema}}}
+
+User Question:
+{{{question}}}
+`,
+        config: { temperature: 0.1 }
+    });
+
+    const { output: planOutput } = await plannerPrompt({ question, schema: schemaString });
+    
+    if (!planOutput || planOutput.subQueries.length === 0) {
+        return {
+            answer: 'I was unable to create a plan to answer your question. Please try rephrasing it.',
+            queryQuality: 'Low',
+            processingTime: `${Date.now() - startTime}`
+        }
+    }
+
+    const queryResults: Record<string, any> = {};
+
+    for (const subQuery of planOutput.subQueries) {
+        // Simple dependency handling - can be improved for parallel execution
+        let currentQuery = subQuery.query;
+        if (subQuery.dependency && queryResults[subQuery.dependency]) {
+            // Basic replacement, could be more sophisticated
+            const dependentResult = queryResults[subQuery.dependency];
+            if(Array.isArray(dependentResult) && dependentResult.length > 0) {
+                const ids = dependentResult.map(r => typeof r.id === 'number' ? r.id : `'${r.id}'`).join(',');
+                currentQuery = currentQuery.replace(`'{{{${subQuery.dependency}.ids}}}'`, `(${ids})`);
+            }
+        }
+        
+        try {
+            queryResults[subQuery.id] = await executeQuery(currentQuery);
+        } catch (e: any) {
+            queryResults[subQuery.id] = { error: e.message };
+        }
+    }
+
+    const synthesizerPrompt = ai.definePrompt({
+        name: 'complexQuerySynthesizerPrompt',
+        input: { schema: z.object({ 
+            question: z.string(), 
+            plan: z.string(), 
+            results: z.string() 
+        }) },
+        output: { schema: z.object({ finalAnswer: z.string() }) },
+        prompt: `You are an AI assistant. Your goal is to synthesize a final, human-readable answer to a user's question based on a plan and the results of several SQL queries.
+
+User's Original Question:
+{{{question}}}
+
+Your Execution Plan:
+{{{plan}}}
+
+Query Results (in JSON format):
+{{{results}}}
+
+---
+Based on the plan and the data from the query results, provide a comprehensive, well-structured, and easy-to-understand answer to the user's original question. Do not just repeat the data; interpret it and present the key insights.
+Final Answer:`,
+        config: { temperature: 0.7 }
+    });
+
+    const { output: finalOutput } = await synthesizerPrompt({
+        question,
+        plan: planOutput.plan,
+        results: JSON.stringify(queryResults, null, 2),
+    });
+
     const endTime = Date.now();
     const processingTime = (endTime - startTime).toString();
-
-    // Here, you would execute the sub-queries against the database
-    // and then return the result in the answer field.
-    // For now, we'll just return a placeholder.
+    
     return {
-      answer: output?.answer ?? 'This is a placeholder answer to the complex question.',
+      answer: finalOutput?.finalAnswer ?? 'No se pudo sintetizar una respuesta final.',
       queryQuality: 'High',
       processingTime: processingTime,
     };

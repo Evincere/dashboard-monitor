@@ -4,6 +4,7 @@
 import { translateNaturalQuery } from '@/ai/flows/translate-natural-query';
 import { answerComplexQueries } from '@/ai/flows/answer-complex-queries';
 import { generateQuerySuggestions } from '@/ai/flows/generate-query-suggestions';
+import { getDbSchema } from '@/services/database';
 import { z } from 'zod';
 
 const naturalQuerySchema = z.object({
@@ -13,14 +14,6 @@ const naturalQuerySchema = z.object({
 const aiQuerySchema = z.object({
   question: z.string().min(1, 'La consulta no puede estar vacía.'),
 });
-
-const tableStats = [
-  { table: 'usuarios', rows: '1,254' },
-  { table: 'concursos', rows: '48' },
-  { table: 'inscripciones', rows: '2,341' },
-  { table: 'documentos', rows: '15,829' },
-  { table: 'evaluaciones', rows: '782' },
-];
 
 export async function handleNaturalQuery(prevState: any, formData: FormData) {
   try {
@@ -36,9 +29,6 @@ export async function handleNaturalQuery(prevState: any, formData: FormData) {
       };
     }
     
-    // Simulate some latency for better UX
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
     const result = await translateNaturalQuery({ question: validatedFields.data.question });
     return {
       error: null,
@@ -70,7 +60,6 @@ export async function handleAiQuery(prevState: any, formData: FormData) {
       };
     }
     
-    // The answerComplexQueries flow includes its own processing logic and latency simulation.
     const result = await answerComplexQueries({
       question: validatedFields.data.question,
     });
@@ -97,11 +86,10 @@ export async function handleAiQuery(prevState: any, formData: FormData) {
 
 export async function handleGenerateSuggestions(prevState: any, formData: FormData) {
     try {
-        const schema = tableStats.map(t => t.table).join(', ');
+        const schema = await getDbSchema();
+        const schemaString = JSON.stringify(schema, null, 2);
         
-        await new Promise(resolve => setTimeout(resolve, 1200));
-
-        const result = await generateQuerySuggestions({ databaseSchema: schema });
+        const result = await generateQuerySuggestions({ databaseSchema: schemaString });
 
         return {
             suggestions: result.suggestions,

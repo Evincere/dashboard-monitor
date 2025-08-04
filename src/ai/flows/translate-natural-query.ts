@@ -10,7 +10,9 @@
  */
 
 import {ai} from '@/ai/genkit';
+import { executeQuery, getDbSchema } from '@/services/database';
 import {z} from 'genkit';
+import { summarizeQueryResults } from './summarize-query-results';
 
 const TranslateNaturalQueryInputSchema = z.object({
   question: z.string().describe('The natural language question in Spanish to translate into a SQL query.'),
@@ -27,31 +29,67 @@ export async function translateNaturalQuery(input: TranslateNaturalQueryInput): 
   return translateNaturalQueryFlow(input);
 }
 
-const translateNaturalQueryPrompt = ai.definePrompt({
-  name: 'translateNaturalQueryPrompt',
-  input: {schema: TranslateNaturalQueryInputSchema},
-  output: {schema: TranslateNaturalQueryOutputSchema},
-  prompt: `Eres un experto en SQL. Traduce la siguiente pregunta en lenguaje natural al español a una consulta SQL que se pueda ejecutar en una base de datos MySQL.\
-\
-Pregunta: {{{question}}}
-\
-Consulta SQL:`,
-});
-
 const translateNaturalQueryFlow = ai.defineFlow(
   {
     name: 'translateNaturalQueryFlow',
     inputSchema: TranslateNaturalQueryInputSchema,
     outputSchema: TranslateNaturalQueryOutputSchema,
   },
-  async input => {
-    const {output} = await translateNaturalQueryPrompt(input);
-    // Here, you would execute the SQL query against the database
-    // and then return the result in the answer field.
-    // For now, we'll just return a placeholder.
-    return {
-      sqlQuery: output?.sqlQuery ?? 'SELECT * FROM users;',
-      answer: 'Esta es una respuesta de marcador de posición de la base de datos.',
-    };
+  async ({ question }) => {
+    const dbSchema = await getDbSchema();
+    const schemaString = JSON.stringify(dbSchema, null, 2);
+
+    const sqlGenPrompt = ai.definePrompt({
+        name: 'translateNaturalQueryPrompt',
+        input: { schema: z.object({ question: z.string(), schema: z.string() }) },
+        output: { schema: z.object({ sqlQuery: z.string() }) },
+        prompt: `Eres un experto en SQL. Traduce la siguiente pregunta en lenguaje natural al español a una consulta SQL que se pueda ejecutar en una base de datos MySQL.
+Utiliza el siguiente esquema de base de datos para construir la consulta. El esquema se proporciona en formato JSON.
+
+Esquema de la Base de Datos:
+{{{schema}}}
+
+Pregunta: {{{question}}}
+
+Consulta SQL:`
+    });
+
+    const { output } = await sqlGenPrompt({ question, schema: schemaString });
+    const sqlQuery = output?.sqlQuery ?? '';
+
+    if (!sqlQuery) {
+        return {
+            sqlQuery: '',
+            answer: 'No se pudo generar una consulta SQL para esa pregunta.',
+        }
+    }
+
+    try {
+        const results = await executeQuery(sqlQuery);
+        const resultsString = JSON.stringify(results, null, 2);
+
+        if (Array.isArray(results) && results.length === 0) {
+            return {
+                sqlQuery,
+                answer: "La consulta no devolvió resultados."
+            }
+        }
+
+        const summary = await summarizeQueryResults({
+            query: question,
+            results: resultsString,
+        });
+
+        return {
+            sqlQuery: sqlQuery,
+            answer: summary.summary,
+        };
+    } catch (error: any) {
+        console.error("Error executing natural query flow:", error);
+        return {
+            sqlQuery,
+            answer: `Hubo un error al ejecutar la consulta: ${error.message}`
+        }
+    }
   }
 );
