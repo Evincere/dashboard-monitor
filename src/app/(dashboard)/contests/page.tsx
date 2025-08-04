@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Library, Edit, Trash2, Plus, Calendar as CalendarIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -72,11 +72,11 @@ const initialContests: Contest[] = [
     { id: 'contest-004', name: 'Secretario de Juzgado', status: 'Abierto', startDate: new Date('2024-08-15'), endDate: new Date('2024-09-30') },
 ];
 
-const defaultNewContest: Omit<Contest, 'id'> = {
+const defaultNewContest: Omit<Contest, 'id'> & { startDate: Date | null; endDate: Date | null } = {
     name: '',
     status: 'Abierto',
-    startDate: new Date(),
-    endDate: new Date(),
+    startDate: null,
+    endDate: null,
 };
 
 export default function ContestsPage() {
@@ -86,6 +86,15 @@ export default function ContestsPage() {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [newContest, setNewContest] = useState(defaultNewContest);
     const { toast } = useToast();
+
+    useEffect(() => {
+        // Set dates only on the client side to avoid hydration mismatch
+        setNewContest(prev => ({
+            ...prev,
+            startDate: new Date(),
+            endDate: new Date(),
+        }));
+    }, [isCreateModalOpen]);
 
     const handleEditClick = (contest: Contest) => {
         setEditingContest({ ...contest });
@@ -105,9 +114,14 @@ export default function ContestsPage() {
     };
 
     const handleCreateContest = () => {
-        const contestToAdd = {
+        if (!newContest.startDate || !newContest.endDate) return;
+
+        const contestToAdd: Contest = {
             id: `contest-${Date.now()}`,
-            ...newContest
+            name: newContest.name,
+            status: newContest.status,
+            startDate: newContest.startDate,
+            endDate: newContest.endDate,
         };
         setContests([contestToAdd, ...contests]);
         setIsCreateModalOpen(false);
@@ -369,13 +383,13 @@ export default function ContestsPage() {
                                 className={cn("col-span-3 justify-start text-left font-normal", !newContest.startDate && "text-muted-foreground")}
                             >
                                 <CalendarIcon className="mr-2 h-4 w-4" />
-                                {newContest.startDate ? format(newContest.startDate, "PPP") : <span>Elige una fecha</span>}
+                                {newContest.startDate ? format(newContest.startDate, "PPP") : <span>Elige una fecha...</span>}
                             </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-0">
                             <Calendar
                                 mode="single"
-                                selected={newContest.startDate}
+                                selected={newContest.startDate ?? undefined}
                                 onSelect={(date) => date && setNewContest({...newContest, startDate: date})}
                                 initialFocus
                             />
@@ -393,13 +407,13 @@ export default function ContestsPage() {
                                 className={cn("col-span-3 justify-start text-left font-normal", !newContest.endDate && "text-muted-foreground")}
                             >
                                 <CalendarIcon className="mr-2 h-4 w-4" />
-                                {newContest.endDate ? format(newContest.endDate, "PPP") : <span>Elige una fecha</span>}
+                                {newContest.endDate ? format(newContest.endDate, "PPP") : <span>Elige una fecha...</span>}
                             </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-0">
                             <Calendar
                                 mode="single"
-                                selected={newContest.endDate}
+                                selected={newContest.endDate ?? undefined}
                                 onSelect={(date) => date && setNewContest({...newContest, endDate: date})}
                                 initialFocus
                             />
@@ -415,5 +429,7 @@ export default function ContestsPage() {
         </Dialog>
     </>
     );
+
+    
 
     
