@@ -3,6 +3,7 @@
 
 import { translateNaturalQuery } from '@/ai/flows/translate-natural-query';
 import { answerComplexQueries } from '@/ai/flows/answer-complex-queries';
+import { generateQuerySuggestions } from '@/ai/flows/generate-query-suggestions';
 import { z } from 'zod';
 
 const naturalQuerySchema = z.object({
@@ -12,6 +13,14 @@ const naturalQuerySchema = z.object({
 const aiQuerySchema = z.object({
   question: z.string().min(1, 'La consulta no puede estar vacía.'),
 });
+
+const tableStats = [
+  { table: 'usuarios', rows: '1,254' },
+  { table: 'concursos', rows: '48' },
+  { table: 'inscripciones', rows: '2,341' },
+  { table: 'documentos', rows: '15,829' },
+  { table: 'evaluaciones', rows: '782' },
+];
 
 export async function handleNaturalQuery(prevState: any, formData: FormData) {
   try {
@@ -84,4 +93,26 @@ export async function handleAiQuery(prevState: any, formData: FormData) {
       processingTime: null,
     };
   }
+}
+
+export async function handleGenerateSuggestions(prevState: any, formData: FormData) {
+    try {
+        const schema = tableStats.map(t => t.table).join(', ');
+        
+        await new Promise(resolve => setTimeout(resolve, 1200));
+
+        const result = await generateQuerySuggestions({ databaseSchema: schema });
+
+        return {
+            suggestions: result.suggestions,
+            error: null,
+        };
+
+    } catch (error) {
+        console.error('Error generating suggestions:', error);
+        return {
+            suggestions: null,
+            error: 'No se pudieron generar sugerencias en este momento.',
+        };
+    }
 }
