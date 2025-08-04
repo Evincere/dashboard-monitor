@@ -2,7 +2,8 @@
 'use client';
 
 import { useState } from 'react';
-import { Users, Search, Edit, Trash2 } from 'lucide-react';
+import { Users, Search, Edit, Trash2, Files } from 'lucide-react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -56,17 +57,18 @@ type UserRole = 'Administrador' | 'Evaluador' | 'Usuario';
 interface User {
     id: string;
     name: string;
+    username: string;
     email: string;
     role: UserRole;
     registrationDate: string;
 }
 
 const initialUsers: User[] = [
-    { id: 'user-001', name: 'Juan Pérez', email: 'juan.perez@example.com', role: 'Usuario', registrationDate: '2024-07-01' },
-    { id: 'user-002', name: 'María Gómez', email: 'maria.gomez@example.com', role: 'Usuario', registrationDate: '2024-07-03' },
-    { id: 'user-003', name: 'Carlos López', email: 'carlos.lopez@example.com', role: 'Administrador', registrationDate: '2024-06-28' },
-    { id: 'user-004', name: 'Ana Martinez', email: 'ana.martinez@example.com', role: 'Usuario', registrationDate: '2024-07-05' },
-    { id: 'user-005', name: 'Luis Fernández', email: 'luis.fernandez@example.com', role: 'Evaluador', registrationDate: '2024-07-02' },
+    { id: 'user-001', name: 'Juan Pérez', username: 'jperez', email: 'juan.perez@example.com', role: 'Usuario', registrationDate: '2024-07-01' },
+    { id: 'user-002', name: 'María Gómez', username: 'mgomez', email: 'maria.gomez@example.com', role: 'Usuario', registrationDate: '2024-07-03' },
+    { id: 'user-003', name: 'Carlos López', username: 'clopez', email: 'carlos.lopez@example.com', role: 'Administrador', registrationDate: '2024-06-28' },
+    { id: 'user-004', name: 'Ana Martinez', username: 'amartinez', email: 'ana.martinez@example.com', role: 'Usuario', registrationDate: '2024-07-05' },
+    { id: 'user-005', name: 'Luis Fernández', username: 'lfernandez', email: 'luis.fernandez@example.com', role: 'Evaluador', registrationDate: '2024-07-02' },
 ];
 
 export default function UsersPage() {
@@ -172,6 +174,14 @@ export default function UsersPage() {
                                 <TableCell><Badge variant={user.role === 'Administrador' ? 'default' : (user.role === 'Evaluador' ? 'secondary' : 'outline')}>{user.role}</Badge></TableCell>
                                 <TableCell className="font-mono">{user.registrationDate}</TableCell>
                                 <TableCell className="text-right space-x-2">
+                                    <Link href={`/documents?user=${user.username}`} passHref>
+                                        <Button variant="outline" size="icon" asChild>
+                                            <a>
+                                                <Files className="h-4 w-4" />
+                                                <span className="sr-only">Ver Documentos</span>
+                                            </a>
+                                        </Button>
+                                    </Link>
                                     <Button variant="outline" size="icon" onClick={() => handleEditClick(user)}>
                                         <Edit className="h-4 w-4" />
                                         <span className="sr-only">Editar</span>
@@ -268,3 +278,5 @@ export default function UsersPage() {
     </>
     );
 }
+
+    

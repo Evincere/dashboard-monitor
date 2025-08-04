@@ -1,7 +1,8 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { FolderKanban, Search, FileDown, Eye, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -47,10 +48,18 @@ const docStats = {
     totalSize: '25.3 GB'
 };
 
-export default function DocumentsPage() {
+function DocumentsPageContent() {
     const [documents, setDocuments] = useState(initialDocuments);
     const [searchTerm, setSearchTerm] = useState('');
     const { toast } = useToast();
+    const searchParams = useSearchParams();
+
+    useEffect(() => {
+        const userFilter = searchParams.get('user');
+        if (userFilter) {
+            setSearchTerm(userFilter);
+        }
+    }, [searchParams]);
 
     const handleDelete = (id: string) => {
         setDocuments(documents.filter(doc => doc.id !== id));
@@ -180,3 +189,12 @@ export default function DocumentsPage() {
     </div>
     );
 }
+
+export default function DocumentsPage() {
+    return (
+        <Suspense fallback={<div>Loading...</div>}>
+            <DocumentsPageContent />
+        </Suspense>
+    );
+}
+    
