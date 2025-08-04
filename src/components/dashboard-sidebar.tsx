@@ -15,7 +15,8 @@ import {
   FileText,
   User,
   FileClock,
-  BookUser
+  BookUser,
+  Library
 } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
@@ -46,6 +47,11 @@ const menuItems = [
     href: '/natural-query',
     label: 'Consulta Natural',
     icon: MessageSquare,
+  },
+    {
+    href: '/contests',
+    label: 'Concursos',
+    icon: Library,
   },
   {
     href: '/database',
