@@ -1,6 +1,7 @@
 'use client';
 
-import { useActionState, useFormStatus } from 'react';
+import { useActionState } from 'react';
+import { useFormStatus } from 'react-dom';
 import { MessageSquare, Loader, Send, Code } from 'lucide-react';
 import { handleNaturalQuery } from '@/lib/actions';
 import { Button } from '@/components/ui/button';

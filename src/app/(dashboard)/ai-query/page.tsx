@@ -1,6 +1,7 @@
 'use client';
 
-import { useActionState, useFormStatus } from 'react';
+import { useActionState } from 'react';
+import { useFormStatus } from 'react-dom';
 import { BrainCircuit, Loader, Wand2, Star, Clock } from 'lucide-react';
 import { handleAiQuery } from '@/lib/actions';
 import { Button } from '@/components/ui/button';
