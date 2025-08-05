@@ -16,7 +16,8 @@ import {
   User,
   FileClock,
   BookUser,
-  Library
+  Library,
+  Search
 } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
@@ -39,14 +40,9 @@ const menuItems = [
     icon: BarChart3,
   },
   {
-    href: '/ai-query',
-    label: 'Consulta con IA',
+    href: '/unified-query',
+    label: 'Consulta Inteligente',
     icon: BrainCircuit,
-  },
-  {
-    href: '/natural-query',
-    label: 'Consulta Natural',
-    icon: MessageSquare,
   },
     {
     href: '/contests',
@@ -57,6 +53,11 @@ const menuItems = [
     href: '/database',
     label: 'Base de Datos',
     icon: Database,
+  },
+  {
+    href: '/schema',
+    label: 'Esquema DB',
+    icon: Search,
   },
    {
     href: '/backups',

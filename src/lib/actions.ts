@@ -3,6 +3,7 @@
 
 import { translateNaturalQuery } from '@/ai/flows/translate-natural-query';
 import { answerComplexQueries } from '@/ai/flows/answer-complex-queries';
+import { intelligentQueryRouter } from '@/ai/flows/intelligent-query-router';
 import { generateQuerySuggestions } from '@/ai/flows/generate-query-suggestions';
 import { getDbSchema } from '@/services/database';
 import { z } from 'zod';
@@ -13,6 +14,10 @@ const naturalQuerySchema = z.object({
 
 const aiQuerySchema = z.object({
   question: z.string().min(1, 'La consulta no puede estar vacía.'),
+});
+
+const unifiedQuerySchema = z.object({
+  question: z.string().min(1, 'La pregunta no puede estar vacía.'),
 });
 
 export async function handleNaturalQuery(prevState: any, formData: FormData) {
@@ -80,6 +85,51 @@ export async function handleAiQuery(prevState: any, formData: FormData) {
       summary: null,
       quality: null,
       processingTime: null,
+    };
+  }
+}
+
+export async function handleUnifiedQuery(prevState: any, formData: FormData) {
+  try {
+    const validatedFields = unifiedQuerySchema.safeParse({
+      question: formData.get('question'),
+    });
+
+    if (!validatedFields.success) {
+      return {
+        error: validatedFields.error.flatten().fieldErrors.question?.join(', '),
+        answer: null,
+        queryType: null,
+        sqlQueries: null,
+        processingTime: null,
+        queryQuality: null,
+      };
+    }
+    
+    const result = await intelligentQueryRouter({ 
+      question: validatedFields.data.question 
+    });
+    
+    const processingTimeInSeconds = (parseInt(result.processingTime, 10) / 1000).toFixed(2);
+
+    return {
+      error: null,
+      answer: result.answer,
+      queryType: result.queryType,
+      sqlQueries: result.sqlQueries,
+      processingTime: `${processingTimeInSeconds}s`,
+      queryQuality: result.queryQuality,
+    };
+
+  } catch (error) {
+    console.error('Error in handleUnifiedQuery:', error);
+    return {
+      error: 'Hubo un error al procesar la consulta.',
+      answer: null,
+      queryType: null,
+      sqlQueries: null,
+      processingTime: null,
+      queryQuality: null,
     };
   }
 }

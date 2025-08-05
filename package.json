@@ -3,12 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack -p 9002",
+    "dev": "NODE_OPTIONS='--max-old-space-size=1024' npx next dev -p 9002 -H 0.0.0.0",
     "genkit:dev": "genkit start -- tsx src/ai/dev.ts",
     "genkit:watch": "genkit start -- tsx --watch src/ai/dev.ts",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
+    "build": "NODE_OPTIONS='--max-old-space-size=1024' npx next build",
+    "start": "NODE_OPTIONS='--max-old-space-size=512' npx next start -p 9002 -H 0.0.0.0",
+    "start:minimal": "NODE_OPTIONS='--max-old-space-size=256' npx next start -p 9002 -H 0.0.0.0",
+    "lint": "npx next lint",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -57,13 +58,14 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
-    "@types/mysql2": "github:types/mysql2",
-    "@types/node": "^20",
+    "@types/node": "^20.19.9",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "@vitest/ui": "^3.2.4",
     "genkit-cli": "^1.14.1",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.4"
   }
 }

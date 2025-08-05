@@ -1,0 +1,35 @@
+services:
+  dashboard-monitor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dashboard-monitor
+    restart: unless-stopped
+    ports:
+      - "9002:9002"
+    environment:
+      - NODE_ENV=production
+      - DB_HOST=mpd-concursos-mysql
+      - DB_PORT=3306
+      - DB_USER=root
+      - DB_PASSWORD=root1234
+      - DB_DATABASE=mpd_concursos
+      - SCHEMA_CACHE_DURATION=3600000
+      - NEXT_TELEMETRY_DISABLED=1
+      - NEXT_PUBLIC_BASE_PATH=/dashboard-monitor
+    volumes:
+      - dashboard-monitor_vector_store:/app/vector_store
+    networks:
+      - mpd-concursos-network
+    mem_limit: 1g
+    memswap_limit: 1g
+    cpus: '1.0'
+
+volumes:
+  dashboard-monitor_vector_store:
+    external: true
+
+networks:
+  mpd-concursos-network:
+    external: true
+    name: mpd_concursos_mpd-concursos-network
