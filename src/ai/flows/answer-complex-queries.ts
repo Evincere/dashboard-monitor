@@ -9,7 +9,7 @@
  * - AnswerComplexQueriesOutput - The return type for the answerComplexQueries function.
  */
 
-import {ai} from '@/ai/genkit';
+import {ai} from '@/ai/unified';
 import { executeQuery, getDbSchema } from '@/services/database';
 import {z} from 'genkit';
 import { summarizeQueryResults } from './summarize-query-results';

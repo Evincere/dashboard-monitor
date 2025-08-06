@@ -14,7 +14,24 @@ declare namespace NodeJS {
     DB_PASSWORD: string;
     DB_DATABASE: string;
     SCHEMA_CACHE_DURATION?: string;
+    
+    // AI Provider Configuration
+    AI_PROVIDER?: 'gemini' | 'openai' | 'claude';
+    
+    // Gemini/Google AI
     GOOGLE_GENAI_API_KEY?: string;
+    GEMINI_API_KEY?: string;
+    GEMINI_MODEL?: string;
+    
+    // OpenAI
+    OPENAI_API_KEY?: string;
+    OPENAI_MODEL?: string;
+    
+    // Claude/Anthropic
+    ANTHROPIC_API_KEY?: string;
+    CLAUDE_API_KEY?: string;
+    CLAUDE_MODEL?: string;
+    
     NEXT_PUBLIC_BASE_PATH?: string;
   }
 }

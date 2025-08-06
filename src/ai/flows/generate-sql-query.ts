@@ -9,7 +9,7 @@
  * - GenerateSqlQueryOutput - The return type for the generateSqlQuery function.
  */
 
-import {ai} from '@/ai/genkit';
+import {ai} from '@/ai/unified';
 import { executeQuery, getDbSchema } from '@/services/database';
 import {z} from 'genkit';
 
@@ -48,14 +48,11 @@ Question: ${question}
 
 SQL Query:`;
 
-    const llmResponse = await ai.generate({
-        prompt: prompt,
-        config: {
-            temperature: 0.3
-        }
+    const llmResponse = await ai.generate(prompt, {
+        temperature: 0.3
     });
 
-    const sqlQuery = llmResponse.text.trim().replace(/```sql\n?|```/g, '').replace(/[\r\n]/g, ' ');
+    const sqlQuery = llmResponse.trim().replace(/```sql\n?|```/g, '').replace(/[\r\n]/g, ' ');
 
     try {
         const results = await executeQuery(sqlQuery);

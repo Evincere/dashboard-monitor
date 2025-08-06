@@ -9,7 +9,7 @@
  * - TranslateNaturalQueryOutput - The return type for the translateNaturalQuery function.
  */
 
-import {ai} from '@/ai/genkit';
+import {ai} from '@/ai/unified';
 import { executeQuery, getDbSchema } from '@/services/database';
 import {z} from 'genkit';
 import { summarizeQueryResults } from './summarize-query-results';
@@ -51,7 +51,8 @@ Esquema de la Base de Datos:
 
 Pregunta: {{{question}}}
 
-Consulta SQL:`
+Consulta SQL:`,
+        config: { temperature: 0.3 }
     });
 
     const { output } = await sqlGenPrompt({ question, schema: schemaString });

@@ -8,7 +8,7 @@
  * - SummarizeQueryResultsOutput - The return type for the summarizeQueryResults function.
  */
 
-import {ai} from '@/ai/genkit';
+import {ai} from '@/ai/unified';
 import {z} from 'genkit';
 
 const SummarizeQueryResultsInputSchema = z.object({
@@ -37,6 +37,7 @@ const prompt = ai.definePrompt({
   Results: {{{results}}}
 
   Summary:`,
+  config: { temperature: 0.5 }
 });
 
 const summarizeQueryResultsFlow = ai.defineFlow(

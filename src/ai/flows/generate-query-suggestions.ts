@@ -8,7 +8,7 @@
  * - GenerateQuerySuggestionsOutput - The return type for the generateQuerySuggestions function.
  */
 
-import {ai} from '@/ai/genkit';
+import {ai} from '@/ai/unified';
 import {z} from 'genkit';
 
 const GenerateQuerySuggestionsInputSchema = z.object({
@@ -32,26 +32,12 @@ const prompt = ai.definePrompt({
   prompt: `You are an AI assistant that suggests queries based on a given database schema.
 
   Given the following database schema:
-  {{databaseSchema}}
+  {{{databaseSchema}}}
 
   Suggest a few example queries that would be useful to explore the data. The queries should be in Spanish.
   Queries:
-  `,config: {
-    safetySettings: [
-      {
-        category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
-        threshold: 'BLOCK_ONLY_HIGH',
-      },
-      {
-        category: 'HARM_CATEGORY_HARASSMENT',
-        threshold: 'BLOCK_MEDIUM_AND_ABOVE',
-      },
-      {
-        category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
-        threshold: 'BLOCK_LOW_AND_ABOVE',
-      },
-    ],
-  },
+  `,
+  config: { temperature: 0.7 }
 });
 
 const generateQuerySuggestionsFlow = ai.defineFlow(

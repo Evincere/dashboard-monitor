@@ -70,8 +70,21 @@ Para ejecutar este proyecto localmente, sigue estos pasos:
     DB_PASSWORD=tu_contraseña_de_bd
     DB_DATABASE=mpd_concursos
 
-    # Clave de API de Google (para Genkit)
-    GEMINI_API_KEY=tu_clave_de_api_de_gemini
+    # Configuración de Proveedores de IA
+    # Proveedor por defecto (opcional)
+    AI_PROVIDER=gemini  # gemini|openai|claude
+    
+    # Google Gemini
+    GOOGLE_GENAI_API_KEY=tu_clave_de_gemini
+    GEMINI_MODEL=gemini-2.0-flash  # opcional
+    
+    # OpenAI (opcional)
+    OPENAI_API_KEY=tu_clave_de_openai
+    OPENAI_MODEL=gpt-4o-mini  # opcional
+    
+    # Claude/Anthropic (opcional)
+    ANTHROPIC_API_KEY=tu_clave_de_claude
+    CLAUDE_MODEL=claude-3-5-sonnet-20241022  # opcional
     ```
 
 4.  **Ejecutar la Aplicación**:
@@ -80,6 +93,38 @@ Para ejecutar este proyecto localmente, sigue estos pasos:
     npm run dev
     ```
     La aplicación estará disponible en `http://localhost:9002`.
+
+---
+
+## 🤖 Sistema de Proveedores de IA
+
+MPD Insights cuenta con un sistema agnóstico de proveedores de IA que permite utilizar múltiples servicios de inteligencia artificial de manera intercambiable:
+
+### Proveedores Soportados
+
+- **Google Gemini** (por defecto): Respuestas rápidas con soporte JSON nativo
+- **OpenAI**: Amplio conocimiento y alta calidad de respuestas
+- **Claude (Anthropic)**: Análisis detallado y respuestas extensas
+
+### Configuración Flexible
+
+El sistema permite:
+- **Configuración por variables de entorno**: Cada proveedor se configura independientemente
+- **Fallback automático**: Si el proveedor por defecto no está disponible, usa otro configurado
+- **Cambio dinámico**: Posibilidad de cambiar el proveedor por defecto desde la interfaz
+- **Validación automática**: Verificación de configuración al inicio de la aplicación
+
+### Gestión desde la Interfaz
+
+La página de **Configuración** (`/settings`) proporciona:
+- Estado en tiempo real de todos los proveedores
+- Pruebas de conectividad para cada proveedor
+- Cambio del proveedor por defecto
+- Información detallada de configuración y errores
+
+### Migración Transparente
+
+El sistema mantiene compatibilidad con la implementación anterior basada en Genkit, permitiendo una migración sin interrupciones del servicio.
 
 ---
 

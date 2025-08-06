@@ -4,12 +4,21 @@
 /**
  * @fileOverview Unified intelligent query system that automatically analyzes input 
  * and determines whether to use simple or complex query processing.
+ * Enhanced with specialized prompting system for optimal performance.
  */
 
-import { ai } from '@/ai/genkit';
+import { ai } from '@/ai/unified';
 import { executeQuery, getDbSchema } from '@/services/database';
 import { z } from 'genkit';
 import { summarizeQueryResults } from './summarize-query-results';
+import { 
+  specializedPromptOrchestrator,
+  intentDiscoveryPrompt,
+  optimizedSQLGenerationPrompt,
+  contextAnalysisPrompt
+} from '@/ai/prompts/specialized-prompts';
+import { promptManager } from '@/ai/prompts/prompt-manager';
+import { iterativeQueryResolver } from './iterative-query-resolver';
 
 const IntelligentQueryInputSchema = z.object({
   question: z.string().describe('The user question in Spanish to be analyzed and processed.'),
@@ -26,9 +35,48 @@ const IntelligentQueryOutputSchema = z.object({
 export type IntelligentQueryOutput = z.infer<typeof IntelligentQueryOutputSchema>;
 
 export async function intelligentQueryRouter(input: IntelligentQueryInput): Promise<IntelligentQueryOutput> {
-  return intelligentQueryFlow(input);
+  return intelligentQueryFlowEnhanced(input);
 }
 
+// Enhanced intelligent query flow using specialized prompting system
+const intelligentQueryFlowEnhanced = ai.defineFlow(
+  {
+    name: 'intelligentQueryFlowEnhanced',
+    inputSchema: IntelligentQueryInputSchema,
+    outputSchema: IntelligentQueryOutputSchema,
+  },
+  async ({ question }) => {
+    const startTime = Date.now();
+    const dbSchema = await getDbSchema();
+    const schemaString = JSON.stringify(dbSchema, null, 2);
+
+    try {
+      // Step 1: Use specialized intent discovery
+      const { output: intentAnalysis } = await intentDiscoveryPrompt({
+        userQuery: question,
+        dbSchema: schemaString,
+        conversationHistory: ''
+      });
+
+      // Step 2: Route based on complexity and intent
+      if (intentAnalysis.complexity === 'simple') {
+        return await processSimpleQueryEnhanced(question, schemaString, intentAnalysis, startTime);
+      } else if (intentAnalysis.complexity === 'moderate') {
+        return await processModerateQueryEnhanced(question, schemaString, intentAnalysis, startTime);
+      } else {
+        return await processComplexQueryEnhanced(question, schemaString, intentAnalysis, startTime);
+      }
+
+    } catch (error) {
+      console.error('Error in enhanced intelligent query flow:', error);
+      
+      // Fallback to original implementation
+      return await fallbackToOriginalFlow(question, schemaString, startTime);
+    }
+  }
+);
+
+// Keep original flow as fallback
 const intelligentQueryFlow = ai.defineFlow(
   {
     name: 'intelligentQueryFlow',
@@ -309,4 +357,181 @@ Respuesta Final:`,
     processingTime: `${Date.now() - startTime}`,
     queryQuality: 'High',
   };
+}
+
+// ============================================================================
+// ENHANCED PROCESSING FUNCTIONS
+// ============================================================================
+
+async function processSimpleQueryEnhanced(
+  question: string,
+  schemaString: string,
+  intentAnalysis: any,
+  startTime: number
+): Promise<IntelligentQueryOutput> {
+  try {
+    // Use specialized SQL generation
+    const { output: sqlGeneration } = await optimizedSQLGenerationPrompt({
+      intentAnalysis: JSON.stringify(intentAnalysis),
+      dbSchema: schemaString,
+      userQuery: question,
+      performanceConstraints: 'Optimize for fast execution with minimal resource usage'
+    });
+
+    if (!sqlGeneration.sqlQuery) {
+      return {
+        answer: 'No se pudo generar una consulta SQL para esa pregunta.',
+        queryType: 'simple' as const,
+        sqlQueries: [],
+        processingTime: `${Date.now() - startTime}`,
+        queryQuality: 'Low',
+      };
+    }
+
+    // Execute the optimized query
+    const results = await executeQuery(sqlGeneration.sqlQuery);
+    const resultsString = JSON.stringify(results, null, 2);
+
+    if (Array.isArray(results) && results.length === 0) {
+      return {
+        answer: "La consulta no devolvió resultados.",
+        queryType: 'simple' as const,
+        sqlQueries: [sqlGeneration.sqlQuery],
+        processingTime: `${Date.now() - startTime}`,
+        queryQuality: 'Medium',
+      };
+    }
+
+    // Use context analysis for better response
+    const { output: contextAnalysis } = await contextAnalysisPrompt({
+      originalQuery: question,
+      queryResults: resultsString,
+      intentAnalysis: JSON.stringify(intentAnalysis),
+      businessContext: 'Sistema de concursos públicos del Ministerio Público de la Defensa'
+    });
+
+    return {
+      answer: contextAnalysis.synthesizedResponse,
+      queryType: 'simple' as const,
+      sqlQueries: [sqlGeneration.sqlQuery],
+      processingTime: `${Date.now() - startTime}`,
+      queryQuality: 'High',
+    };
+
+  } catch (error: any) {
+    console.error("Error in enhanced simple query processing:", error);
+    
+    // Fallback to original simple processing
+    return await processSimpleQuery(question, schemaString, startTime);
+  }
+}
+
+async function processModerateQueryEnhanced(
+  question: string,
+  schemaString: string,
+  intentAnalysis: any,
+  startTime: number
+): Promise<IntelligentQueryOutput> {
+  try {
+    // Use specialized workflow orchestrator for moderate complexity
+    const workflowResult = await specializedPromptOrchestrator.executeSpecializedWorkflow(
+      question,
+      schemaString,
+      ''
+    );
+
+    // Execute SQL if generated
+    let queryResults: any = null;
+    let executedQueries: string[] = [];
+
+    if (workflowResult.sqlGeneration?.sqlQuery) {
+      try {
+        queryResults = await executeQuery(workflowResult.sqlGeneration.sqlQuery);
+        executedQueries.push(workflowResult.sqlGeneration.sqlQuery);
+      } catch (error: any) {
+        console.error("Error executing moderate query:", error);
+        return {
+          answer: `Error al ejecutar la consulta: ${error.message}`,
+          queryType: 'complex' as const,
+          sqlQueries: executedQueries,
+          processingTime: `${Date.now() - startTime}`,
+          queryQuality: 'Low',
+        };
+      }
+    }
+
+    return {
+      answer: workflowResult.finalResponse,
+      queryType: 'complex' as const,
+      sqlQueries: executedQueries,
+      processingTime: `${Date.now() - startTime}`,
+      queryQuality: workflowResult.processingMetrics.qualityScore > 0.8 ? 'High' : 'Medium',
+    };
+
+  } catch (error: any) {
+    console.error("Error in enhanced moderate query processing:", error);
+    
+    // Fallback to complex processing
+    return await processComplexQuery(question, schemaString, startTime);
+  }
+}
+
+async function processComplexQueryEnhanced(
+  question: string,
+  schemaString: string,
+  intentAnalysis: any,
+  startTime: number
+): Promise<IntelligentQueryOutput> {
+  try {
+    // Use iterative query resolver for complex queries
+    const iterativeResult = await iterativeQueryResolver({
+      query: question,
+      context: {
+        conversationHistory: '',
+        userPreferences: {
+          maxIterations: 8,
+          timeoutMs: 45000,
+          detailLevel: 'comprehensive'
+        }
+      }
+    });
+
+    // Extract SQL queries from resolution path
+    const sqlQueries: string[] = [];
+    iterativeResult.resolutionPath.forEach(step => {
+      try {
+        const stepResult = JSON.parse(step.result);
+        if (stepResult.sqlQuery) {
+          sqlQueries.push(stepResult.sqlQuery);
+        }
+      } catch (e) {
+        // Ignore parsing errors
+      }
+    });
+
+    return {
+      answer: iterativeResult.finalAnswer,
+      queryType: 'complex' as const,
+      sqlQueries,
+      processingTime: `${iterativeResult.qualityMetrics.totalExecutionTime}`,
+      queryQuality: iterativeResult.qualityMetrics.completeness > 0.8 ? 'High' : 'Medium',
+    };
+
+  } catch (error: any) {
+    console.error("Error in enhanced complex query processing:", error);
+    
+    // Fallback to original complex processing
+    return await processComplexQuery(question, schemaString, startTime);
+  }
+}
+
+async function fallbackToOriginalFlow(
+  question: string,
+  schemaString: string,
+  startTime: number
+): Promise<IntelligentQueryOutput> {
+  console.log('Falling back to original query processing flow');
+  
+  // Use the original flow as fallback
+  return await intelligentQueryFlow({ question });
 }
