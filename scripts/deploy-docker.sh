@@ -42,12 +42,25 @@ if docker ps | grep -q "dashboard-monitor"; then
     docker rm dashboard-monitor
 fi
 
-# Build de la imagen
+# Limpiar imágenes no utilizadas para liberar espacio
+echo "🧹 Limpiando imágenes no utilizadas..."
+docker system prune -f
+
+# Build de la imagen con configuración optimizada para memoria limitada
 echo "🏗️  Construyendo imagen Docker..."
-docker build -t dashboard-monitor:latest . --no-cache
+if [ $AVAILABLE_MEMORY -lt 1500 ]; then
+    echo "💾 Usando configuración de memoria limitada..."
+    docker build -t dashboard-monitor:latest . --memory=1g --memory-swap=2g
+else
+    docker build -t dashboard-monitor:latest . --no-cache
+fi
 
 if [ $? -ne 0 ]; then
     echo "❌ Error durante el build de Docker"
+    echo "💡 Sugerencias:"
+    echo "   - Ejecuta: npm install para sincronizar dependencias"
+    echo "   - Verifica que tengas suficiente espacio en disco"
+    echo "   - Considera cerrar otras aplicaciones"
     exit 1
 fi
 

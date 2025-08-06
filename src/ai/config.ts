@@ -6,6 +6,7 @@
 
 import { SupportedProvider } from './providers/types';
 import { aiProviderManager } from './providers/manager';
+import { initializeEmbeddingSystem } from './embeddings/startup';
 
 export interface AIConfig {
   defaultProvider: SupportedProvider;
@@ -90,6 +91,29 @@ export function getProviderStatus() {
       hasApiKey: !!providerConfig.apiKey,
     })),
   };
+}
+
+/**
+ * Initialize the complete AI system including embeddings
+ */
+export async function initializeAISystem(): Promise<void> {
+  console.log('🤖 Initializing AI system...');
+  
+  // Validate configuration first
+  const validation = validateAIConfig();
+  if (!validation.valid) {
+    console.error('❌ AI configuration validation failed:', validation.errors);
+    throw new Error(`AI configuration invalid: ${validation.errors.join(', ')}`);
+  }
+  
+  if (validation.warnings.length > 0) {
+    console.warn('⚠️ AI configuration warnings:', validation.warnings);
+  }
+  
+  // Initialize embedding system
+  await initializeEmbeddingSystem();
+  
+  console.log('✅ AI system initialization completed');
 }
 
 /**

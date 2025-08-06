@@ -1,0 +1,47 @@
+# docker-compose.performance.yml
+# Optional Redis service for enhanced caching performance
+
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: dashboard-monitor-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    networks:
+      - mpd-concursos-network
+    environment:
+      - REDIS_REPLICATION_MODE=master
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Optional: Redis Commander for Redis management
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: dashboard-monitor-redis-commander
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    networks:
+      - mpd-concursos-network
+    depends_on:
+      - redis
+
+volumes:
+  redis_data:
+    driver: local
+
+networks:
+  mpd-concursos-network:
+    external: true
+    name: mpd_concursos_mpd-concursos-network

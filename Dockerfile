@@ -1,5 +1,5 @@
 # Dockerfile optimizado para servidor con memoria limitada
-FROM node:18-alpine AS base
+FROM node:20-alpine AS base
 
 # Instalar dependencias necesarias
 RUN apk add --no-cache libc6-compat
@@ -18,7 +18,7 @@ COPY postcss.config.mjs ./
 FROM base AS deps
 RUN npm config set fund false && \
     npm config set audit false && \
-    NODE_OPTIONS="--max-old-space-size=1024" npm ci --only=production --no-optional
+    NODE_OPTIONS="--max-old-space-size=768" npm ci --omit=dev
 
 # Build de la aplicación
 FROM base AS builder
@@ -33,7 +33,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN NODE_OPTIONS="--max-old-space-size=1024" npm run build
 
 # Imagen de producción
-FROM node:18-alpine AS runner
+FROM node:20-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production

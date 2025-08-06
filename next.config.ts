@@ -8,9 +8,9 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  // Configuración para subpath
-  basePath: '/dashboard-monitor',
-  assetPrefix: '/dashboard-monitor',
+  // Configuración para subpath (temporarily disabled for testing)
+  // basePath: '/dashboard-monitor',
+  // assetPrefix: '/dashboard-monitor',
   images: {
     remotePatterns: [
       {

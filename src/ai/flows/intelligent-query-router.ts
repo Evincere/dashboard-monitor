@@ -19,6 +19,9 @@ import {
 } from '@/ai/prompts/specialized-prompts';
 import { promptManager } from '@/ai/prompts/prompt-manager';
 import { iterativeQueryResolver } from './iterative-query-resolver';
+import { getContextualLearningSystem } from '@/ai/embeddings/contextual-learning';
+import { getResponseQualityMetrics } from '@/ai/embeddings/response-quality-metrics';
+import { getEmbeddingService, getPersistentMemoryManager, getSemanticSearchService } from '@/ai/embeddings';
 
 const IntelligentQueryInputSchema = z.object({
   question: z.string().describe('The user question in Spanish to be analyzed and processed.'),
@@ -38,6 +41,25 @@ export async function intelligentQueryRouter(input: IntelligentQueryInput): Prom
   return intelligentQueryFlowEnhanced(input);
 }
 
+// Initialize contextual learning system
+let contextualLearningInitialized = false;
+async function initializeContextualLearning() {
+  if (contextualLearningInitialized) return;
+  
+  try {
+    const embeddingService = await getEmbeddingService();
+    const memoryManager = await getPersistentMemoryManager();
+    const searchService = await getSemanticSearchService();
+    const contextualLearning = await getContextualLearningSystem();
+    
+    await contextualLearning.initialize(embeddingService, memoryManager, searchService);
+    contextualLearningInitialized = true;
+    console.log('🧠 Contextual learning system initialized for query router');
+  } catch (error) {
+    console.warn('⚠️ Failed to initialize contextual learning:', error);
+  }
+}
+
 // Enhanced intelligent query flow using specialized prompting system
 const intelligentQueryFlowEnhanced = ai.defineFlow(
   {
@@ -50,22 +72,68 @@ const intelligentQueryFlowEnhanced = ai.defineFlow(
     const dbSchema = await getDbSchema();
     const schemaString = JSON.stringify(dbSchema, null, 2);
 
+    // Initialize contextual learning system
+    await initializeContextualLearning();
+
     try {
-      // Step 1: Use specialized intent discovery
+      // Step 1: Check for similar queries in contextual learning cache
+      const contextualLearning = await getContextualLearningSystem();
+      const similarQueryCheck = await contextualLearning.checkForSimilarQuery(question);
+      
+      if (similarQueryCheck.shouldUseCache && similarQueryCheck.cacheEntry) {
+        console.log('🎯 Using cached response from contextual learning');
+        
+        // Optionally improve the cached response
+        const improvement = await contextualLearning.improveResponse(
+          question,
+          similarQueryCheck.cacheEntry.response,
+          { userFeedback: 'neutral' }
+        );
+
+        const processingTime = Date.now() - startTime;
+        const qualityMetrics = getResponseQualityMetrics();
+        
+        // Record quality metrics
+        qualityMetrics.recordQuality(similarQueryCheck.cacheEntry.quality, {
+          category: 'cached-response',
+          queryId: similarQueryCheck.cacheEntry.id,
+        });
+
+        return {
+          answer: improvement.improvedResponse,
+          queryType: 'simple' as const,
+          sqlQueries: similarQueryCheck.cacheEntry.metadata.sqlQueries,
+          processingTime: `${processingTime}`,
+          queryQuality: 'High (Cached + Improved)',
+        };
+      }
+
+      // Step 2: Use specialized intent discovery
       const { output: intentAnalysis } = await intentDiscoveryPrompt({
         userQuery: question,
         dbSchema: schemaString,
         conversationHistory: ''
       });
 
-      // Step 2: Route based on complexity and intent
+      // Step 3: Route based on complexity and intent
+      let result: IntelligentQueryOutput;
       if (intentAnalysis.complexity === 'simple') {
-        return await processSimpleQueryEnhanced(question, schemaString, intentAnalysis, startTime);
+        result = await processSimpleQueryEnhanced(question, schemaString, intentAnalysis, startTime);
       } else if (intentAnalysis.complexity === 'moderate') {
-        return await processModerateQueryEnhanced(question, schemaString, intentAnalysis, startTime);
+        result = await processModerateQueryEnhanced(question, schemaString, intentAnalysis, startTime);
       } else {
-        return await processComplexQueryEnhanced(question, schemaString, intentAnalysis, startTime);
+        result = await processComplexQueryEnhanced(question, schemaString, intentAnalysis, startTime);
       }
+
+      // Step 4: Store result in contextual learning system
+      await contextualLearning.storeQueryResponse(question, result.answer, {
+        processingTime: parseInt(result.processingTime),
+        sqlQueries: result.sqlQueries,
+        dataPoints: result.sqlQueries.length,
+        category: intentAnalysis.complexity,
+      });
+
+      return result;
 
     } catch (error) {
       console.error('Error in enhanced intelligent query flow:', error);
