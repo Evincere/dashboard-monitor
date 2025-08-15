@@ -4,9 +4,14 @@ import * as bcrypt from 'bcryptjs';
 import { z } from 'zod';
 
 // JWT Configuration
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
+const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
 const REFRESH_TOKEN_EXPIRES_IN = process.env.REFRESH_TOKEN_EXPIRES_IN || '7d';
+
+// Validar que JWT_SECRET esté configurado en producción
+if (!JWT_SECRET) {
+    throw new Error('JWT_SECRET environment variable is required');
+}
 
 // Validation schemas
 export const LoginSchema = z.object({
@@ -40,9 +45,10 @@ export interface AuthUser {
 }
 
 // Password hashing utilities
+const BCRYPT_SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS || '12');
+
 export const hashPassword = async (password: string): Promise<string> => {
-    const saltRounds = 12;
-    return bcrypt.hash(password, saltRounds);
+    return bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
 };
 
 export const verifyPassword = async (password: string, hashedPassword: string): Promise<boolean> => {
@@ -51,16 +57,16 @@ export const verifyPassword = async (password: string, hashedPassword: string): 
 
 // JWT token utilities
 export const generateAccessToken = (payload: Omit<JWTPayload, 'iat' | 'exp'>): string => {
-    return jwt.sign(payload, JWT_SECRET as string, {
-        expiresIn: JWT_EXPIRES_IN as string | number,
+    return jwt.sign(payload, JWT_SECRET, {
+        expiresIn: JWT_EXPIRES_IN,
         issuer: 'dashboard-monitor',
         audience: 'mpd-concursos'
     });
 };
 
 export const generateRefreshToken = (userId: string): string => {
-    return jwt.sign({ userId, type: 'refresh' }, JWT_SECRET as string, {
-        expiresIn: REFRESH_TOKEN_EXPIRES_IN as string | number,
+    return jwt.sign({ userId, type: 'refresh' }, JWT_SECRET, {
+        expiresIn: REFRESH_TOKEN_EXPIRES_IN,
         issuer: 'dashboard-monitor',
         audience: 'mpd-concursos'
     });
@@ -68,7 +74,7 @@ export const generateRefreshToken = (userId: string): string => {
 
 export const verifyAccessToken = (token: string): JWTPayload | null => {
     try {
-        const decoded = jwt.verify(token, JWT_SECRET as string, {
+        const decoded = jwt.verify(token, JWT_SECRET, {
             issuer: 'dashboard-monitor',
             audience: 'mpd-concursos'
         }) as JWTPayload;
@@ -81,7 +87,7 @@ export const verifyAccessToken = (token: string): JWTPayload | null => {
 
 export const verifyRefreshToken = (token: string): { userId: string } | null => {
     try {
-        const decoded = jwt.verify(token, JWT_SECRET as string, {
+        const decoded = jwt.verify(token, JWT_SECRET, {
             issuer: 'dashboard-monitor',
             audience: 'mpd-concursos'
         }) as any;

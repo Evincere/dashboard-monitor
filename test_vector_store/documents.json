@@ -123,5 +123,159 @@
       "type": "query",
       "timestamp": 1754476296622
     }
+  },
+  {
+    "id": "doc_1755089772897_2fznngnm1",
+    "text": "Test document for storage",
+    "embedding": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "metadata": {
+      "type": "query",
+      "timestamp": 1755089772897,
+      "source": "test"
+    }
+  },
+  {
+    "id": "doc_1755089773957_ahuquvhkk",
+    "text": "Test document for storage",
+    "embedding": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "metadata": {
+      "type": "query",
+      "timestamp": 1755089773957,
+      "source": "test"
+    }
+  },
+  {
+    "id": "doc_1755089773962_phx13gnk4",
+    "text": "Query about users",
+    "embedding": [
+      1,
+      0,
+      0,
+      0,
+      0
+    ],
+    "metadata": {
+      "type": "query",
+      "timestamp": 1755089773962
+    }
+  },
+  {
+    "id": "doc_1755089773962_qlqfll2s6",
+    "text": "Query about contests",
+    "embedding": [
+      0,
+      1,
+      0,
+      0,
+      0
+    ],
+    "metadata": {
+      "type": "query",
+      "timestamp": 1755089773962
+    }
+  },
+  {
+    "id": "doc_1755089773962_a3u2hnqg5",
+    "text": "Similar user query",
+    "embedding": [
+      0.9,
+      0.1,
+      0,
+      0,
+      0
+    ],
+    "metadata": {
+      "type": "query",
+      "timestamp": 1755089773962
+    }
+  },
+  {
+    "id": "doc_1755091110904_p1y0fw0dw",
+    "text": "Test document for storage",
+    "embedding": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "metadata": {
+      "type": "query",
+      "timestamp": 1755091110904,
+      "source": "test"
+    }
+  },
+  {
+    "id": "doc_1755091111754_cjj6800ve",
+    "text": "Test document for storage",
+    "embedding": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "metadata": {
+      "type": "query",
+      "timestamp": 1755091111754,
+      "source": "test"
+    }
+  },
+  {
+    "id": "doc_1755091111758_lln1eiq9d",
+    "text": "Query about users",
+    "embedding": [
+      1,
+      0,
+      0,
+      0,
+      0
+    ],
+    "metadata": {
+      "type": "query",
+      "timestamp": 1755091111758
+    }
+  },
+  {
+    "id": "doc_1755091111758_jh80nl0wo",
+    "text": "Query about contests",
+    "embedding": [
+      0,
+      1,
+      0,
+      0,
+      0
+    ],
+    "metadata": {
+      "type": "query",
+      "timestamp": 1755091111758
+    }
+  },
+  {
+    "id": "doc_1755091111758_ev06q7ol4",
+    "text": "Similar user query",
+    "embedding": [
+      0.9,
+      0.1,
+      0,
+      0,
+      0
+    ],
+    "metadata": {
+      "type": "query",
+      "timestamp": 1755091111758
+    }
   }
 ]

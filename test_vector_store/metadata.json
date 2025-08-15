@@ -1,7 +1,7 @@
 {
-  "totalDocuments": 8,
-  "storageSize": 2034,
-  "lastUpdated": 1754476296622,
+  "totalDocuments": 18,
+  "storageSize": 4508,
+  "lastUpdated": 1755091111758,
   "dimensions": 5,
   "model": "sentence-transformers"
 }

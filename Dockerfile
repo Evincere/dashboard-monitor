@@ -1,61 +1,53 @@
-# Dockerfile optimizado para servidor con memoria limitada
-FROM node:20-alpine AS base
+# Dockerfile para Dashboard Monitor - Producción
+FROM node:18-alpine AS base
 
-# Instalar dependencias necesarias
+# Instalar dependencias del sistema
 RUN apk add --no-cache libc6-compat
 
-# Establecer directorio de trabajo
 WORKDIR /app
 
-# Copiar archivos de configuración
+# Copiar archivos de dependencias
 COPY package*.json ./
-COPY next.config.ts ./
-COPY tsconfig.json ./
-COPY tailwind.config.ts ./
-COPY postcss.config.mjs ./
 
-# Instalar dependencias con límites de memoria
+# Instalar dependencias
 FROM base AS deps
-RUN npm config set fund false && \
-    npm config set audit false && \
-    NODE_OPTIONS="--max-old-space-size=768" npm ci --omit=dev
+RUN npm ci --only=production && npm cache clean --force
 
 # Build de la aplicación
 FROM base AS builder
-COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-
-# Configurar variables de entorno para el build
-ENV NODE_ENV=production
-ENV NEXT_TELEMETRY_DISABLED=1
-
-# Build con límite de memoria
-RUN NODE_OPTIONS="--max-old-space-size=1024" npm run build
+RUN npm ci
+RUN npm run build
 
 # Imagen de producción
-FROM node:20-alpine AS runner
+FROM node:18-alpine AS runner
 WORKDIR /app
-
-ENV NODE_ENV=production
-ENV NEXT_TELEMETRY_DISABLED=1
 
 # Crear usuario no-root
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
 # Copiar archivos necesarios
-# Crear directorio public y copiar archivos si existen
-RUN mkdir -p ./public
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder /app/package*.json ./
 
+# Cambiar ownership
+RUN chown -R nextjs:nodejs /app
 USER nextjs
 
-EXPOSE 9002
+# Exponer puerto
+EXPOSE 3000
 
-ENV PORT=9002
+# Variables de entorno
+ENV NODE_ENV=production
+ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# Iniciar con límite de memoria
-CMD ["node", "--max-old-space-size=512", "server.js"]
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:3000/health || exit 1
+
+# Comando de inicio
+CMD ["npm", "start"]
