@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../concursos-mpd"
+		}
+	],
+	"settings": {
+		"typescript.autoClosingTags": false
+	}
+}

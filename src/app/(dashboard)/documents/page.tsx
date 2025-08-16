@@ -3,7 +3,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { 
+import {
   FolderKanban, 
   Search, 
   FileDown, 
@@ -16,7 +16,10 @@ import {
   Clock,
   Download,
   Users,
-  HardDrive
+  HardDrive,
+  ArrowRight,
+  FileCheck,
+  Info
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -62,6 +65,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
+import { DocumentTypeBadge } from '@/components/ui/document-type-badge';
+import Link from 'next/link';
 
 interface Document {
   id: string;
@@ -142,8 +147,8 @@ function DocumentsPageContent() {
       });
 
       if (searchTerm) params.append('search', searchTerm);
-      if (typeFilter) params.append('type', typeFilter);
-      if (statusFilter) params.append('status', statusFilter);
+      if (typeFilter && typeFilter !== 'all') params.append('type', typeFilter);
+      if (statusFilter && statusFilter !== 'all') params.append('status', statusFilter);
       if (userFilter) params.append('user', userFilter);
 
       const response = await fetch(`/api/documents?${params}`);
@@ -343,14 +348,57 @@ function DocumentsPageContent() {
   return (
     <div className="flex flex-col h-full p-4 md:p-8">
       <header className="mb-8">
-        <h1 className="text-3xl font-bold font-headline flex items-center gap-2">
-          <FolderKanban className="w-8 h-8 text-primary" />
-          Gestión de Documentos
-        </h1>
-        <p className="text-muted-foreground mt-2">
-          Busque, visualice y administre todos los documentos cargados por los usuarios.
-        </p>
+        <div className="flex justify-between items-start">
+          <div>
+            <h1 className="text-3xl font-bold font-headline flex items-center gap-2">
+              <FolderKanban className="w-8 h-8 text-primary" />
+              Gestión de Documentos
+            </h1>
+            <p className="text-muted-foreground mt-2">
+              Busque, visualice y administre todos los documentos cargados por los usuarios.
+            </p>
+          </div>
+          
+          <div className="flex gap-3">
+            <Link href="/postulations">
+              <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg hover:shadow-xl transition-all">
+                <FileCheck className="w-4 h-4 mr-2" />
+                Validación de Documentos
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </Link>
+          </div>
+        </div>
       </header>
+
+      {/* Information Banner */}
+      <div className="mb-6">
+        <Card className="bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-100 rounded-full">
+                  <Info className="w-5 h-5 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900">Nueva Interfaz de Validación</h3>
+                  <p className="text-sm text-gray-600">
+                    Use la nueva interfaz de gestión de postulaciones para validar documentos de forma más eficiente. 
+                    Los postulantes con estado COMPLETED_WITH_DOCS tienen prioridad.
+                  </p>
+                </div>
+              </div>
+              <Link href="/postulations">
+                <Button variant="outline" className="border-blue-300 text-blue-600 hover:bg-blue-50">
+                  <FileCheck className="w-4 h-4 mr-2" />
+                  Ir a Validación
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Statistics Cards */}
       <div className="grid gap-6 md:grid-cols-4 mb-8">
@@ -441,7 +489,7 @@ function DocumentsPageContent() {
                 <SelectValue placeholder="Tipo de documento" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Todos los tipos</SelectItem>
+                <SelectItem value="all">Todos los tipos</SelectItem>
                 {documentTypes.map((type) => (
                   <SelectItem key={type.type} value={type.type}>
                     {type.type} ({type.count})
@@ -455,7 +503,7 @@ function DocumentsPageContent() {
                 <SelectValue placeholder="Estado" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Todos los estados</SelectItem>
+                <SelectItem value="all">Todos los estados</SelectItem>
                 <SelectItem value="PENDING">Pendiente</SelectItem>
                 <SelectItem value="APPROVED">Aprobado</SelectItem>
                 <SelectItem value="REJECTED">Rechazado</SelectItem>
@@ -530,7 +578,10 @@ function DocumentsPageContent() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">{doc.documentType}</Badge>
+                      <DocumentTypeBadge 
+                        documentType={doc.documentType} 
+                        variant="compact"
+                      />
                     </TableCell>
                     <TableCell>
                       <Badge 

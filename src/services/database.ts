@@ -271,7 +271,6 @@ export async function closeDatabaseConnection(): Promise<void> {
   }
 }
 /**
-
  * Get complete database schema
  */
 export async function getDbSchema(forceRefresh = false): Promise<any> {
@@ -282,13 +281,78 @@ export async function getDbSchema(forceRefresh = false): Promise<any> {
     const [tables] = await connection.execute(`
       SELECT TABLE_NAME, TABLE_COMMENT, ENGINE, TABLE_ROWS, DATA_LENGTH, INDEX_LENGTH
       FROM information_schema.TABLES 
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = 'BASE TABLE'
+      ORDER BY TABLE_NAME
+    `);
+
+    // Get all views
+    const [views] = await connection.execute(`
+      SELECT 
+        TABLE_NAME as name,
+        VIEW_DEFINITION as definition,
+        IS_UPDATABLE = 'YES' as isUpdatable,
+        SECURITY_TYPE as securityType
+      FROM information_schema.VIEWS 
       WHERE TABLE_SCHEMA = DATABASE()
       ORDER BY TABLE_NAME
+    `);
+
+    // Get all routines (stored procedures and functions)
+    const [routines] = await connection.execute(`
+      SELECT 
+        ROUTINE_NAME as name,
+        ROUTINE_TYPE as type,
+        DATA_TYPE as dataType,
+        ROUTINE_DEFINITION as definition,
+        IS_DETERMINISTIC = 'YES' as isDeterministic,
+        ROUTINE_COMMENT as comment,
+        CREATED as created,
+        LAST_ALTERED as modified
+      FROM information_schema.ROUTINES 
+      WHERE ROUTINE_SCHEMA = DATABASE()
+      ORDER BY ROUTINE_NAME
+    `);
+
+    // Get all foreign keys across all tables
+    const [allForeignKeys] = await connection.execute(`
+      SELECT 
+        kcu.CONSTRAINT_NAME as constraintName,
+        kcu.TABLE_NAME as fromTable,
+        kcu.COLUMN_NAME as fromColumn,
+        kcu.REFERENCED_TABLE_NAME as toTable,
+        kcu.REFERENCED_COLUMN_NAME as toColumn,
+        rc.UPDATE_RULE as updateRule,
+        rc.DELETE_RULE as deleteRule
+      FROM information_schema.KEY_COLUMN_USAGE kcu
+      JOIN information_schema.REFERENTIAL_CONSTRAINTS rc 
+        ON kcu.CONSTRAINT_NAME = rc.CONSTRAINT_NAME
+      WHERE kcu.TABLE_SCHEMA = DATABASE() 
+        AND kcu.REFERENCED_TABLE_NAME IS NOT NULL
+      ORDER BY kcu.TABLE_NAME, kcu.CONSTRAINT_NAME
+    `);
+
+    // Get all indexes across all tables
+    const [allIndexes] = await connection.execute(`
+      SELECT 
+        TABLE_NAME as tableName,
+        INDEX_NAME as indexName,
+        GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) as columns,
+        NON_UNIQUE = 0 as isUnique,
+        INDEX_NAME = 'PRIMARY' as isPrimary,
+        INDEX_TYPE as indexType
+      FROM information_schema.STATISTICS 
+      WHERE TABLE_SCHEMA = DATABASE()
+      GROUP BY TABLE_NAME, INDEX_NAME, NON_UNIQUE, INDEX_TYPE
+      ORDER BY TABLE_NAME, INDEX_NAME
     `);
 
     const schema = {
       database: process.env.DB_DATABASE || 'mpd_concursos',
       tables: [],
+      views: views || [],
+      routines: routines || [],
+      foreignKeys: allForeignKeys || [],
+      indexes: allIndexes || [],
       lastIntrospection: new Date().toISOString()
     };
 
@@ -296,39 +360,32 @@ export async function getDbSchema(forceRefresh = false): Promise<any> {
     for (const table of tables as any[]) {
       const tableName = table.TABLE_NAME;
       
-      // Get columns
+      // Get columns with detailed type information
       const [columns] = await connection.execute(`
-        SELECT COLUMN_NAME, DATA_TYPE, IS_NULLABLE, COLUMN_DEFAULT, COLUMN_KEY, EXTRA, COLUMN_COMMENT
+        SELECT 
+          COLUMN_NAME as name,
+          DATA_TYPE as type,
+          IS_NULLABLE = 'YES' as isNullable,
+          COLUMN_DEFAULT as defaultValue,
+          EXTRA LIKE '%auto_increment%' as isAutoIncrement,
+          COLUMN_KEY = 'PRI' as isPrimaryKey,
+          COLUMN_COMMENT as comment,
+          CHARACTER_MAXIMUM_LENGTH as maxLength,
+          NUMERIC_PRECISION as precision,
+          NUMERIC_SCALE as scale
         FROM information_schema.COLUMNS 
         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
         ORDER BY ORDINAL_POSITION
       `, [tableName]);
 
-      // Get foreign keys
-      const [foreignKeys] = await connection.execute(`
-        SELECT COLUMN_NAME, REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME
-        FROM information_schema.KEY_COLUMN_USAGE 
-        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND REFERENCED_TABLE_NAME IS NOT NULL
-      `, [tableName]);
-
-      // Get indexes
-      const [indexes] = await connection.execute(`
-        SELECT INDEX_NAME, COLUMN_NAME, NON_UNIQUE, INDEX_TYPE
-        FROM information_schema.STATISTICS 
-        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
-        ORDER BY INDEX_NAME, SEQ_IN_INDEX
-      `, [tableName]);
-
       schema.tables.push({
         name: tableName,
-        comment: table.TABLE_COMMENT,
+        comment: table.TABLE_COMMENT || '',
         engine: table.ENGINE,
-        rows: table.TABLE_ROWS,
+        tableRows: table.TABLE_ROWS,
         dataLength: table.DATA_LENGTH,
         indexLength: table.INDEX_LENGTH,
-        columns: columns,
-        foreignKeys: foreignKeys,
-        indexes: indexes
+        columns: columns || []
       });
     }
 
@@ -347,18 +404,73 @@ export async function getSchemaOverview(): Promise<any> {
   try {
     const connection = await getDatabaseConnection();
     
+    // Get basic counts and sizes
     const [overview] = await connection.execute(`
       SELECT 
-        COUNT(*) as total_tables,
-        SUM(TABLE_ROWS) as total_rows,
-        SUM(DATA_LENGTH) as total_data_size,
-        SUM(INDEX_LENGTH) as total_index_size
+        COUNT(CASE WHEN TABLE_TYPE = 'BASE TABLE' THEN 1 END) as tablesCount,
+        COUNT(CASE WHEN TABLE_TYPE = 'VIEW' THEN 1 END) as viewsCount,
+        SUM(CASE WHEN TABLE_TYPE = 'BASE TABLE' THEN TABLE_ROWS ELSE 0 END) as totalRows,
+        SUM(CASE WHEN TABLE_TYPE = 'BASE TABLE' THEN DATA_LENGTH ELSE 0 END) as totalDataSize,
+        SUM(CASE WHEN TABLE_TYPE = 'BASE TABLE' THEN INDEX_LENGTH ELSE 0 END) as totalIndexSize,
+        DATABASE() as schemaName
       FROM information_schema.TABLES 
       WHERE TABLE_SCHEMA = DATABASE()
     `);
 
+    // Get database character set info
+    const [schemaInfo] = await connection.execute(`
+      SELECT 
+        DEFAULT_CHARACTER_SET_NAME as characterSet,
+        DEFAULT_COLLATION_NAME as collation
+      FROM information_schema.SCHEMATA 
+      WHERE SCHEMA_NAME = DATABASE()
+    `);
+
+    // Get routines count
+    const [routinesCount] = await connection.execute(`
+      SELECT COUNT(*) as routinesCount
+      FROM information_schema.ROUTINES 
+      WHERE ROUTINE_SCHEMA = DATABASE()
+    `);
+
+    // Get foreign keys count
+    const [fkCount] = await connection.execute(`
+      SELECT COUNT(DISTINCT CONSTRAINT_NAME) as foreignKeysCount
+      FROM information_schema.KEY_COLUMN_USAGE 
+      WHERE TABLE_SCHEMA = DATABASE() 
+        AND REFERENCED_TABLE_NAME IS NOT NULL
+    `);
+
+    // Get indexes count
+    const [indexCount] = await connection.execute(`
+      SELECT COUNT(DISTINCT INDEX_NAME) as indexesCount
+      FROM information_schema.STATISTICS 
+      WHERE TABLE_SCHEMA = DATABASE()
+    `);
+
+    // Get total columns count
+    const [columnCount] = await connection.execute(`
+      SELECT COUNT(*) as totalColumns
+      FROM information_schema.COLUMNS 
+      WHERE TABLE_SCHEMA = DATABASE()
+    `);
+
     connection.release();
-    return overview[0];
+    
+    const result = {
+      tablesCount: overview[0].tablesCount || 0,
+      viewsCount: overview[0].viewsCount || 0,
+      routinesCount: routinesCount[0].routinesCount || 0,
+      foreignKeysCount: fkCount[0].foreignKeysCount || 0,
+      indexesCount: indexCount[0].indexesCount || 0,
+      totalColumns: columnCount[0].totalColumns || 0,
+      schemaName: overview[0].schemaName || 'unknown',
+      characterSet: schemaInfo[0]?.characterSet || 'utf8mb4',
+      collation: schemaInfo[0]?.collation || 'utf8mb4_unicode_ci',
+      lastIntrospection: new Date()
+    };
+    
+    return result;
   } catch (error) {
     console.error('[DB] Error getting schema overview:', error);
     throw error;
@@ -372,17 +484,46 @@ export async function getDatabaseMetadata(): Promise<any> {
   try {
     const connection = await getDatabaseConnection();
     
-    const [metadata] = await connection.execute(`
+    // Get basic schema info
+    const [schemaInfo] = await connection.execute(`
       SELECT 
         SCHEMA_NAME as database_name,
-        DEFAULT_CHARACTER_SET_NAME as charset,
+        DEFAULT_CHARACTER_SET_NAME as characterSet,
         DEFAULT_COLLATION_NAME as collation
       FROM information_schema.SCHEMATA 
       WHERE SCHEMA_NAME = DATABASE()
     `);
 
+    // Get database version and connection info
+    const [serverInfo] = await connection.execute(`
+      SELECT 
+        VERSION() as version,
+        VERSION_COMMENT as versionComment,
+        @@global.time_zone as timezone,
+        @@global.max_connections as maxConnections,
+        @@global.uptime as uptime,
+        @@global.datadir as dataDirectory
+    `);
+
+    // Get current connection count
+    const [connectionInfo] = await connection.execute(`
+      SELECT COUNT(*) as currentConnections
+      FROM information_schema.PROCESSLIST
+    `);
+
     connection.release();
-    return metadata[0];
+    
+    return {
+      version: serverInfo[0].version || 'Unknown',
+      versionComment: serverInfo[0].versionComment || '',
+      characterSet: schemaInfo[0]?.characterSet || 'utf8mb4',
+      collation: schemaInfo[0]?.collation || 'utf8mb4_unicode_ci',
+      timezone: serverInfo[0].timezone || 'UTC',
+      maxConnections: serverInfo[0].maxConnections || 151,
+      currentConnections: connectionInfo[0].currentConnections || 0,
+      uptime: serverInfo[0].uptime || 0,
+      dataDirectory: serverInfo[0].dataDirectory || '/var/lib/mysql'
+    };
   } catch (error) {
     console.error('[DB] Error getting database metadata:', error);
     throw error;
@@ -396,6 +537,14 @@ export async function validateSchemaIntegrity(): Promise<any> {
   try {
     const connection = await getDatabaseConnection();
     
+    const issues: Array<{
+      type: 'error' | 'warning' | 'info';
+      table: string;
+      column?: string;
+      message: string;
+      recommendation?: string;
+    }> = [];
+
     // Check for orphaned foreign keys
     const [orphanedFKs] = await connection.execute(`
       SELECT 
@@ -411,10 +560,82 @@ export async function validateSchemaIntegrity(): Promise<any> {
         )
     `);
 
+    // Add orphaned FK issues
+    for (const fk of orphanedFKs as any[]) {
+      issues.push({
+        type: 'error',
+        table: fk.TABLE_NAME,
+        column: fk.COLUMN_NAME,
+        message: `References non-existent table '${fk.REFERENCED_TABLE_NAME}'`,
+        recommendation: `Remove the foreign key constraint or create the missing table '${fk.REFERENCED_TABLE_NAME}'`
+      });
+    }
+
+    // Check for tables without primary keys
+    const [tablesWithoutPK] = await connection.execute(`
+      SELECT TABLE_NAME
+      FROM information_schema.TABLES t
+      WHERE t.TABLE_SCHEMA = DATABASE()
+        AND t.TABLE_TYPE = 'BASE TABLE'
+        AND NOT EXISTS (
+          SELECT 1 FROM information_schema.COLUMNS c
+          WHERE c.TABLE_SCHEMA = t.TABLE_SCHEMA
+            AND c.TABLE_NAME = t.TABLE_NAME
+            AND c.COLUMN_KEY = 'PRI'
+        )
+    `);
+
+    // Add missing PK warnings
+    for (const table of tablesWithoutPK as any[]) {
+      issues.push({
+        type: 'warning',
+        table: table.TABLE_NAME,
+        message: 'Table has no primary key defined',
+        recommendation: 'Consider adding a primary key for better performance and data integrity'
+      });
+    }
+
+    // Check for large tables without indexes
+    const [largeTablesWithoutIndexes] = await connection.execute(`
+      SELECT t.TABLE_NAME, t.TABLE_ROWS
+      FROM information_schema.TABLES t
+      WHERE t.TABLE_SCHEMA = DATABASE()
+        AND t.TABLE_TYPE = 'BASE TABLE'
+        AND t.TABLE_ROWS > 1000
+        AND NOT EXISTS (
+          SELECT 1 FROM information_schema.STATISTICS s
+          WHERE s.TABLE_SCHEMA = t.TABLE_SCHEMA
+            AND s.TABLE_NAME = t.TABLE_NAME
+            AND s.INDEX_NAME != 'PRIMARY'
+        )
+    `);
+
+    // Add indexing recommendations
+    for (const table of largeTablesWithoutIndexes as any[]) {
+      issues.push({
+        type: 'info',
+        table: table.TABLE_NAME,
+        message: `Large table (${table.TABLE_ROWS} rows) has no secondary indexes`,
+        recommendation: 'Consider adding indexes on frequently queried columns'
+      });
+    }
+
     connection.release();
+    
+    // Calculate summary
+    const summary = {
+      totalIssues: issues.length,
+      errors: issues.filter(i => i.type === 'error').length,
+      warnings: issues.filter(i => i.type === 'warning').length,
+      infos: issues.filter(i => i.type === 'info').length
+    };
+
     return {
-      orphanedForeignKeys: orphanedFKs,
-      isValid: (orphanedFKs as any[]).length === 0
+      isValid: summary.errors === 0,
+      issues,
+      summary,
+      // Keep backward compatibility
+      orphanedForeignKeys: orphanedFKs
     };
   } catch (error) {
     console.error('[DB] Error validating schema integrity:', error);

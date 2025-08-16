@@ -18,7 +18,8 @@ import {
   BookUser,
   Library,
   Search,
-  Activity
+  Activity,
+  FileCheck
 } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
@@ -69,6 +70,11 @@ const menuItems = [
     href: '/documents',
     label: 'Documentos',
     icon: FileText,
+  },
+  {
+    href: '/postulations',
+    label: 'Validación Docs',
+    icon: FileCheck,
   },
   {
     href: '/users',

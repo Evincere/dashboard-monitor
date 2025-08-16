@@ -1,0 +1,24 @@
+[
+  {
+    "id": "backut-test_2025-08-15T16-17-13-336Z",
+    "name": "backut-test_2025-08-15T16-17-13-336Z.sql",
+    "date": "2025-08-15T16:17:14.622Z",
+    "size": "3.01 MB",
+    "sizeBytes": 3156261,
+    "integrity": "pending",
+    "type": "full",
+    "includesDocuments": false,
+    "path": "B:\\CODE\\PROYECTOS\\mpd-dashboard\\database\\backups\\backut-test_2025-08-15T16-17-13-336Z.sql"
+  },
+  {
+    "id": "mpd_concursos_local_backup_20250815_082917",
+    "name": "mpd_concursos_local_backup_20250815_082917.sql",
+    "date": "2025-08-15T11:29:18.617Z",
+    "size": "44.27 KB",
+    "sizeBytes": 45331,
+    "integrity": "pending",
+    "type": "full",
+    "includesDocuments": false,
+    "path": "B:\\CODE\\PROYECTOS\\mpd-dashboard\\database\\backups\\mpd_concursos_local_backup_20250815_082917.sql"
+  }
+]

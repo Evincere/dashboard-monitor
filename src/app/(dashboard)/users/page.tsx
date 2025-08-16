@@ -89,8 +89,8 @@ export default function UsersPage() {
     const [loading, setLoading] = useState(true);
     const [filters, setFilters] = useState<UserFilters>({
         search: '',
-        role: '',
-        status: ''
+        role: 'all',
+        status: 'all'
     });
     const [pagination, setPagination] = useState<Pagination>({
         page: 1,
@@ -121,8 +121,8 @@ export default function UsersPage() {
                 page: pagination.page.toString(),
                 limit: pagination.limit.toString(),
                 ...(filters.search && { search: filters.search }),
-                ...(filters.role && { role: filters.role }),
-                ...(filters.status && { status: filters.status })
+                ...(filters.role && filters.role !== 'all' && { role: filters.role }),
+                ...(filters.status && filters.status !== 'all' && { status: filters.status })
             });
 
             const response = await fetch(`/api/users?${params}`);
@@ -377,7 +377,7 @@ export default function UsersPage() {
                                     <SelectValue placeholder="Filtrar por rol" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="">Todos los roles</SelectItem>
+                                    <SelectItem value="all">Todos los roles</SelectItem>
                                     <SelectItem value="ROLE_ADMIN">Administrador</SelectItem>
                                     <SelectItem value="ROLE_USER">Usuario</SelectItem>
                                 </SelectContent>
@@ -387,7 +387,7 @@ export default function UsersPage() {
                                     <SelectValue placeholder="Filtrar por estado" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="">Todos los estados</SelectItem>
+                                    <SelectItem value="all">Todos los estados</SelectItem>
                                     <SelectItem value="ACTIVE">Activo</SelectItem>
                                     <SelectItem value="INACTIVE">Inactivo</SelectItem>
                                     <SelectItem value="BLOCKED">Bloqueado</SelectItem>
@@ -467,13 +467,11 @@ export default function UsersPage() {
                                                 </TableCell>
                                                 <TableCell className="text-right">
                                                     <div className="flex justify-end gap-1">
-                                                        <Link href={`/documents?user=${user.username}`} passHref legacyBehavior>
-                                                            <Button variant="outline" size="icon" asChild title="Ver Documentos">
-                                                                <a>
-                                                                    <Files className="h-4 w-4" />
-                                                                </a>
-                                                            </Button>
-                                                        </Link>
+                                                        <Button variant="outline" size="icon" asChild title="Ver Documentos">
+                                                            <Link href={`/documents?user=${user.username}`}>
+                                                                <Files className="h-4 w-4" />
+                                                            </Link>
+                                                        </Button>
                                                         <Button 
                                                             variant="outline" 
                                                             size="icon" 

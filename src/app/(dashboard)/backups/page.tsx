@@ -99,16 +99,18 @@ export default function BackupsPage() {
       } else {
         toast({
           title: 'Error',
-          description: 'Failed to fetch backups',
+          description: 'Error al cargar los backups',
           variant: 'destructive',
+          duration: 5000,
         });
       }
     } catch (error) {
       console.error('Error fetching backups:', error);
       toast({
         title: 'Error',
-        description: 'Failed to fetch backups',
+        description: 'Error al cargar los backups',
         variant: 'destructive',
+        duration: 5000,
       });
     } finally {
       setLoading(false);
@@ -119,8 +121,9 @@ export default function BackupsPage() {
     if (!createForm.name.trim()) {
       toast({
         title: 'Error',
-        description: 'Backup name is required',
+        description: 'El nombre del backup es requerido',
         variant: 'destructive',
+        duration: 5000,
       });
       return;
     }
@@ -139,8 +142,9 @@ export default function BackupsPage() {
 
       if (result.success) {
         toast({
-          title: 'Success',
-          description: 'Backup created successfully',
+          title: 'Éxito',
+          description: 'Backup creado exitosamente',
+          duration: 5000,
         });
         setCreateDialogOpen(false);
         setCreateForm({ name: '', description: '', includeDocuments: true });
@@ -148,16 +152,18 @@ export default function BackupsPage() {
       } else {
         toast({
           title: 'Error',
-          description: result.error || 'Failed to create backup',
+          description: result.error || 'Error al crear el backup',
           variant: 'destructive',
+          duration: 5000,
         });
       }
     } catch (error) {
       console.error('Error creating backup:', error);
       toast({
         title: 'Error',
-        description: 'Failed to create backup',
+        description: 'Error al crear el backup',
         variant: 'destructive',
+        duration: 5000,
       });
     } finally {
       setCreating(false);
@@ -182,22 +188,25 @@ export default function BackupsPage() {
 
       if (result.success) {
         toast({
-          title: 'Success',
-          description: 'Backup restored successfully',
+          title: 'Éxito',
+          description: 'Backup restaurado exitosamente',
+          duration: 5000,
         });
       } else {
         toast({
           title: 'Error',
-          description: result.error || 'Failed to restore backup',
+          description: result.error || 'Error al restaurar el backup',
           variant: 'destructive',
+          duration: 5000,
         });
       }
     } catch (error) {
       console.error('Error restoring backup:', error);
       toast({
         title: 'Error',
-        description: 'Failed to restore backup',
+        description: 'Error al restaurar el backup',
         variant: 'destructive',
+        duration: 5000,
       });
     } finally {
       setRestoring(null);
@@ -215,23 +224,26 @@ export default function BackupsPage() {
 
       if (result.success) {
         toast({
-          title: 'Success',
-          description: 'Backup deleted successfully',
+          title: 'Éxito',
+          description: 'Backup eliminado exitosamente',
+          duration: 5000,
         });
         fetchBackups();
       } else {
         toast({
           title: 'Error',
-          description: result.error || 'Failed to delete backup',
+          description: result.error || 'Error al eliminar el backup',
           variant: 'destructive',
+          duration: 5000,
         });
       }
     } catch (error) {
       console.error('Error deleting backup:', error);
       toast({
         title: 'Error',
-        description: 'Failed to delete backup',
+        description: 'Error al eliminar el backup',
         variant: 'destructive',
+        duration: 5000,
       });
     } finally {
       setDeleting(null);
@@ -254,13 +266,13 @@ export default function BackupsPage() {
   const getIntegrityBadge = (integrity: string) => {
     switch (integrity) {
       case 'verified':
-        return <Badge variant="default" className="bg-green-100 text-green-800">Verified</Badge>;
+        return <Badge variant="default" className="bg-green-100 text-green-800">Verificado</Badge>;
       case 'failed':
-        return <Badge variant="destructive">Failed</Badge>;
+        return <Badge variant="destructive">Fallido</Badge>;
       case 'pending':
-        return <Badge variant="secondary">Pending</Badge>;
+        return <Badge variant="secondary">Pendiente</Badge>;
       default:
-        return <Badge variant="outline">Unknown</Badge>;
+        return <Badge variant="outline">Desconocido</Badge>;
     }
   };
 
@@ -268,9 +280,9 @@ export default function BackupsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Backup Management</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Gestión de Backups</h1>
           <p className="text-muted-foreground">
-            Manage database and document backups for the MPD Concursos system
+            Administra backups de base de datos y documentos para el sistema MPD Concursos
           </p>
         </div>
         <div className="flex gap-2">
@@ -280,39 +292,39 @@ export default function BackupsPage() {
             disabled={loading}
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
+            Actualizar
           </Button>
           <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
             <DialogTrigger asChild>
               <Button>
                 <Plus className="h-4 w-4 mr-2" />
-                Create Backup
+                Crear Backup
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Create New Backup</DialogTitle>
+                <DialogTitle>Crear Nuevo Backup</DialogTitle>
                 <DialogDescription>
-                  Create a new backup of the database and optionally include documents.
+                  Crea un nuevo backup de la base de datos y opcionalmente incluye documentos.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
                 <div>
-                  <Label htmlFor="name">Backup Name</Label>
+                  <Label htmlFor="name">Nombre del Backup</Label>
                   <Input
                     id="name"
                     value={createForm.name}
                     onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
-                    placeholder="Enter backup name"
+                    placeholder="Ingresa el nombre del backup"
                   />
                 </div>
                 <div>
-                  <Label htmlFor="description">Description (Optional)</Label>
+                  <Label htmlFor="description">Descripción (Opcional)</Label>
                   <Textarea
                     id="description"
                     value={createForm.description}
                     onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
-                    placeholder="Enter backup description"
+                    placeholder="Ingresa la descripción del backup"
                     rows={3}
                   />
                 </div>
@@ -324,7 +336,7 @@ export default function BackupsPage() {
                       setCreateForm({ ...createForm, includeDocuments: checked as boolean })
                     }
                   />
-                  <Label htmlFor="includeDocuments">Include documents</Label>
+                  <Label htmlFor="includeDocuments">Incluir documentos</Label>
                 </div>
               </div>
               <DialogFooter>
@@ -333,18 +345,18 @@ export default function BackupsPage() {
                   onClick={() => setCreateDialogOpen(false)}
                   disabled={creating}
                 >
-                  Cancel
+                  Cancelar
                 </Button>
                 <Button onClick={createBackup} disabled={creating}>
                   {creating ? (
                     <>
                       <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                      Creating...
+                      Creando...
                     </>
                   ) : (
                     <>
                       <Database className="h-4 w-4 mr-2" />
-                      Create Backup
+                      Crear Backup
                     </>
                   )}
                 </Button>
@@ -367,7 +379,7 @@ export default function BackupsPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Size</CardTitle>
+            <CardTitle className="text-sm font-medium">Tamaño Total</CardTitle>
             <FolderOpen className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -381,7 +393,7 @@ export default function BackupsPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Verified Backups</CardTitle>
+            <CardTitle className="text-sm font-medium">Backups Verificados</CardTitle>
             <CheckCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -395,40 +407,40 @@ export default function BackupsPage() {
       {/* Backups Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Backup History</CardTitle>
+          <CardTitle>Historial de Backups</CardTitle>
           <CardDescription>
-            View and manage all system backups stored in mpd_concursos_backup_data_prod
+            Ver y administrar todos los backups del sistema almacenados en mpd_concursos_backup_data_prod
           </CardDescription>
         </CardHeader>
         <CardContent>
           {loading ? (
             <div className="flex items-center justify-center py-8">
               <RefreshCw className="h-6 w-6 animate-spin mr-2" />
-              Loading backups...
+              Cargando backups...
             </div>
           ) : backups.length === 0 ? (
             <div className="text-center py-8">
               <Database className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No backups found</h3>
+              <h3 className="text-lg font-semibold mb-2">No se encontraron backups</h3>
               <p className="text-muted-foreground mb-4">
-                Create your first backup to get started
+                Crea tu primer backup para comenzar
               </p>
               <Button onClick={() => setCreateDialogOpen(true)}>
                 <Plus className="h-4 w-4 mr-2" />
-                Create Backup
+                Crear Backup
               </Button>
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Size</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Integrity</TableHead>
-                  <TableHead>Includes Docs</TableHead>
-                  <TableHead>Actions</TableHead>
+                  <TableHead>Nombre</TableHead>
+                  <TableHead>Fecha</TableHead>
+                  <TableHead>Tamaño</TableHead>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead>Integridad</TableHead>
+                  <TableHead>Incluye Docs</TableHead>
+                  <TableHead>Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -445,11 +457,11 @@ export default function BackupsPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {new Date(backup.date).toLocaleString()}
+                      {new Date(backup.date).toLocaleString('es-ES')}
                     </TableCell>
                     <TableCell>{backup.size}</TableCell>
                     <TableCell>
-                      <Badge variant="outline">{backup.type}</Badge>
+                      <Badge variant="outline">{backup.type === 'full' ? 'Completo' : 'Incremental'}</Badge>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
@@ -482,19 +494,19 @@ export default function BackupsPage() {
                           </AlertDialogTrigger>
                           <AlertDialogContent>
                             <AlertDialogHeader>
-                              <AlertDialogTitle>Restore Backup</AlertDialogTitle>
+                              <AlertDialogTitle>Restaurar Backup</AlertDialogTitle>
                               <AlertDialogDescription>
-                                Are you sure you want to restore this backup? This action will replace
-                                the current database with the backup data and cannot be undone.
+                                ¿Estás seguro de que quieres restaurar este backup? Esta acción reemplazará
+                                la base de datos actual con los datos del backup y no se puede deshacer.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
                               <AlertDialogAction
                                 onClick={() => restoreBackup(backup.id)}
                                 className="bg-red-600 hover:bg-red-700"
                               >
-                                Restore Backup
+                                Restaurar Backup
                               </AlertDialogAction>
                             </AlertDialogFooter>
                           </AlertDialogContent>
@@ -516,18 +528,18 @@ export default function BackupsPage() {
                           </AlertDialogTrigger>
                           <AlertDialogContent>
                             <AlertDialogHeader>
-                              <AlertDialogTitle>Delete Backup</AlertDialogTitle>
+                              <AlertDialogTitle>Eliminar Backup</AlertDialogTitle>
                               <AlertDialogDescription>
-                                Are you sure you want to delete this backup? This action cannot be undone.
+                                ¿Estás seguro de que quieres eliminar este backup? Esta acción no se puede deshacer.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
                               <AlertDialogAction
                                 onClick={() => deleteBackup(backup.id)}
                                 className="bg-red-600 hover:bg-red-700"
                               >
-                                Delete
+                                Eliminar
                               </AlertDialogAction>
                             </AlertDialogFooter>
                           </AlertDialogContent>
@@ -546,9 +558,9 @@ export default function BackupsPage() {
       <Alert>
         <AlertTriangle className="h-4 w-4" />
         <AlertDescription>
-          <strong>Important:</strong> Backup operations may take several minutes to complete depending on database size. 
-          Document backups are stored separately and require additional storage space. Always verify backup integrity 
-          before relying on them for recovery purposes.
+          <strong>Importante:</strong> Las operaciones de backup pueden tomar varios minutos en completarse dependiendo del tamaño de la base de datos. 
+          Los backups de documentos se almacenan por separado y requieren espacio de almacenamiento adicional. Siempre verifica la integridad del backup 
+          antes de confiar en ellos para propósitos de recuperación.
         </AlertDescription>
       </Alert>
     </div>

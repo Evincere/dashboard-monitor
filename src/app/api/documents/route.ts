@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDatabaseConnection } from '@/services/database';
 import type { RowDataPacket } from 'mysql2';
 import { z } from 'zod';
+import fs from 'fs';
+import path from 'path';
 
 // Validation schemas
 const DocumentFilterSchema = z.object({
@@ -48,6 +50,73 @@ interface CacheEntry {
 const cache = new Map<string, CacheEntry>();
 const CACHE_DURATION = 30 * 1000; // 30 seconds
 
+// Configuration for file storage based on MPD system architecture
+const STORAGE_BASE_PATH = process.env.STORAGE_BASE_DIR || '/app/storage';
+const DOCUMENTS_DIR = process.env.DOCUMENTS_DIR || 'documents';
+const LOCAL_DOCS_PATH = process.env.LOCAL_DOCUMENTS_PATH || 'B:\\concursos_situacion_post_gracia\\descarga_administracion_20250814_191745\\documentos';
+
+/**
+ * Get file size from filesystem
+ * @param filePath - Relative path from database (format: "dni/filename")
+ * @returns File size in bytes or 0 if file doesn't exist
+ */
+async function getFileSize(filePath: string): Promise<number> {
+  if (!filePath) return 0;
+  
+  try {
+    // Try multiple possible paths based on MPD storage structure
+    const possiblePaths = [
+      // Local development path with real documents (highest priority)
+      path.join(LOCAL_DOCS_PATH, filePath),
+      // Primary production path (Docker volume mount)
+      path.join(STORAGE_BASE_PATH, DOCUMENTS_DIR, filePath),
+      // Development/local paths
+      path.join(process.cwd(), 'storage', 'documents', filePath),
+      path.join(process.cwd(), 'uploads', filePath),
+      // Legacy paths for compatibility
+      path.join('/app/storage/documents', filePath),
+      path.join('C:', 'app', 'storage', 'documents', filePath),
+      // Direct path if already absolute
+      filePath
+    ];
+    
+    for (const fullPath of possiblePaths) {
+      try {
+        const stats = await fs.promises.stat(fullPath);
+        if (stats.isFile()) {
+          return stats.size;
+        }
+      } catch (err) {
+        // Continue to next path
+        continue;
+      }
+    }
+    
+    // If no file found, return 0
+    return 0;
+  } catch (error) {
+    console.warn(`Could not get file size for ${filePath}:`, error);
+    return 0;
+  }
+}
+
+/**
+ * Get file sizes for multiple documents concurrently
+ * @param documents - Array of document objects with filePath
+ * @returns Array of documents with calculated file sizes
+ */
+async function calculateFileSizes(documents: any[]): Promise<any[]> {
+  const sizePromises = documents.map(async (doc) => {
+    const fileSize = await getFileSize(doc.filePath);
+    return {
+      ...doc,
+      fileSize
+    };
+  });
+  
+  return Promise.all(sizePromises);
+}
+
 function getCachedData(key: string): any | null {
   const entry = cache.get(key);
   if (entry && Date.now() - entry.timestamp < CACHE_DURATION) {
@@ -67,188 +136,120 @@ function setCachedData(key: string, data: any): void {
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const filters = DocumentFilterSchema.parse(Object.fromEntries(searchParams));
+    const page = Number(searchParams.get('page')) || 1;
+    const limit = Number(searchParams.get('limit')) || 20;
     
-    // Create cache key based on filters
-    const cacheKey = `documents-${JSON.stringify(filters)}`;
-    const cachedData = getCachedData(cacheKey);
-    if (cachedData) {
-      return NextResponse.json({
-        ...cachedData,
-        cached: true,
-        timestamp: new Date().toISOString()
-      });
-    }
-
     const connection = await getDatabaseConnection();
 
     try {
-      // Build WHERE clause based on filters
-      const whereConditions: string[] = [];
-      const queryParams: any[] = [];
-
-      if (filters.user) {
-        whereConditions.push('(u.name LIKE ? OR u.email LIKE ?)');
-        queryParams.push(`%${filters.user}%`, `%${filters.user}%`);
-      }
-
-      if (filters.type) {
-        whereConditions.push('d.document_type = ?');
-        queryParams.push(filters.type);
-      }
-
-      if (filters.status) {
-        whereConditions.push('d.validation_status = ?');
-        queryParams.push(filters.status);
-      }
-
-      if (filters.contest) {
-        whereConditions.push('c.title LIKE ?');
-        queryParams.push(`%${filters.contest}%`);
-      }
-
-      if (filters.dateFrom) {
-        whereConditions.push('DATE(d.created_at) >= ?');
-        queryParams.push(filters.dateFrom);
-      }
-
-      if (filters.dateTo) {
-        whereConditions.push('DATE(d.created_at) <= ?');
-        queryParams.push(filters.dateTo);
-      }
-
-      if (filters.search) {
-        whereConditions.push('(d.name LIKE ? OR d.original_name LIKE ? OR u.name LIKE ? OR u.email LIKE ?)');
-        queryParams.push(`%${filters.search}%`, `%${filters.search}%`, `%${filters.search}%`, `%${filters.search}%`);
-      }
-
-      const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
-
       // Get total count
-      const countQuery = `
-        SELECT COUNT(*) as total
-        FROM documents d
-        JOIN users u ON d.user_id = u.id
-        LEFT JOIN contests c ON d.contest_id = c.id
-        ${whereClause}
-      `;
-
-      const [countResult] = await connection.execute(countQuery, queryParams) as [RowDataPacket[], any];
+      const countQuery = 'SELECT COUNT(*) as total FROM documents';
+      const [countResult] = await connection.query(countQuery) as [RowDataPacket[], any];
       const totalCount = countResult[0]?.total || 0;
 
       // Get paginated documents
-      const offset = (filters.page - 1) * filters.limit;
+      const offset = (page - 1) * limit;
       const documentsQuery = `
         SELECT 
           HEX(d.id) as id,
-          d.name,
-          d.original_name,
+          d.file_name as name,
+          d.file_name as original_name,
           d.file_path,
-          d.file_size,
-          d.mime_type,
-          d.document_type,
-          d.validation_status,
-          d.created_at,
-          d.updated_at,
+          d.content_type as mime_type,
+          COALESCE(dt.name, 'Sin especificar') as document_type,
+          d.status as validation_status,
+          d.upload_date as created_at,
+          d.upload_date as updated_at,
           HEX(d.user_id) as user_id,
-          u.name as user_name,
-          u.email as user_email,
-          HEX(d.contest_id) as contest_id,
-          c.title as contest_title
+          COALESCE(CONCAT(u.first_name, ' ', u.last_name), 'Unknown User') as user_name,
+          COALESCE(u.email, 'unknown@email.com') as user_email
         FROM documents d
-        JOIN users u ON d.user_id = u.id
-        LEFT JOIN contests c ON d.contest_id = c.id
-        ${whereClause}
-        ORDER BY d.created_at DESC
-        LIMIT ? OFFSET ?
+        LEFT JOIN user_entity u ON d.user_id = u.id
+        LEFT JOIN document_types dt ON d.document_type_id = dt.id
+        ORDER BY d.upload_date DESC
+        LIMIT ${limit} OFFSET ${offset}
       `;
 
-      const [documentsResult] = await connection.execute(
-        documentsQuery, 
-        [...queryParams, filters.limit, offset]
-      ) as [DocumentRow[], any];
+      const [documentsResult] = await connection.query(documentsQuery) as [DocumentRow[], any];
 
-      // Get summary statistics
+      // Get statistics (without file_size since it doesn't exist in this table)
       const statsQuery = `
         SELECT 
           COUNT(*) as total_documents,
-          COUNT(DISTINCT d.user_id) as unique_users,
-          SUM(d.file_size) as total_size,
-          AVG(d.file_size) as avg_size,
-          COUNT(CASE WHEN d.validation_status = 'PENDING' THEN 1 END) as pending_count,
-          COUNT(CASE WHEN d.validation_status = 'APPROVED' THEN 1 END) as approved_count,
-          COUNT(CASE WHEN d.validation_status = 'REJECTED' THEN 1 END) as rejected_count
-        FROM documents d
-        JOIN users u ON d.user_id = u.id
-        LEFT JOIN contests c ON d.contest_id = c.id
-        ${whereClause}
+          COUNT(DISTINCT user_id) as unique_users,
+          SUM(CASE WHEN status = 'PENDING' THEN 1 ELSE 0 END) as pending_count,
+          SUM(CASE WHEN status = 'APPROVED' THEN 1 ELSE 0 END) as approved_count,
+          SUM(CASE WHEN status = 'REJECTED' THEN 1 ELSE 0 END) as rejected_count
+        FROM documents
       `;
-
-      const [statsResult] = await connection.execute(statsQuery, queryParams) as [RowDataPacket[], any];
-      const stats = statsResult[0];
-
-      // Get document types distribution
+      
+      const [statsResult] = await connection.query(statsQuery) as [RowDataPacket[], any];
+      const stats = statsResult[0] || {};
+      
+      // Get document types
       const typesQuery = `
         SELECT 
-          d.document_type,
+          COALESCE(dt.name, 'Sin especificar') as type,
           COUNT(*) as count
         FROM documents d
-        JOIN users u ON d.user_id = u.id
-        LEFT JOIN contests c ON d.contest_id = c.id
-        ${whereClause}
-        GROUP BY d.document_type
+        LEFT JOIN document_types dt ON d.document_type_id = dt.id
+        GROUP BY dt.name
         ORDER BY count DESC
       `;
+      
+      const [typesResult] = await connection.query(typesQuery) as [RowDataPacket[], any];
 
-      const [typesResult] = await connection.execute(typesQuery, queryParams) as [RowDataPacket[], any];
+      // Calculate file sizes from filesystem
+      const documentsWithoutSizes = documentsResult.map(doc => ({
+        id: doc.id,
+        name: doc.name,
+        originalName: doc.original_name,
+        filePath: doc.file_path || '',
+        fileSize: 0, // Will be calculated
+        mimeType: doc.mime_type || 'application/octet-stream',
+        documentType: doc.document_type || 'Sin especificar',
+        validationStatus: doc.validation_status || 'PENDING',
+        createdAt: doc.created_at,
+        updatedAt: doc.updated_at,
+        user: {
+          id: doc.user_id,
+          name: doc.user_name ? doc.user_name.trim() : 'Unknown User',
+          email: doc.user_email || 'unknown@email.com'
+        },
+        contest: null
+      }));
+      
+      // Calculate file sizes concurrently
+      const documentsWithSizes = await calculateFileSizes(documentsWithoutSizes);
+      
+      // Calculate total and average sizes
+      const totalSize = documentsWithSizes.reduce((sum, doc) => sum + doc.fileSize, 0);
+      const avgSize = documentsWithSizes.length > 0 ? Math.round(totalSize / documentsWithSizes.length) : 0;
 
       const response = {
-        documents: documentsResult.map(doc => ({
-          id: doc.id,
-          name: doc.name,
-          originalName: doc.original_name,
-          filePath: doc.file_path,
-          fileSize: doc.file_size,
-          mimeType: doc.mime_type,
-          documentType: doc.document_type,
-          validationStatus: doc.validation_status,
-          createdAt: doc.created_at,
-          updatedAt: doc.updated_at,
-          user: {
-            id: doc.user_id,
-            name: doc.user_name,
-            email: doc.user_email
-          },
-          contest: doc.contest_id ? {
-            id: doc.contest_id,
-            title: doc.contest_title
-          } : null
-        })),
+        documents: documentsWithSizes,
         pagination: {
-          page: filters.page,
-          limit: filters.limit,
+          page: page,
+          limit: limit,
           total: totalCount,
-          totalPages: Math.ceil(totalCount / filters.limit)
+          totalPages: Math.ceil(totalCount / limit)
         },
         statistics: {
-          totalDocuments: stats?.total_documents || 0,
-          uniqueUsers: stats?.unique_users || 0,
-          totalSize: stats?.total_size || 0,
-          avgSize: stats?.avg_size || 0,
+          totalDocuments: parseInt(stats.total_documents) || 0,
+          uniqueUsers: parseInt(stats.unique_users) || 0,
+          totalSize: totalSize, // Calculated from filesystem
+          avgSize: avgSize, // Calculated from filesystem
           statusCounts: {
-            pending: stats?.pending_count || 0,
-            approved: stats?.approved_count || 0,
-            rejected: stats?.rejected_count || 0
+            pending: parseInt(stats.pending_count) || 0,
+            approved: parseInt(stats.approved_count) || 0,
+            rejected: parseInt(stats.rejected_count) || 0
           }
         },
         documentTypes: typesResult.map(type => ({
-          type: type.document_type,
-          count: type.count
+          type: type.type,
+          count: parseInt(type.count)
         }))
       };
-
-      // Cache the results
-      setCachedData(cacheKey, response);
 
       return NextResponse.json({
         ...response,
@@ -294,14 +295,11 @@ export async function PUT(request: NextRequest) {
       // Update document
       const updateQuery = `
         UPDATE documents 
-        SET validation_status = ?, updated_at = NOW()
-        WHERE id = UNHEX(?)
+        SET status = '${updateData.validation_status}'
+        WHERE id = UNHEX('${documentId}')
       `;
 
-      const [result] = await connection.execute(updateQuery, [
-        updateData.validation_status,
-        documentId
-      ]);
+      const [result] = await connection.query(updateQuery);
 
       // Clear cache
       cache.clear();
@@ -346,12 +344,12 @@ export async function DELETE(request: NextRequest) {
     try {
       // Get document info before deletion for file cleanup
       const getDocQuery = `
-        SELECT file_path, name 
+        SELECT file_path, file_name 
         FROM documents 
-        WHERE id = UNHEX(?)
+        WHERE id = UNHEX('${documentId}')
       `;
 
-      const [docResult] = await connection.execute(getDocQuery, [documentId]) as [RowDataPacket[], any];
+      const [docResult] = await connection.query(getDocQuery) as [RowDataPacket[], any];
       
       if (docResult.length === 0) {
         return NextResponse.json(
@@ -363,10 +361,10 @@ export async function DELETE(request: NextRequest) {
       // Delete document from database
       const deleteQuery = `
         DELETE FROM documents 
-        WHERE id = UNHEX(?)
+        WHERE id = UNHEX('${documentId}')
       `;
 
-      await connection.execute(deleteQuery, [documentId]);
+      await connection.query(deleteQuery);
 
       // Clear cache
       cache.clear();
@@ -374,6 +372,7 @@ export async function DELETE(request: NextRequest) {
       // Note: File system cleanup would be handled here in a real implementation
       // For now, we just log the file path that should be deleted
       console.log(`Document deleted from DB. File to cleanup: ${docResult[0].file_path}`);
+      console.log(`Deleted document: ${docResult[0].file_name}`);
 
       return NextResponse.json({
         success: true,
