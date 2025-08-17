@@ -256,7 +256,7 @@ export default function PostulationCard({
                 <div className="flex items-center space-x-2 text-sm">
                   <MapPin className="w-4 h-4 text-muted-foreground" />
                   <span className="font-medium text-muted-foreground">
-                    Circunscripción:
+                    Centro de Vida:
                   </span>
                   <span className="text-foreground font-medium">
                     {inscription.centroDeVida}
@@ -285,7 +285,7 @@ export default function PostulationCard({
                     Documentos:
                   </span>
                   <span className="text-sm text-foreground font-medium">
-                    {documents.total} total ({documents.required} obligatorios)
+                    {documents.total} total • {documents.required}/7 obligatorios
                   </span>
                 </div>
 
@@ -342,7 +342,7 @@ export default function PostulationCard({
             {/* Tipos de documentos visados */}
             {documents.types && documents.types.length > 0 && (
               <div className="flex flex-wrap gap-1">
-                {documents.types.slice(0, 5).map((type, index) => {
+                {documents.types.map((type, index) => {
                   const isValidated = validationStatus === 'COMPLETED' || validationStatus === 'PARTIAL';
                   return (
                     <div key={index} className="relative">
@@ -359,11 +359,6 @@ export default function PostulationCard({
                     </div>
                   );
                 })}
-                {documents.types.length > 5 && (
-                  <Badge variant="outline" className="text-xs">
-                    +{documents.types.length - 5} más
-                  </Badge>
-                )}
               </div>
             )}
             </div>

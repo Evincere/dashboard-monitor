@@ -51,8 +51,18 @@ interface PostulantInfo {
     createdAt: string;
   };
   contest: {
+    id: number;
     title: string;
+    category: string;
     position: string;
+    department: string;
+    contestClass: string;
+    status: string;
+    statusDescription: string;
+    inscriptionStartDate: string;
+    inscriptionEndDate: string;
+    dependency?: string;
+    location?: string;
   };
 }
 
@@ -63,6 +73,7 @@ interface ValidationCompletionModalProps {
   postulant: PostulantInfo;
   onApprovePostulation: () => void;
   onRejectPostulation: () => void;
+  onInitiateValidation?: () => void; // Nueva función para iniciar validación
   onGenerateEmailTemplate: (emailContent: string) => void;
   onNextPostulation: () => void;
 }
@@ -74,6 +85,7 @@ export default function ValidationCompletionModal({
   postulant,
   onApprovePostulation,
   onRejectPostulation,
+  onInitiateValidation,
   onGenerateEmailTemplate,
   onNextPostulation,
 }: ValidationCompletionModalProps) {
@@ -85,8 +97,31 @@ export default function ValidationCompletionModal({
   const requiredDocs = documents.filter(doc => doc.isRequired);
   const approvedRequiredDocs = requiredDocs.filter(doc => doc.validationStatus === "APPROVED");
   const rejectedRequiredDocs = requiredDocs.filter(doc => doc.validationStatus === "REJECTED");
+  const pendingRequiredDocs = requiredDocs.filter(doc => doc.validationStatus === "PENDING");
+  
+  // Diferentes criterios para "completado"
   const allRequiredApproved = requiredDocs.length > 0 && approvedRequiredDocs.length === requiredDocs.length;
+  const allRequiredValidated = requiredDocs.length > 0 && pendingRequiredDocs.length === 0; // Aprobados O rechazados, no pendientes
   const hasRejectedRequired = rejectedRequiredDocs.length > 0;
+  
+  console.log('📊 Modal validation stats:', {
+    requiredDocs: requiredDocs.length,
+    approved: approvedRequiredDocs.length,
+    rejected: rejectedRequiredDocs.length,
+    pending: pendingRequiredDocs.length,
+    allRequiredApproved,
+    allRequiredValidated,
+    inscriptionState: postulant.inscription.state
+  });
+  
+  // Check inscription state - simplified flow
+  const inscriptionState = postulant.inscription.state;
+  const isReadyToInitiateValidation = inscriptionState === 'COMPLETED_WITH_DOCS' && !allRequiredValidated;
+  const canMakeFinalDecision = inscriptionState === 'COMPLETED_WITH_DOCS' || inscriptionState === 'PENDING';
+  
+  // Si todos los documentos obligatorios están validados (aprobados o rechazados), permitir decisión final
+  const showDirectApproval = allRequiredApproved && canMakeFinalDecision;
+  const canDecide = allRequiredValidated && canMakeFinalDecision && !showDirectApproval;
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('es-ES', {
@@ -103,7 +138,7 @@ export default function ValidationCompletionModal({
 
     const template = `Estimado/a ${postulant.user.fullName},
 
-Espero que se encuentre bien. Me dirijo a usted en relación a su postulación para el concurso "${postulant.contest.title}" - ${postulant.contest.position}.
+Espero que se encuentre bien. Me dirijo a usted en relación a su postulación para el concurso "${postulant.contest.title}" - ${postulant.contest.category}.
 
 Después de revisar su documentación, hemos identificado que algunos documentos requieren ser corregidos y vueltos a subir:
 
@@ -280,15 +315,43 @@ Equipo de Validación de Documentos`;
               <FileText className="w-5 h-5" />
               Información del Concurso
             </h3>
-            <div className="space-y-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <div className="text-sm font-medium text-muted-foreground">Título:</div>
                 <div className="font-medium">{postulant.contest.title}</div>
               </div>
               <div>
+                <div className="text-sm font-medium text-muted-foreground">Categoría:</div>
+                <div className="font-medium">{postulant.contest.category}</div>
+              </div>
+              <div>
                 <div className="text-sm font-medium text-muted-foreground">Posición:</div>
                 <div className="font-medium">{postulant.contest.position}</div>
               </div>
+              <div>
+                <div className="text-sm font-medium text-muted-foreground">Departamento:</div>
+                <div className="font-medium">{postulant.contest.department}</div>
+              </div>
+              <div>
+                <div className="text-sm font-medium text-muted-foreground">Clase:</div>
+                <div className="font-medium">{postulant.contest.contestClass}</div>
+              </div>
+              <div>
+                <div className="text-sm font-medium text-muted-foreground">Estado:</div>
+                <div className="font-medium">{postulant.contest.statusDescription}</div>
+              </div>
+              <div>
+                <div className="text-sm font-medium text-muted-foreground">Periodo de Inscripciones:</div>
+                <div className="font-medium text-sm">
+                  {formatDate(postulant.contest.inscriptionStartDate)} - {formatDate(postulant.contest.inscriptionEndDate)}
+                </div>
+              </div>
+              {postulant.contest.dependency && (
+                <div>
+                  <div className="text-sm font-medium text-muted-foreground">Dependencia:</div>
+                  <div className="font-medium">{postulant.contest.dependency}</div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -382,42 +445,71 @@ Equipo de Validación de Documentos`;
             Cancelar
           </Button>
           
-          {allRequiredApproved ? (
+          {/* CASO 1: Todos los documentos están aprobados - Permitir aprobación directa */}
+          {showDirectApproval ? (
+            <Button
+              onClick={onApprovePostulation}
+              className="bg-green-600 hover:bg-green-700 text-white gap-2"
+            >
+              <CheckCircle className="w-4 h-4" />
+              Aprobar y Continuar con Siguiente
+            </Button>
+          
+          /* CASO 2: No todos aprobados pero sí validados - Mostrar opciones basadas en estado */
+          ) : canDecide ? (
             <>
-              <Button
-                onClick={onApprovePostulation}
-                className="bg-green-600 hover:bg-green-700 text-white gap-2"
-              >
-                <CheckCircle className="w-4 h-4" />
-                Aprobar Postulación
-              </Button>
-              <Button
-                onClick={onNextPostulation}
-                variant="default"
-                className="gap-2"
-              >
-                Próxima Postulación
-              </Button>
+              {/* Si todos están aprobados, solo mostrar aprobar */}
+              {allRequiredApproved ? (
+                <Button
+                  onClick={onApprovePostulation}
+                  className="bg-green-600 hover:bg-green-700 text-white gap-2"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  Aprobar y Continuar
+                </Button>
+              ) : hasRejectedRequired ? (
+                /* Si hay documentos rechazados, mostrar opciones de rechazo */
+                <>
+                  <Button
+                    onClick={() => setShowEmailTemplate(true)}
+                    variant="outline"
+                    className="gap-2"
+                  >
+                    <Mail className="w-4 h-4" />
+                    Generar Email
+                  </Button>
+                  <Button
+                    onClick={onRejectPostulation}
+                    variant="destructive"
+                    className="gap-2"
+                  >
+                    <XCircle className="w-4 h-4" />
+                    Rechazar y Continuar
+                  </Button>
+                </>
+              ) : null}
             </>
-          ) : (
-            <>
-              <Button
-                onClick={() => setShowEmailTemplate(true)}
-                variant="outline"
-                className="gap-2"
-              >
-                <Mail className="w-4 h-4" />
-                Generar Email
-              </Button>
-              <Button
-                onClick={onRejectPostulation}
-                variant="destructive"
-                className="gap-2"
-              >
-                <XCircle className="w-4 h-4" />
-                Rechazar Postulación
-              </Button>
-            </>
+          
+          /* CASO 3: Estado COMPLETED_WITH_DOCS sin documentos validados */
+          ) : isReadyToInitiateValidation && onInitiateValidation ? (
+            <Button
+              onClick={onInitiateValidation}
+              className="bg-blue-600 hover:bg-blue-700 text-white gap-2"
+            >
+              <AlertTriangle className="w-4 h-4" />
+              Iniciar Proceso de Validación
+            </Button>
+          
+          /* CASO 4: Estado no válido o no manejado */
+          ) : null}
+          
+          {/* Estado no válido para acción */}
+          {!showDirectApproval && !isReadyToInitiateValidation && !canMakeFinalDecision && (
+            <div className="text-sm text-muted-foreground p-2">
+              Estado de inscripción: {inscriptionState}
+              <br />
+              Esta postulación no está en un estado válido para tomar acciones.
+            </div>
           )}
         </DialogFooter>
       </DialogContent>

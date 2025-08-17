@@ -35,6 +35,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DocumentTypeBadge } from "@/components/ui/document-type-badge";
+import DocumentError from "@/components/postulations/DocumentError";
 
 interface DocumentData {
   id: string;
@@ -80,6 +81,7 @@ interface DocumentViewerProps {
 }
 
 const REJECTION_REASONS = [
+  "Archivo corrupto",
   "Documento ilegible o de mala calidad",
   "Documento incompleto",
   "Documento no corresponde al tipo requerido",
@@ -106,6 +108,8 @@ export default function DocumentViewer({
   const [zoom, setZoom] = useState(100);
   const [rotation, setRotation] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const [documentError, setDocumentError] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
 
   const handleApprove = async () => {
     setSubmitting(true);
@@ -189,6 +193,29 @@ export default function DocumentViewer({
   };
 
   const statusDisplay = getStatusDisplay(document.validationStatus);
+
+  const handleDocumentLoad = () => {
+    setDocumentError(null);
+  };
+
+  const handleDocumentError = (error: string = "Document file not found") => {
+    console.error("Document load error:", error);
+    // Establecer mensaje de archivo corrupto por defecto para errores de carga
+    const corruptionMessage = "Error loading document - File appears to be corrupted";
+    setDocumentError(corruptionMessage);
+  };
+
+  const handleRetryDocument = () => {
+    setDocumentError(null);
+    setRetryKey(prev => prev + 1);
+  };
+  
+  const handleRejectAsCorrupted = () => {
+    // Pre-seleccionar "Archivo corrupto" y abrir el diálogo de rechazo
+    setRejectionReason("Archivo corrupto");
+    setComments("Archivo corrupto debido a interrupciones durante el proceso de carga ocasionadas por conexiones inestables.");
+    setShowRejectionDialog(true);
+  };
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
@@ -480,27 +507,49 @@ export default function DocumentViewer({
 
             {/* Document Preview */}
             <div className="flex-1 bg-muted/20 flex items-center justify-center overflow-auto p-4">
-              <div
-                className="bg-background shadow-lg border border-border"
-                style={{
-                  transform: `scale(${zoom / 100}) rotate(${rotation}deg)`,
-                  transformOrigin: "center",
-                }}
-              >
-                {document.fileName.toLowerCase().endsWith(".pdf") ? (
-                  <iframe
-                    src={`/api/documents/${document.id}/view`}
-                    className="w-[800px] h-[1000px] border-0"
-                    title={document.originalName}
-                  />
-                ) : (
-                  <img
-                    src={`/api/documents/${document.id}/view`}
-                    alt={document.originalName}
-                    className="max-w-[800px] max-h-[1000px] object-contain"
-                  />
-                )}
-              </div>
+              {documentError ? (
+                <DocumentError
+                  document={{
+                    id: document.id,
+                    fileName: document.fileName,
+                    originalName: document.originalName,
+                    filePath: document.filePath,
+                    fileSize: document.fileSize
+                  }}
+                  error={documentError}
+                  onRetry={handleRetryDocument}
+                  onRejectAsCorrupted={document.validationStatus === "PENDING" ? handleRejectAsCorrupted : undefined}
+                  className="w-full h-full"
+                />
+              ) : (
+                <div
+                  className="bg-background shadow-lg border border-border"
+                  style={{
+                    transform: `scale(${zoom / 100}) rotate(${rotation}deg)`,
+                    transformOrigin: "center",
+                  }}
+                >
+                  {document.fileName.toLowerCase().endsWith(".pdf") ? (
+                    <iframe
+                      key={retryKey}
+                      src={`/api/documents/${document.id}/view`}
+                      className="w-[800px] h-[1000px] border-0"
+                      title={document.originalName}
+                      onLoad={handleDocumentLoad}
+                      onError={() => handleDocumentError("Error loading PDF document - File corrupted")}
+                    />
+                  ) : (
+                    <img
+                      key={retryKey}
+                      src={`/api/documents/${document.id}/view`}
+                      alt={document.originalName}
+                      className="max-w-[800px] max-h-[1000px] object-contain"
+                      onLoad={handleDocumentLoad}
+                      onError={() => handleDocumentError("Error loading image document - File corrupted")}
+                    />
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>

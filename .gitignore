@@ -111,6 +111,11 @@ vector_store/
 *.backup
 *.bak
 
+# Database backups
+database/backups/
+*.sql
+*_backup_*.sql
+
 # Temporary files
 tmp/
 temp/

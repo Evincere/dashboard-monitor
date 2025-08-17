@@ -9,7 +9,10 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    console.log(`📥 Downloading document with ID: ${id}`);
+    console.log(`📥 [DOCUMENT_DOWNLOAD] Starting document download request`);
+    console.log(`📋 [DOCUMENT_DOWNLOAD] Document ID: ${id}`);
+    console.log(`🌐 [DOCUMENT_DOWNLOAD] Request URL: ${request.url}`);
+    console.log(`⏰ [DOCUMENT_DOWNLOAD] Timestamp: ${new Date().toISOString()}`);
 
     // First, get all users to find which user owns this document
     const usersResponse = await backendClient.getUsers({ size: 1000 });
@@ -37,18 +40,19 @@ export async function GET(
           if (foundDoc) {
             document = foundDoc;
             documentOwnerUser = user;
-            console.log(`📄 Found document ${id} belonging to user ${user.fullName || user.name} (${user.id})`);
+            console.log(`📄 [DOCUMENT_DOWNLOAD] ✅ Found document ${id} belonging to user ${user.fullName || user.name} (DNI: ${user.dni || 'N/A'}, ID: ${user.id})`);
             break;
           }
         }
       } catch (error) {
-        console.warn(`Error checking documents for user ${user.id}:`, error);
+        console.warn(`⚠️ [DOCUMENT_DOWNLOAD] Error checking documents for user ${user.id} (${user.fullName || user.name}):`, error.message || error);
         continue;
       }
     }
     
     if (!document) {
-      console.log(`❌ Document with ID ${id} not found across all users`);
+      console.error(`❌ [DOCUMENT_DOWNLOAD] Document with ID ${id} not found across all users`);
+      console.error(`🔍 [DOCUMENT_DOWNLOAD] Search completed across ${usersResponse.data?.content?.length || 0} users`);
       return NextResponse.json({
         error: 'Document not found',
         message: 'Document not found in any user\'s document collection',
@@ -69,6 +73,12 @@ export async function GET(
       );
     }
 
+    console.log(`📁 [DOCUMENT_DOWNLOAD] File resolution details:`);
+    console.log(`   - File Name: ${fileName}`);
+    console.log(`   - Original Name: ${originalName}`);
+    console.log(`   - File Path: ${filePath}`);
+    console.log(`   - MIME Type: ${mimeType}`);
+    
     // Try to read the file from various possible locations
     const possiblePaths = [
       // Local development path with real documents
@@ -81,6 +91,11 @@ export async function GET(
       // Direct path if already absolute
       filePath
     ];
+    
+    console.log(`📁 [DOCUMENT_DOWNLOAD] Attempting file access from paths:`);
+    possiblePaths.forEach((path, index) => {
+      console.log(`   ${index + 1}. ${path}`);
+    });
 
     let fileBuffer: Buffer | null = null;
     let actualFilePath = '';
@@ -91,7 +106,9 @@ export async function GET(
         if (stats.isFile()) {
           fileBuffer = await fs.readFile(fullPath);
           actualFilePath = fullPath;
-          console.log(`✅ File found at: ${actualFilePath}`);
+          console.log(`✅ [DOCUMENT_DOWNLOAD] File found at: ${actualFilePath}`);
+          console.log(`📄 [DOCUMENT_DOWNLOAD] File size: ${stats.size} bytes`);
+          console.log(`🗺️ [DOCUMENT_DOWNLOAD] File type: ${mimeType}`);
           break;
         }
       } catch (err) {
@@ -101,8 +118,16 @@ export async function GET(
     }
 
     if (!fileBuffer) {
-      console.error(`❌ File not found in any of the expected locations for document ${id}`);
-      console.error('Tried paths:', possiblePaths);
+      console.error(`❌ [DOCUMENT_DOWNLOAD] File not found in any of the expected locations for document ${id}`);
+      console.error(`🔍 [DOCUMENT_DOWNLOAD] All attempted paths:`);
+      possiblePaths.forEach((path, index) => {
+        console.error(`   ${index + 1}. ${path}`);
+      });
+      console.error(`📊 [DOCUMENT_DOWNLOAD] Environment variables:`);
+      console.error(`   - LOCAL_DOCUMENTS_PATH: ${process.env.LOCAL_DOCUMENTS_PATH || 'Not set'}`);
+      console.error(`   - DOCUMENT_STORAGE_PATH: ${process.env.DOCUMENT_STORAGE_PATH || 'Not set'}`);
+      console.error(`   - Current working directory: ${process.cwd()}`);
+      console.error(`⏰ [DOCUMENT_DOWNLOAD] Error timestamp: ${new Date().toISOString()}`);
       
       return NextResponse.json({
         error: 'Document file not found',
@@ -129,7 +154,12 @@ export async function GET(
     });
 
   } catch (error) {
-    console.error('❌ Error downloading document:', error);
+    console.error('❌ [DOCUMENT_DOWNLOAD] Fatal error during document download:', error);
+    console.error(`🔍 [DOCUMENT_DOWNLOAD] Error details:`, {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      timestamp: new Date().toISOString()
+    });
     return NextResponse.json(
       {
         error: 'Failed to download document',

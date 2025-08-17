@@ -51,6 +51,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { DocumentTypeBadge } from "@/components/ui/document-type-badge";
 import ValidationCompletionModal from "@/components/validation/ValidationCompletionModal";
+import backendClient from "@/lib/backend-client";
 
 interface Document {
   id: string;
@@ -76,6 +77,7 @@ interface PostulantInfo {
     email: string;
   };
   inscription: {
+    id: string;
     state: string;
     centroDeVida: string;
     createdAt: string;
@@ -143,9 +145,88 @@ export default function DocumentValidationPage() {
   const [rejectionReason, setRejectionReason] = useState("");
   const [showRejectionForm, setShowRejectionForm] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
   const [allPostulantsList, setAllPostulantsList] = useState<string[]>([]);
   const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const [modalDismissed, setModalDismissed] = useState(false);
+  const [isProcessingApproval, setIsProcessingApproval] = useState(false);
+
+  // Fetch all postulants list for navigation
+  const fetchAllPostulantsList = async () => {
+    console.log('🔄 fetchAllPostulantsList - Iniciando carga de lista de postulantes...');
+    try {
+      console.log('📡 Haciendo fetch a /api/backend/inscriptions con tamaño=1000');
+      const response = await fetch('/api/backend/inscriptions?size=1000');
+      console.log('📨 Respuesta recibida:', {
+        ok: response.ok,
+        status: response.status,
+        statusText: response.statusText
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log('📋 Datos de API recibidos:', {
+          success: result.success,
+          dataLength: result.data?.content?.length || 0,
+          firstItem: result.data?.content?.[0]
+        });
+        
+        if (result.success && result.data && result.data.content) {
+          // Extract DNIs and sort alphabetically by full name
+          console.log('🔧 Procesando datos...');
+          
+          // SOLO incluir postulantes que necesiten validación (COMPLETED_WITH_DOCS o PENDING)
+          // NO incluir los ya APPROVED o REJECTED en la lista de navegación
+          const needsValidation = result.data.content.filter((p: any) => {
+            const hasName = p.userInfo?.fullName;
+            const hasDni = p.userInfo?.dni;
+            const needsValidation = p.state === 'COMPLETED_WITH_DOCS' || p.state === 'PENDING';
+            
+            console.log(`📝 Postulante ${p.userInfo?.fullName || 'N/A'} (${p.userInfo?.dni || 'N/A'}): estado=${p.state}, necesitaValidación=${needsValidation}`);
+            
+            return hasName && hasDni && needsValidation;
+          });
+          
+          console.log('🔍 Postulantes que necesitan validación:', needsValidation.length);
+          
+          // Buscar el postulante actual en todos los datos
+          const currentPostulant = result.data.content.find((p: any) => p.userInfo?.dni === dni);
+          console.log('🔎 Postulante actual encontrado:', currentPostulant ? 
+            `${currentPostulant.userInfo.fullName} (${currentPostulant.userInfo.dni}) - Estado: ${currentPostulant.state}` : 'No encontrado');
+          
+          // Solo usar los que necesitan validación para la navegación
+          let validationCandidates = [...needsValidation];
+          
+          // Si el postulante actual no está en la lista (porque ya fue procesado), NO lo añadimos
+          // Esto evita que se pueda navegar a postulantes ya aprobados/rechazados
+          
+          if (validationCandidates.length === 0) {
+            console.log('⚠️ No se encontraron postulantes pendientes de validación');
+            setAllPostulantsList([]);
+            return;
+          }
+          
+          const postulants = validationCandidates
+            .sort((a: any, b: any) => {
+              const nameA = a.userInfo.fullName.toLowerCase();
+              const nameB = b.userInfo.fullName.toLowerCase();
+              return nameA.localeCompare(nameB, 'es', { numeric: true, sensitivity: 'base' });
+            })
+            .map((p: any) => p.userInfo.dni);
+          
+          console.log('📝 Lista final de DNIs pendientes ordenada:', postulants);
+          setAllPostulantsList(postulants);
+          console.log('✅ Lista de postulantes cargada exitosamente:', postulants.length, 'postulantes pendientes');
+        } else {
+          console.log('❌ API no devolvió datos válidos:', result);
+        }
+      } else {
+        console.log('❌ Error en respuesta de API:', response.status, response.statusText);
+      }
+    } catch (error) {
+      console.error('💥 Error fetching postulants list:', error);
+    }
+  };
 
   // Fetch validation data
   const fetchValidationData = async () => {
@@ -192,12 +273,26 @@ export default function DocumentValidationPage() {
   };
 
   useEffect(() => {
+    console.log('🔄 useEffect ejecutándose con DNI:', dni);
     if (dni) {
+      console.log('✅ DNI válido, iniciando carga de datos...');
+      
+      // Resetear estados de modal al cambiar de postulación
+      setShowCompletionModal(false);
+      // Para navegación entre postulaciones, NO marcar como dismissed inmediatamente
+      // Esperar a que se carguen los datos para decidir
+      
       fetchValidationData();
+      
+      console.log('🚀 Llamando a fetchAllPostulantsList...');
+      fetchAllPostulantsList();
+    } else {
+      console.log('❌ DNI no válido:', dni);
     }
 
     // Cleanup on unmount
     return () => {
+      console.log('🧹 Limpiando componente...');
       reset();
     };
   }, [dni]);
@@ -282,25 +377,284 @@ export default function DocumentValidationPage() {
 
   // Check if all required documents are validated
   useEffect(() => {
-    if (documents.length > 0 && postulant) {
-      const requiredDocs = documents.filter(doc => doc.isRequired);
-      const allRequiredValidated = requiredDocs.length > 0 && requiredDocs.every(doc => doc.validationStatus !== "PENDING");
+    // Evitar procesamiento si no hay datos básicos
+    if (!documents.length || !postulant) {
+      // Al inicio de carga, resetear dismissed para permitir modales automáticos cuando corresponda
+      setModalDismissed(false);
+      return;
+    }
+    
+    const requiredDocs = documents.filter(doc => doc.isRequired);
+    const allRequiredValidated = requiredDocs.length > 0 && requiredDocs.every(doc => doc.validationStatus !== "PENDING");
+    
+    console.log('📊 Validation check:', {
+      totalDocs: documents.length,
+      requiredDocs: requiredDocs.length,
+      allRequiredValidated,
+      showCompletionModal,
+      modalDismissed,
+      postulantState: postulant?.inscription?.state,
+      requiredDocsStatus: requiredDocs.map(doc => ({
+        name: doc.documentType,
+        status: doc.validationStatus,
+        isRequired: doc.isRequired
+      }))
+    });
+    
+    // No hacer nada si ya está aprobado
+    if (postulant.inscription.state === 'APPROVED') {
+      console.log('⏭️ Postulante ya APPROVED, saltando validaciones');
+      setModalDismissed(true); // Marcar como dismissed para postulantes aprobados
+      return;
+    }
+    
+    // Si todos los documentos requeridos están validados (NO hay pendientes)
+    if (allRequiredValidated) {
+      console.log('✅ Todos los documentos requeridos están validados');
       
-      if (allRequiredValidated && !showCompletionModal) {
+      // Caso 1: COMPLETED_WITH_DOCS - Iniciar automáticamente validación sin modal
+      if (postulant.inscription.state === 'COMPLETED_WITH_DOCS') {
+        console.log('🔄 COMPLETED_WITH_DOCS detectado, iniciando validación automáticamente...');
+        setModalDismissed(true); // Evitar modal durante el cambio automático
+        
+        // Usar una referencia para evitar múltiples llamadas
+        const timeoutId = setTimeout(() => {
+          // Verificar nuevamente que aún estamos en COMPLETED_WITH_DOCS antes de proceder
+          if (postulant.inscription.state === 'COMPLETED_WITH_DOCS') {
+            handleInitiateValidation();
+          }
+        }, 100);
+        
+        return () => clearTimeout(timeoutId);
+      }
+      
+      // Caso 2: PENDING - Mostrar modal de completado SOLO si no está dismissed y no se está mostrando ya
+      if (postulant.inscription.state === 'PENDING' && !showCompletionModal && !modalDismissed) {
+        console.log('🎯 PENDING con docs completados, abriendo modal de completado...');
         setShowCompletionModal(true);
       }
+    } else {
+      console.log('⏳ Todavía hay documentos pendientes de validación');
+      
+      // Si hay documentos pendientes, NO mostrar modal y asegurar que está cerrado
+      if (showCompletionModal) {
+        console.log('📝 Cerrando modal porque hay documentos pendientes...');
+        setShowCompletionModal(false);
+        setModalDismissed(true); // Marcar como dismissed hasta que se completen
+      }
     }
-  }, [documents, postulant, showCompletionModal]);
+  }, [
+    documents.map(d => `${d.id}:${d.validationStatus}`).join(','), // Solo cambios en status de documentos
+    postulant?.inscription?.state, // Solo cambios en estado de inscripción
+    showCompletionModal,
+    modalDismissed
+  ]);
+
+  // Helper function to navigate to next postulant in alphabetical order
+  const navigateToNextPostulant = () => {
+    console.log('🚀 navigateToNextPostulant called');
+    console.log('📋 allPostulantsList:', allPostulantsList);
+    console.log('🔍 Current DNI:', dni);
+    console.log('📊 Lista length:', allPostulantsList?.length || 0);
+    
+    // Verificar si hay postulantes disponibles
+    if (!allPostulantsList || allPostulantsList.length === 0) {
+      console.log('❌ No hay postulantes pendientes en la lista, redirigiendo al dashboard');
+      toast({
+        title: "Validación Completada",
+        description: "No hay más postulantes pendientes de validación.",
+      });
+      setTimeout(() => {
+        router.push('/postulations');
+      }, 2000);
+      return;
+    }
+
+    // Buscar el índice del postulante actual
+    const currentIndex = allPostulantsList.indexOf(dni);
+    console.log('📍 Current index:', currentIndex);
+    
+    // SI EL POSTULANTE ACTUAL NO ESTÁ EN LA LISTA (porque fue aprobado/rechazado)
+    if (currentIndex === -1) {
+      console.log('🔍 Current postulant not found in pending list (likely approved/rejected)');
+      console.log('📋 Available pending DNIs:', allPostulantsList.slice(0, 5)); // Mostrar primeros 5
+      
+      // Ir al primer postulante pendiente disponible
+      if (allPostulantsList.length > 0) {
+        const firstPendingDni = allPostulantsList[0];
+        console.log(`✅ Navegando al primer postulante pendiente: ${firstPendingDni}`);
+        const targetUrl = `/postulations/${firstPendingDni}/documents/validation`;
+        console.log(`🎯 Target URL: ${targetUrl}`);
+        router.push(targetUrl);
+        return;
+      } else {
+        console.log('🎉 No hay más postulantes pendientes');
+        toast({
+          title: "Validación Completada",
+          description: "No hay más postulantes pendientes de validación.",
+        });
+        setTimeout(() => {
+          router.push('/postulations');
+        }, 2000);
+        return;
+      }
+    }
+
+    // NAVEGAR AL SIGUIENTE POSTULANTE PENDIENTE
+    const nextIndex = currentIndex + 1;
+    console.log('⏭️ Next index:', nextIndex);
+    console.log('📏 List length:', allPostulantsList.length);
+    
+    if (nextIndex < allPostulantsList.length) {
+      const nextDni = allPostulantsList[nextIndex];
+      console.log(`✅ Navegando al siguiente postulante pendiente: ${nextDni} (index: ${nextIndex})`);
+      const targetUrl = `/postulations/${nextDni}/documents/validation`;
+      console.log(`🎯 Target URL: ${targetUrl}`);
+      router.push(targetUrl);
+    } else {
+      console.log('🎉 Era el último postulante pendiente, redirigiendo al dashboard');
+      toast({
+        title: "Validación Completada",
+        description: "Has validado todos los postulantes pendientes. Redirigiendo al panel principal...",
+      });
+      setTimeout(() => {
+        router.push('/postulations');
+      }, 2000);
+    }
+  };
 
   // Modal handlers
-  const handleApprovePostulation = async () => {
+  const handleApprovePostulationAndNext = async () => {
     try {
-      // Here you would make an API call to approve the postulation
+      if (!postulant?.inscription?.id) {
+        throw new Error('ID de inscripción no encontrado');
+      }
+
+      // 🚀 ACTIVAR LOADING INMEDIATAMENTE
+      setLoading(true);
+      setShowCompletionModal(false); // Cerrar modal inmediatamente
+      setModalDismissed(true);
+
+      console.log('🟢 Aprobando postulación:', {
+        inscriptionId: postulant.inscription.id,
+        postulantName: postulant.user.fullName,
+        dni: postulant.user.dni,
+        currentState: postulant.inscription.state
+      });
+
+      // GUARDAR INFORMACIÓN ANTES DE LA APROBACIÓN
+      const currentIndex = allPostulantsList?.indexOf(dni) || -1;
+      const nextIndex = currentIndex + 1;
+      const hasNextPostulant = nextIndex < (allPostulantsList?.length || 0);
+      const nextDni = hasNextPostulant ? allPostulantsList?.[nextIndex] : null;
+
+      console.log('📊 Pre-approval state:', {
+        currentIndex,
+        nextIndex,
+        hasNextPostulant,
+        nextDni,
+        totalPostulants: allPostulantsList?.length || 0
+      });
+
+      // PASO 1: Si está en COMPLETED_WITH_DOCS, primero cambiar a PENDING
+      if (postulant.inscription.state === 'COMPLETED_WITH_DOCS') {
+        console.log('🟡 Estado actual es COMPLETED_WITH_DOCS, cambiando primero a PENDING...');
+        
+        const initiateResponse = await fetch(`/api/postulations/${dni}/initiate-validation`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            inscriptionId: postulant.inscription.id,
+            note: 'Validación de documentos iniciada para aprobación'
+          }),
+        });
+
+        const initiateResult = await initiateResponse.json();
+
+        if (!initiateResult.success) {
+          throw new Error(initiateResult.error || 'Error al iniciar la validación');
+        }
+        
+        console.log('✅ Estado cambiado a PENDING exitosamente');
+      }
+
+      // PASO 2: Ahora aprobar la postulación (PENDING -> APPROVED)
+      console.log('🟢 Aprobando postulación (PENDING -> APPROVED)...');
+      
+      const response = await fetch(`/api/postulations/${dni}/approve`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          inscriptionId: postulant.inscription.id,
+          note: 'Postulación aprobada tras validación de documentos'
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || 'Error al aprobar la postulación');
+      }
+      
       toast({
         title: "Postulación Aprobada",
-        description: "La postulación ha sido aprobada exitosamente",
+        description: "Postulación aprobada. Actualizando lista y navegando...",
       });
+      
+      // Close modal immediately and mark as dismissed
       setShowCompletionModal(false);
+      setModalDismissed(true);
+      
+      // Actualizar lista de postulantes después de aprobar
+      console.log('🔄 Actualizando lista de postulantes después de aprobar...');
+      await fetchAllPostulantsList();
+      
+      // NAVEGAR DESPUÉS DE ACTUALIZAR LA LISTA
+      setTimeout(async () => {
+        // Refrescar la lista una vez más para obtener el estado más actualizado
+        await fetchAllPostulantsList();
+        
+        // Encontrar el siguiente postulante que NO sea el actual y que esté pendiente
+        const availablePostulants = allPostulantsList.filter(postulantDni => postulantDni !== dni);
+        
+        if (availablePostulants.length > 0) {
+          const nextPostulant = availablePostulants[0];
+          console.log(`✅ Navegando al siguiente postulante disponible: ${nextPostulant}`);
+          const targetUrl = `/postulations/${nextPostulant}/documents/validation`;
+          router.push(targetUrl);
+        } else {
+          console.log('🎉 No hay más postulantes pendientes, redirigiendo al dashboard');
+          router.push('/postulations');
+        }
+      }, 1500);
+      
+    } catch (error) {
+      console.error('Error approving postulation:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "No se pudo aprobar la postulación",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Keep the old function for compatibility when only approving without continuing
+  const handleApprovePostulation = async () => {
+    try {
+      toast({
+        title: "Postulación Aprobada",
+        description: "La postulación ha sido aprobada exitosamente.",
+      });
+      
+      setShowCompletionModal(false);
+      setTimeout(() => {
+        router.push('/postulations');
+      }, 2000);
+      
     } catch (error) {
       console.error('Error approving postulation:', error);
       toast({
@@ -311,15 +665,154 @@ export default function DocumentValidationPage() {
     }
   };
 
+  // Function to initiate validation (change state to PENDING)
+  const handleInitiateValidation = async () => {
+    try {
+      if (!postulant?.inscription?.id) {
+        throw new Error('ID de inscripción no encontrado');
+      }
+
+      // Verificar estado actual antes de intentar cambio
+      if (postulant.inscription.state === 'PENDING') {
+        console.log('⚠️ La postulación ya está en estado PENDING, no se requiere cambio de estado');
+        return; // No hacer nada si ya está en PENDING
+      }
+
+      console.log('🟡 Iniciando validación (cambio a PENDING):', {
+        inscriptionId: postulant.inscription.id,
+        postulantName: postulant.user.fullName,
+        dni: postulant.user.dni,
+        currentState: postulant.inscription.state
+      });
+
+      // Call the API route to initiate validation (change to PENDING)
+      const response = await fetch(`/api/postulations/${dni}/initiate-validation`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          inscriptionId: postulant.inscription.id,
+          note: 'Validación de documentos iniciada automáticamente'
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || 'Error al iniciar la validación');
+      }
+      
+      // Refresh the validation data to update the postulant state
+      await fetchValidationData();
+      
+      console.log('✅ Validación iniciada automáticamente, estado cambiado a PENDING');
+      
+      // Después del cambio de estado, esperar un poco y mostrar modal si docs están completos
+      setTimeout(() => {
+        const requiredDocs = documents.filter(doc => doc.isRequired);
+        const allRequiredValidated = requiredDocs.length > 0 && requiredDocs.every(doc => doc.validationStatus !== "PENDING");
+        
+        if (allRequiredValidated) {
+          console.log('📋 Docs ya completos después de cambio a PENDING, mostrando modal...');
+          setModalDismissed(false);
+          setShowCompletionModal(true);
+        }
+      }, 500);
+      
+    } catch (error) {
+      console.error('Error initiating validation:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "No se pudo iniciar la validación",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Function to reject postulation and continue to next one
+  const handleRejectPostulationAndNext = async () => {
+    try {
+      if (!postulant?.inscription?.id) {
+        throw new Error('ID de inscripción no encontrado');
+      }
+
+      // 🚀 ACTIVAR LOADING INMEDIATAMENTE
+      setLoading(true);
+      setShowCompletionModal(false); // Cerrar modal inmediatamente
+      setModalDismissed(true);
+
+      console.log('🔴 Rechazando postulación:', {
+        inscriptionId: postulant.inscription.id,
+        postulantName: postulant.user.fullName,
+        dni: postulant.user.dni
+      });
+
+      // Llamar al API route local para rechazar la inscripción
+      const response = await fetch(`/api/postulations/${dni}/reject`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          inscriptionId: postulant.inscription.id,
+          note: 'Postulación rechazada tras validación de documentos'
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || 'Error al rechazar la postulación');
+      }
+      
+      toast({
+        title: "Postulación Rechazada",
+        description: "Postulación rechazada. Navegando a la siguiente...",
+        variant: "destructive",
+      });
+      
+      // Close modal immediately and mark as dismissed
+      setShowCompletionModal(false);
+      setModalDismissed(true);
+      
+      // Small delay to show toast, then navigate to next postulant
+      setTimeout(() => {
+        navigateToNextPostulant();
+      }, 1500);
+      
+    } catch (error) {
+      console.error('Error rejecting postulation:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "No se pudo rechazar la postulación",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Keep the old function for compatibility when only rejecting without continuing
   const handleRejectPostulation = async () => {
     try {
       // Here you would make an API call to reject the postulation
+      // TODO: Implement actual API call to update postulation status to REJECTED
+      
       toast({
         title: "Postulación Rechazada",
-        description: "La postulación ha sido rechazada",
+        description: "La postulación ha sido rechazada. Los documentos quedan en estado de corrección pendiente.",
         variant: "destructive",
       });
+      
+      // Close modal immediately and mark as dismissed
       setShowCompletionModal(false);
+      setModalDismissed(true);
+      
+      // Small delay to show toast, then redirect
+      setTimeout(() => {
+        // Navigate back to postulations list
+        router.push('/postulations');
+      }, 2000);
+      
     } catch (error) {
       console.error('Error rejecting postulation:', error);
       toast({
@@ -340,12 +833,11 @@ export default function DocumentValidationPage() {
   };
 
   const handleNextPostulation = () => {
-    // Here you would navigate to the next postulation
-    toast({
-      title: "Navegando",
-      description: "Navegando a la próxima postulación...",
-    });
     setShowCompletionModal(false);
+    setModalDismissed(true);
+    setTimeout(() => {
+      navigateToNextPostulant();
+    }, 500);
   };
 
   // Handle revert document status
@@ -365,14 +857,41 @@ export default function DocumentValidationPage() {
           }
         : doc
     );
+    
+    // Update store and current document immediately
     setDocuments(updatedDocuments);
+    
+    // Find and set the updated current document to trigger re-render
+    const updatedCurrentDocument = updatedDocuments.find(doc => doc.id === currentDocument.id);
+    if (updatedCurrentDocument) {
+      setCurrentDocument(updatedCurrentDocument);
+    }
+    
     updateStats();
+    
+    // Reset modal dismissed state so it can show again if all required docs become validated
+    setModalDismissed(false);
     
     toast({
       title: "Estado Revertido",
       description: "El documento ha vuelto al estado pendiente",
     });
   };
+  
+  // Reset modalDismissed when documents change (after approval/rejection)
+  useEffect(() => {
+    // Solo procesar si hay documentos y postulante
+    if (!documents.length || !postulant) return;
+    
+    const requiredDocs = documents.filter(doc => doc.isRequired);
+    const allRequiredValidated = requiredDocs.length > 0 && requiredDocs.every(doc => doc.validationStatus !== "PENDING");
+    
+    // Si acabamos de completar todos los documentos durante la validación activa (PENDING)
+    if (allRequiredValidated && modalDismissed && postulant.inscription.state === 'PENDING') {
+      console.log('🔄 Documentos completados durante validación PENDING, reseteando modalDismissed...');
+      setModalDismissed(false);
+    }
+  }, [documents.map(d => d.validationStatus).join(','), postulant?.inscription?.state]);
 
   if (loading) {
     return (
@@ -423,6 +942,7 @@ export default function DocumentValidationPage() {
 
           <div className="flex items-center gap-4">
             <KeyboardShortcuts />
+            
             <div className="text-right">
               <div className="text-sm text-muted-foreground">
                 Progreso: {stats.approved}/{stats.total} documentos
@@ -549,7 +1069,15 @@ export default function DocumentValidationPage() {
       {showCompletionModal && postulant && (
         <ValidationCompletionModal
           open={showCompletionModal}
-          onOpenChange={setShowCompletionModal}
+          onOpenChange={(open) => {
+            console.log('🔄 Modal onOpenChange called with:', open);
+            setShowCompletionModal(open);
+            if (!open) {
+              // When modal is closed via onOpenChange (like clicking outside or ESC), mark as dismissed
+              console.log('❌ Modal dismissed by user - marking as dismissed');
+              setModalDismissed(true);
+            }
+          }}
           documents={documents}
           postulant={{
             user: {
@@ -561,8 +1089,9 @@ export default function DocumentValidationPage() {
             inscription: postulant.inscription,
             contest: postulant.contest
           }}
-          onApprovePostulation={handleApprovePostulation}
-          onRejectPostulation={handleRejectPostulation}
+          onApprovePostulation={handleApprovePostulationAndNext}
+          onRejectPostulation={handleRejectPostulationAndNext}
+          onInitiateValidation={handleInitiateValidation}
           onGenerateEmailTemplate={handleGenerateEmailTemplate}
           onNextPostulation={handleNextPostulation}
         />
@@ -792,6 +1321,20 @@ function DocumentViewer({
   isFullscreen?: boolean;
   onFullscreenToggle?: (fullscreen: boolean) => void;
 }) {
+  const [iframeKey, setIframeKey] = useState(0);
+  const [prevFullscreen, setPrevFullscreen] = useState(isFullscreen);
+
+  // Force iframe re-render when fullscreen changes
+  useEffect(() => {
+    if (prevFullscreen !== isFullscreen) {
+      // Small delay to ensure DOM has updated
+      setTimeout(() => {
+        setIframeKey(prev => prev + 1);
+      }, 100);
+      setPrevFullscreen(isFullscreen);
+    }
+  }, [isFullscreen, prevFullscreen]);
+
   // Check if all required documents are validated
   const requiredDocs = documents?.filter(doc => doc.isRequired) || [];
   const requiredValidated = requiredDocs.every(doc => doc.validationStatus !== "PENDING");
@@ -878,9 +1421,13 @@ function DocumentViewer({
         <div className="h-full bg-card rounded-lg shadow-sm border border-border overflow-hidden">
           {document.fileName.toLowerCase().endsWith(".pdf") ? (
             <iframe
+              key={`${document.id}-${iframeKey}`}
               src={`/api/documents/${document.id}/view`}
               className="w-full h-full border-0"
               title={document.originalName}
+              onLoad={() => {
+                // Additional handling if needed when PDF loads
+              }}
             />
           ) : (
             <div className="h-full flex items-center justify-center">

@@ -83,17 +83,50 @@ export default function PostulationsManagementPage() {
   const [sortBy, setSortBy] = useState('PRIORITY');
   const { toast } = useToast();
 
-  // Fetch postulations data
-  const fetchPostulations = async () => {
-    setLoading(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const pageSize = 15;
+
+  // Fetch postulations stats only (fast)
+  const fetchStats = async () => {
     try {
-      const response = await fetch('/api/postulations/management', {
+      const response = await fetch('/api/postulations/management?onlyStats=true', {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        // Add timeout to prevent hanging requests
-        signal: AbortSignal.timeout(30000) // 30 seconds
+        headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(10000) // 10 seconds
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setStats(data.stats);
+          setTotalPages(data.pagination.totalPages);
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to fetch stats:', error);
+    }
+  };
+
+  // Fetch postulations data with pagination
+  const fetchPostulations = async (page = 1, append = false) => {
+    if (page === 1) {
+      setLoading(true);
+    } else {
+      setIsLoadingMore(true);
+    }
+    
+    try {
+      const params = new URLSearchParams({
+        page: page.toString(),
+        pageSize: pageSize.toString()
+      });
+      
+      const response = await fetch(`/api/postulations/management?${params}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(60000) // 60 seconds for document processing
       });
       
       if (!response.ok) {
@@ -107,15 +140,30 @@ export default function PostulationsManagementPage() {
         throw new Error(`API returned error: ${data.error || 'Unknown error'}`);
       }
       
-      setPostulations(data.postulations || []);
-      setStats(data.stats || null);
+      const newPostulations = data.postulations || [];
       
-      // Apply initial filter for COMPLETED_WITH_DOCS
-      applyFilters(data.postulations || [], statusFilter, validationFilter, priorityFilter, searchTerm, sortBy);
+      if (append) {
+        // Append to existing data (infinite scroll)
+        setPostulations(prev => [...prev, ...newPostulations]);
+      } else {
+        // Replace data (new search/filter)
+        setPostulations(newPostulations);
+      }
+      
+      setStats(data.stats || null);
+      setCurrentPage(page);
+      
+      if (data.pagination) {
+        setTotalPages(data.pagination.totalPages);
+      }
+      
+      // Apply filters to ALL loaded postulations
+      const allPostulations = append ? [...postulations, ...newPostulations] : newPostulations;
+      applyFilters(allPostulations, statusFilter, validationFilter, priorityFilter, searchTerm, sortBy);
+      
     } catch (error) {
       console.error('Error fetching postulations:', error);
       
-      // Don't show toast for aborted requests (component unmounting)
       if (error.name !== 'AbortError') {
         toast({
           title: 'Error',
@@ -125,6 +173,14 @@ export default function PostulationsManagementPage() {
       }
     } finally {
       setLoading(false);
+      setIsLoadingMore(false);
+    }
+  };
+
+  // Load more postulations
+  const loadMorePostulations = async () => {
+    if (currentPage < totalPages && !isLoadingMore) {
+      await fetchPostulations(currentPage + 1, true);
     }
   };
 
@@ -192,7 +248,14 @@ export default function PostulationsManagementPage() {
   }, [postulations, statusFilter, validationFilter, priorityFilter, searchTerm, sortBy]);
 
   useEffect(() => {
-    fetchPostulations();
+    // Cargar estadísticas rápido primero
+    fetchStats();
+    // Luego cargar primera página (con un pequeño delay para evitar llamadas simultáneas)
+    const timeoutId = setTimeout(() => {
+      fetchPostulations(1, false);
+    }, 100);
+    
+    return () => clearTimeout(timeoutId);
   }, []);
 
   const getValidationStatusIcon = (status: string) => {
@@ -264,7 +327,12 @@ export default function PostulationsManagementPage() {
           </div>
           <Button 
             variant="outline" 
-            onClick={fetchPostulations}
+            onClick={() => {
+              // Reset pagination and filters
+              setCurrentPage(1);
+              setPostulations([]);
+              fetchPostulations(1, false);
+            }}
             disabled={loading}
           >
             <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
@@ -461,16 +529,51 @@ export default function PostulationsManagementPage() {
               </CardContent>
             </Card>
           ) : (
-            filteredPostulations.map((postulation) => (
-              <PostulationCard
-                key={postulation.id}
-                postulation={postulation}
-              onClick={() => {
-                // Navigate directly to document validation (bypassing the intermediate documents view)
-                window.location.href = `/postulations/${postulation.user.dni}/documents/validation`;
-              }}
-              />
-            ))
+            <>
+              {filteredPostulations.map((postulation) => (
+                <PostulationCard
+                  key={postulation.id}
+                  postulation={postulation}
+                onClick={() => {
+                  // Navigate directly to document validation (bypassing the intermediate documents view)
+                  window.location.href = `/postulations/${postulation.user.dni}/documents/validation`;
+                }}
+                />
+              ))}
+              
+              {/* Load More Button */}
+              {currentPage < totalPages && (
+                <div className="text-center py-6">
+                  <Button
+                    onClick={loadMorePostulations}
+                    disabled={isLoadingMore}
+                    variant="outline"
+                    size="lg"
+                  >
+                    {isLoadingMore ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                        Cargando más postulaciones...
+                      </>
+                    ) : (
+                      <>
+                        Cargar más postulaciones
+                        <span className="ml-2 text-sm text-muted-foreground">
+                          ({currentPage}/{totalPages})
+                        </span>
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+              
+              {/* Información de paginación */}
+              {currentPage >= totalPages && totalPages > 1 && (
+                <div className="text-center py-4 text-sm text-muted-foreground">
+                  ✅ Se han cargado todas las postulaciones ({postulations.length} de {stats?.total})
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

@@ -12,8 +12,11 @@ export async function GET(
     const url = new URL(request.url);
     const referer = request.headers.get('referer');
     
-    console.log(`🔍 Viewing document with ID: ${id}`);
-    console.log(`🔗 Referer: ${referer}`);
+    console.log(`🔍 [DOCUMENT_VIEW] Starting document view request`);
+    console.log(`📋 [DOCUMENT_VIEW] Document ID: ${id}`);
+    console.log(`🔗 [DOCUMENT_VIEW] Referer: ${referer}`);
+    console.log(`🌐 [DOCUMENT_VIEW] Request URL: ${request.url}`);
+    console.log(`⏰ [DOCUMENT_VIEW] Timestamp: ${new Date().toISOString()}`);
 
     let document: any = null;
     let documentOwnerUser: any = null;
@@ -24,7 +27,8 @@ export async function GET(
       const refererMatch = referer.match(/\/postulations\/(\d+)\/documents/);
       if (refererMatch) {
         targetDni = refererMatch[1];
-        console.log(`🎯 Extracted DNI from referer: ${targetDni}`);
+        console.log(`🎯 [DOCUMENT_VIEW] Extracted DNI from referer: ${targetDni}`);
+        console.log(`🔍 [DOCUMENT_VIEW] Will search for user with DNI: ${targetDni} first`);
       }
     }
 
@@ -48,7 +52,8 @@ export async function GET(
             if (foundDoc) {
               document = foundDoc;
               documentOwnerUser = targetUser;
-              console.log(`📄 Found document ${id} in target user ${targetUser.fullName || targetUser.name}`);
+              console.log(`📄 [DOCUMENT_VIEW] ✅ Found document ${id} in target user ${targetUser.fullName || targetUser.name} (${targetUser.dni})`);
+              console.log(`📊 [DOCUMENT_VIEW] Document metadata:`, JSON.stringify(foundDoc, null, 2));
             }
           }
         }
@@ -57,7 +62,8 @@ export async function GET(
 
     // If not found in target user, fall back to searching all users
     if (!document) {
-      console.log(`🔄 Falling back to search all users for document ${id}`);
+      console.log(`🔄 [DOCUMENT_VIEW] Document not found in target user, falling back to search all users`);
+      console.log(`🔍 [DOCUMENT_VIEW] Searching across all users for document ${id}`);
       const usersResponse = await backendClient.getUsers({ size: 1000 });
       
       if (!usersResponse.success || !usersResponse.data?.content?.length) {
@@ -80,19 +86,21 @@ export async function GET(
             if (foundDoc) {
               document = foundDoc;
               documentOwnerUser = user;
-              console.log(`📄 Found document ${id} belonging to user ${user.fullName || user.name} (${user.id})`);
+              console.log(`📄 [DOCUMENT_VIEW] ✅ Found document ${id} belonging to user ${user.fullName || user.name} (DNI: ${user.dni || 'N/A'}, ID: ${user.id})`);
               break;
             }
           }
         } catch (error) {
-          console.warn(`Error checking documents for user ${user.id}:`, error);
+          console.warn(`⚠️ [DOCUMENT_VIEW] Error checking documents for user ${user.id} (${user.fullName || user.name}):`, error.message || error);
           continue;
         }
       }
     }
     
     if (!document) {
-      console.log(`❌ Document with ID ${id} not found across all users`);
+      console.error(`❌ [DOCUMENT_VIEW] Document with ID ${id} not found across all users`);
+      console.error(`🔍 [DOCUMENT_VIEW] Search completed across ${usersResponse.data?.content?.length || 0} users`);
+      console.error(`⏰ [DOCUMENT_VIEW] Search duration: ${Date.now() - Date.parse(new Date().toISOString())}ms`);
       return NextResponse.json({
         error: 'Document not found',
         message: 'Document not found in any user\'s document collection',
@@ -100,7 +108,15 @@ export async function GET(
       }, { status: 404 });
     }
 
-    console.log(`📄 Found document:`, document);
+    console.log(`📄 [DOCUMENT_VIEW] ✅ Document found successfully`);
+    console.log(`📊 [DOCUMENT_VIEW] Document details:`);
+    console.log(`   - ID: ${document.id}`);
+    console.log(`   - Type: ${document.documentType || 'Unknown'}`);
+    console.log(`   - Size: ${document.fileSize || 'Unknown'}`);
+    console.log(`   - Upload Date: ${document.uploadDate || 'Unknown'}`);
+    console.log(`   - Validation Status: ${document.validationStatus || 'Unknown'}`);
+    console.log(`👤 [DOCUMENT_VIEW] Document owner: ${documentOwnerUser?.fullName || documentOwnerUser?.name} (DNI: ${documentOwnerUser?.dni})`);
+    console.log(`📁 [DOCUMENT_VIEW] Full document object:`, JSON.stringify(document, null, 2));
     
     // Get file details - try multiple field variations
     const fileName = document.fileName || document.nombreArchivo;
@@ -113,12 +129,18 @@ export async function GET(
       const userDni = documentOwnerUser?.dni || documentOwnerUser?.username;
       if (userDni) {
         filePath = `${userDni}/${fileName}`;
-        console.log(`🔧 Constructed filePath: ${filePath}`);
+        console.log(`🔧 [DOCUMENT_VIEW] Constructed filePath from DNI and fileName: ${filePath}`);
+        console.log(`📝 [DOCUMENT_VIEW] Construction details: DNI=${userDni}, fileName=${fileName}`);
       }
     }
 
-    console.log(`📁 File details - Name: ${fileName}, Path: ${filePath}, Type: ${mimeType}`);
-    console.log(`📄 Full document object:`, JSON.stringify(document, null, 2));
+    console.log(`📁 [DOCUMENT_VIEW] File resolution details:`);
+    console.log(`   - File Name: ${fileName}`);
+    console.log(`   - File Path: ${filePath}`);
+    console.log(`   - MIME Type: ${mimeType}`);
+    console.log(`   - Document Owner DNI: ${documentOwnerUser?.dni || 'N/A'}`);
+    console.log(`🔍 [DOCUMENT_VIEW] Document fields available:`, Object.keys(document));
+    console.log(`📊 [DOCUMENT_VIEW] Full document metadata:`, JSON.stringify(document, null, 2));
 
     if (!fileName || !filePath) {
       return NextResponse.json({

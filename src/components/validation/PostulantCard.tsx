@@ -32,6 +32,7 @@ interface PostulantCardProps {
       pending: number;
       approved: number;
       rejected: number;
+      required: number;
     };
     validationStatus: 'PENDING' | 'APPROVED' | 'REJECTED';
     circunscripcion?: {
@@ -133,9 +134,9 @@ export default function PostulantCard({
 
       <CardContent className="pt-0">
         <div className="space-y-3">
-          {/* Circunscripción */}
+          {/* Centro de Vida */}
           <div className="flex items-center justify-between">
-            <span className="text-xs text-gray-500">Circunscripción:</span>
+            <span className="text-xs text-gray-500">Centro de Vida:</span>
             <Badge variant="outline" className="text-xs">
               {inscription.centroDeVida}
             </Badge>
@@ -152,8 +153,8 @@ export default function PostulantCard({
           {/* Estadísticas de documentos */}
           <div className="space-y-1">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500">Documentos:</span>
-              <span className="text-xs font-medium">{documents.total} total</span>
+              <span className="text-xs text-gray-500">Docs. Obligatorios:</span>
+              <span className="text-xs font-medium">{documents.required} de 7</span>
             </div>
             
             <div className="flex space-x-2">

@@ -211,7 +211,7 @@ export default function ValidationDecision({
           <h4 className="font-medium text-sm mb-2">Postulante: {postulant.user.name}</h4>
           <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
             <div>DNI: {postulant.user.dni}</div>
-            <div>Total documentos: {postulant.documents.total}</div>
+            <div>Docs. Obligatorios: {postulant.documents.required || 0} de 7</div>
             <div className="text-green-600">Aprobados: {postulant.documents.approved}</div>
             <div className="text-blue-600">Pendientes: {postulant.documents.pending}</div>
             <div className="text-red-600">Rechazados: {postulant.documents.rejected}</div>

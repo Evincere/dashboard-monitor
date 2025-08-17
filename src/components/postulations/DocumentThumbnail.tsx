@@ -114,9 +114,9 @@ export default function DocumentThumbnail({
   if (viewMode === 'list') {
     return (
       <Card 
-        className={`group cursor-pointer transition-all duration-300 hover:shadow-lg hover:shadow-black/5 ${
-          selected ? 'ring-2 ring-blue-500 shadow-lg bg-blue-50/50 dark:bg-blue-900/10' : 'hover:ring-1 hover:ring-slate-200 dark:hover:ring-slate-700'
-        } ${className} bg-white dark:bg-slate-800/50 border-slate-200/60 dark:border-slate-700/60`}
+        className={`group cursor-pointer transition-all duration-300 hover:shadow-lg ${
+          selected ? 'ring-2 ring-primary shadow-lg bg-accent/20' : 'hover:ring-1 hover:ring-border'
+        } ${className} bg-card border`}
         onClick={onClick}
       >
         <CardContent className="p-0">
@@ -127,7 +127,7 @@ export default function DocumentThumbnail({
             <div className="flex items-center space-x-4">
               {/* File Icon */}
               <div className="flex-shrink-0">
-                <div className="w-14 h-14 bg-slate-50 dark:bg-slate-700 rounded-xl flex items-center justify-center shadow-sm border border-slate-100 dark:border-slate-600 group-hover:shadow-md transition-shadow">
+                <div className="w-14 h-14 bg-secondary rounded-xl flex items-center justify-center shadow-sm border group-hover:shadow-md transition-shadow">
                   {getFileTypeIcon(document.fileName)}
                 </div>
               </div>
@@ -135,7 +135,7 @@ export default function DocumentThumbnail({
               {/* File Info */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center space-x-3 mb-2">
-                  <h3 className="font-semibold text-slate-900 dark:text-slate-100 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                  <h3 className="font-semibold text-foreground truncate group-hover:text-primary transition-colors">
                     {document.originalName || document.fileName}
                   </h3>
                   {document.isRequired && (
@@ -145,7 +145,7 @@ export default function DocumentThumbnail({
                   )}
                 </div>
                 
-                <div className="flex items-center space-x-4 text-sm text-slate-500 dark:text-slate-400">
+                <div className="flex items-center space-x-4 text-sm text-muted-foreground">
                   <span className="font-medium">{formatFileSize(document.fileSize)}</span>
                   <span>•</span>
                   <span>
@@ -201,9 +201,9 @@ export default function DocumentThumbnail({
   // Grid view
   return (
     <Card 
-      className={`group cursor-pointer transition-all duration-300 hover:shadow-xl hover:shadow-black/10 hover:-translate-y-1 ${
-        selected ? 'ring-2 ring-blue-500 shadow-xl' : 'hover:ring-1 hover:ring-slate-200 dark:hover:ring-slate-700'
-      } ${className} relative overflow-hidden bg-white dark:bg-slate-800/50 border-slate-200/60 dark:border-slate-700/60`}
+      className={`group cursor-pointer transition-all duration-300 hover:shadow-xl hover:-translate-y-1 ${
+        selected ? 'ring-2 ring-primary shadow-xl bg-accent/20' : 'hover:ring-1 hover:ring-border'
+      } ${className} relative overflow-hidden bg-card border`}
       onClick={onClick}
     >
       <CardContent className="p-0">
@@ -257,7 +257,7 @@ export default function DocumentThumbnail({
           {/* File Info */}
           <div className="space-y-3">
             {/* Title */}
-            <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-sm line-clamp-2 leading-tight group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+            <h3 className="font-semibold text-foreground text-sm line-clamp-2 leading-tight group-hover:text-primary transition-colors">
               {document.originalName || document.fileName}
             </h3>
 
@@ -265,7 +265,7 @@ export default function DocumentThumbnail({
             <DocumentTypeBadge documentType={document.documentType} variant="compact" />
 
             {/* File metadata */}
-            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
               <span className="font-medium">{formatFileSize(document.fileSize)}</span>
               <span>{new Date(document.uploadDate).toLocaleDateString('es-ES')}</span>
             </div>

@@ -128,8 +128,8 @@ class BackendClient {
 
       const payload = {
         sub: 'admin',
-        authorities: ['ROLE_ADMIN', 'ROLE_USER'],
-        userId: 'f8b266aa-ecd9-4bbf-b850-ced9991b5fbf', // UUID del usuario admin del sistema
+        username: 'admin',
+        authorities: ['ROLE_ADMIN'],
         iat: Math.floor(Date.now() / 1000),
         exp: Math.floor(Date.now() / 1000) + (60 * 60) // 1 hour
       };
@@ -193,6 +193,14 @@ class BackendClient {
       }
 
       if (!response.ok) {
+        console.error('❌ Backend request failed:', {
+          url,
+          status: response.status,
+          statusText: response.statusText,
+          responseData,
+          headers: Object.fromEntries(response.headers.entries())
+        });
+        
         return {
           success: false,
           error: responseData.message || responseData.error || `HTTP ${response.status}`,
@@ -323,16 +331,26 @@ class BackendClient {
   }): Promise<ApiResponse<PagedResponse<BackendInscription>>> {
     const searchParams = new URLSearchParams();
     
+    // Establecer tamaño por defecto grande para obtener todas las inscripciones
+    const defaultSize = 1000;
+    
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
         if (value !== undefined && value !== null && value !== '') {
-          searchParams.append(key, value.toString());
+          // Mapear 'status' a 'state' para el backend
+          const backendKey = key === 'status' ? 'state' : key;
+          searchParams.append(backendKey, value.toString());
         }
       });
     }
+    
+    // Si no se especifica size, usar el valor por defecto
+    if (!params?.size && !searchParams.has('size')) {
+      searchParams.append('size', defaultSize.toString());
+    }
 
     const query = searchParams.toString();
-    const endpoint = `/inscriptions${query ? `?${query}` : ''}`;
+    const endpoint = `/admin/inscriptions${query ? `?${query}` : ''}`;
     
     return this.request<PagedResponse<BackendInscription>>(endpoint);
   }
@@ -398,6 +416,75 @@ class BackendClient {
         documents: documentsResponse.data?.content || []
       }
     };
+  }
+
+  /**
+   * Aprueba una inscripción cambiando su estado a APPROVED
+   */
+  async approveInscription(inscriptionId: string, note?: string): Promise<ApiResponse<BackendInscription>> {
+    console.log('🟡 Backend Client - Enviando aprobación:', {
+      url: `/admin/inscriptions/${inscriptionId}/state`,
+      body: {
+        inscriptionId,
+        newState: 'APPROVED',
+        note: note || 'Postulación aprobada tras validación de documentos'
+      }
+    });
+
+    return this.request<BackendInscription>(`/admin/inscriptions/${inscriptionId}/state`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        inscriptionId,
+        newState: 'APPROVED',
+        note: note || 'Postulación aprobada tras validación de documentos'
+      })
+    });
+  }
+
+  /**
+   * Rechaza una inscripción cambiando su estado a REJECTED
+   */
+  async rejectInscription(inscriptionId: string, note?: string): Promise<ApiResponse<BackendInscription>> {
+    console.log('🟡 Backend Client - Enviando rechazo:', {
+      url: `/admin/inscriptions/${inscriptionId}/state`,
+      body: {
+        inscriptionId,
+        newState: 'REJECTED',
+        note: note || 'Postulación rechazada tras validación de documentos'
+      }
+    });
+
+    return this.request<BackendInscription>(`/admin/inscriptions/${inscriptionId}/state`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        inscriptionId,
+        newState: 'REJECTED',
+        note: note || 'Postulación rechazada tras validación de documentos'
+      })
+    });
+  }
+
+  /**
+   * Inicia el proceso de validación cambiando el estado a PENDING
+   */
+  async startValidation(inscriptionId: string, note?: string): Promise<ApiResponse<BackendInscription>> {
+    console.log('🟡 Backend Client - Iniciando validación:', {
+      url: `/admin/inscriptions/${inscriptionId}/state`,
+      body: {
+        inscriptionId,
+        newState: 'PENDING',
+        note: note || 'Inicio de proceso de validación administrativa'
+      }
+    });
+
+    return this.request<BackendInscription>(`/admin/inscriptions/${inscriptionId}/state`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        inscriptionId,
+        newState: 'PENDING',
+        note: note || 'Inicio de proceso de validación administrativa'
+      })
+    });
   }
 
   /**
