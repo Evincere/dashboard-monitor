@@ -2,13 +2,15 @@
 
 /**
  * @fileOverview Cliente HTTP para integración con backend Spring Boot
- * Maneja autenticación JWT, interceptores de errores y tipos TypeScript
+ * Maneja autenticación JWT automática, interceptores de errores y tipos TypeScript
  */
 
 interface BackendConfig {
   apiUrl: string;
   jwtSecret: string;
   enabled: boolean;
+  loginUsername: string;
+  loginPassword: string;
 }
 
 interface ApiResponse<T = any> {
@@ -19,11 +21,12 @@ interface ApiResponse<T = any> {
   timestamp?: string;
 }
 
-interface JWTPayload {
-  sub: string;
-  role: string;
-  exp: number;
-  iat: number;
+interface LoginResponse {
+  token: string;
+  bearer: string;
+  username: string;
+  authorities: Array<{ authority: string }>;
+  cuit?: string;
 }
 
 // Tipos para respuestas del backend Spring Boot
@@ -94,12 +97,16 @@ export interface PagedResponse<T> {
 class BackendClient {
   private config: BackendConfig;
   private authToken: string | null = null;
+  private tokenExpiry: number = 0;
+  private isLoggingIn: boolean = false;
 
   constructor() {
     this.config = {
       apiUrl: process.env.BACKEND_API_URL || 'http://localhost:8080/api',
       jwtSecret: process.env.BACKEND_JWT_SECRET || 'RcmUR2yePNGr5pjZ9bXL_dx7h_xeIliI4iS4ESXDMMs',
-      enabled: process.env.ENABLE_BACKEND_INTEGRATION !== 'false' // Enabled by default, can be explicitly disabled
+      enabled: process.env.ENABLE_BACKEND_INTEGRATION !== 'false',
+      loginUsername: 'admin',
+      loginPassword: 'admin123'
     };
   }
 
@@ -111,47 +118,85 @@ class BackendClient {
   }
 
   /**
-   * Genera un token JWT temporal para comunicación con el backend
+   * Autentica con el backend usando credenciales y obtiene token JWT
    */
-  private generateServiceToken(): string {
-    if (typeof window !== 'undefined') {
-      // En el cliente, intentar obtener token del localStorage
-      return localStorage.getItem('authToken') || '';
+  private async authenticateWithBackend(): Promise<string | null> {
+    if (this.isLoggingIn) {
+      // Evitar múltiples intentos de login simultáneos
+      return null;
     }
 
-    // En el servidor, generar token de servicio usando la misma lógica que las otras APIs
+    this.isLoggingIn = true;
+
     try {
-      const header = {
-        alg: 'HS256',
-        typ: 'JWT'
-      };
-
-      const payload = {
-        sub: 'admin',
-        username: 'admin',
-        authorities: ['ROLE_ADMIN'],
-        iat: Math.floor(Date.now() / 1000),
-        exp: Math.floor(Date.now() / 1000) + (60 * 60) // 1 hour
-      };
-
-      const base64Header = Buffer.from(JSON.stringify(header)).toString('base64url');
-      const base64Payload = Buffer.from(JSON.stringify(payload)).toString('base64url');
+      console.log('🔐 Iniciando autenticación con backend Spring Boot...');
       
-      const crypto = require('crypto');
-      const signature = crypto
-        .createHmac('sha256', this.config.jwtSecret)
-        .update(`${base64Header}.${base64Payload}`)
-        .digest('base64url');
+      const loginResponse = await fetch(`${this.config.apiUrl}/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          username: this.config.loginUsername,
+          password: this.config.loginPassword
+        })
+      });
 
-      return `${base64Header}.${base64Payload}.${signature}`;
+      if (!loginResponse.ok) {
+        const errorText = await loginResponse.text();
+        console.error('❌ Error en login:', {
+          status: loginResponse.status,
+          statusText: loginResponse.statusText,
+          body: errorText
+        });
+        return null;
+      }
+
+      const loginData: LoginResponse = await loginResponse.json();
+      
+      if (loginData.token) {
+        this.authToken = loginData.token;
+        // Token expira en 24 horas según la configuración del backend
+        this.tokenExpiry = Date.now() + (24 * 60 * 60 * 1000);
+        
+        console.log('✅ Autenticación exitosa con backend Spring Boot');
+        console.log(`🎫 Token obtenido para usuario: ${loginData.username}`);
+        console.log(`🔑 Autoridades: ${loginData.authorities.map(a => a.authority).join(', ')}`);
+        
+        return this.authToken;
+      }
+
+      return null;
     } catch (error) {
-      console.warn('No se pudo generar JWT, continuando sin token:', error);
-      return '';
+      console.error('❌ Error durante autenticación:', error);
+      return null;
+    } finally {
+      this.isLoggingIn = false;
     }
   }
 
   /**
-   * Realiza petición HTTP al backend con manejo de errores
+   * Verifica si el token actual es válido y no ha expirado
+   */
+  private isTokenValid(): boolean {
+    return this.authToken !== null && Date.now() < this.tokenExpiry;
+  }
+
+  /**
+   * Obtiene un token válido, autenticándose si es necesario
+   */
+  private async getValidToken(): Promise<string | null> {
+    if (this.isTokenValid()) {
+      return this.authToken;
+    }
+
+    console.log('🔄 Token expirado o inexistente, obteniendo nuevo token...');
+    return await this.authenticateWithBackend();
+  }
+
+  /**
+   * Realiza petición HTTP al backend con manejo de errores y autenticación automática
    */
   private async request<T>(
     endpoint: string,
@@ -165,19 +210,27 @@ class BackendClient {
     }
 
     const url = `${this.config.apiUrl}${endpoint}`;
-    const token = this.authToken || this.generateServiceToken();
+    
+    // Obtener token válido
+    const token = await this.getValidToken();
+    
+    if (!token) {
+      return {
+        success: false,
+        error: 'Could not authenticate with backend'
+      };
+    }
 
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
+      'Authorization': `Bearer ${token}`,
       ...options.headers
     };
 
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
     try {
+      console.log(`📡 Backend request: ${options.method || 'GET'} ${url}`);
+      
       const response = await fetch(url, {
         ...options,
         headers
@@ -197,9 +250,15 @@ class BackendClient {
           url,
           status: response.status,
           statusText: response.statusText,
-          responseData,
-          headers: Object.fromEntries(response.headers.entries())
+          responseData
         });
+        
+        // Si es 401, limpiar token para forzar re-autenticación en próxima llamada
+        if (response.status === 401) {
+          console.log('🔄 Token inválido, limpiando para re-autenticación...');
+          this.authToken = null;
+          this.tokenExpiry = 0;
+        }
         
         return {
           success: false,
@@ -208,6 +267,8 @@ class BackendClient {
         };
       }
 
+      console.log(`✅ Backend request successful: ${Object.keys(responseData).length} keys in response`);
+
       return {
         success: true,
         data: responseData,
@@ -215,7 +276,7 @@ class BackendClient {
       };
 
     } catch (error) {
-      console.error('Backend request error:', error);
+      console.error('❌ Backend request error:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -267,28 +328,6 @@ class BackendClient {
     const endpoint = `/admin/documentos${query ? `?${query}` : ''}`;
     
     return this.request<PagedResponse<BackendDocument>>(endpoint);
-  }
-
-  /**
-   * Aprueba un documento
-   */
-  async approveDocument(documentId: string): Promise<ApiResponse<BackendDocument>> {
-    return this.request<BackendDocument>(`/admin/documentos/${documentId}/aprobar`, {
-      method: 'PATCH'
-    });
-  }
-
-  /**
-   * Rechaza un documento
-   */
-  async rejectDocument(
-    documentId: string, 
-    motivo: string
-  ): Promise<ApiResponse<BackendDocument>> {
-    return this.request<BackendDocument>(`/admin/documentos/${documentId}/rechazar`, {
-      method: 'PATCH',
-      body: JSON.stringify({ motivo })
-    });
   }
 
   /**
@@ -356,8 +395,43 @@ class BackendClient {
   }
 
   /**
-   * Obtiene datos de gestión de postulaciones desde el backend principal
+   * Fuerza re-autenticación (útil para testing)
    */
+  async forceReauth(): Promise<boolean> {
+    this.authToken = null;
+    this.tokenExpiry = 0;
+    const token = await this.getValidToken();
+    return token !== null;
+  }
+
+  /**
+   * Obtiene el estado actual del token
+   */
+  getTokenStatus(): { hasToken: boolean; isValid: boolean; expiresAt: string | null } {
+    return {
+      hasToken: this.authToken !== null,
+      isValid: this.isTokenValid(),
+      expiresAt: this.tokenExpiry > 0 ? new Date(this.tokenExpiry).toISOString() : null
+    };
+  }
+
+  // ... resto de métodos sin cambios
+  async approveDocument(documentId: string): Promise<ApiResponse<BackendDocument>> {
+    return this.request<BackendDocument>(`/admin/documentos/${documentId}/aprobar`, {
+      method: 'PATCH'
+    });
+  }
+
+  async rejectDocument(
+    documentId: string, 
+    motivo: string
+  ): Promise<ApiResponse<BackendDocument>> {
+    return this.request<BackendDocument>(`/admin/documentos/${documentId}/rechazar`, {
+      method: 'PATCH',
+      body: JSON.stringify({ motivo })
+    });
+  }
+
   async getPostulationsManagement(): Promise<ApiResponse<{
     success: boolean;
     postulations: any[];
@@ -372,15 +446,11 @@ class BackendClient {
     }>('/postulations/management');
   }
 
-  /**
-   * Obtiene datos completos de un postulante por DNI
-   */
   async getPostulantByDni(dni: string): Promise<ApiResponse<{
     user: BackendUser;
     inscription: BackendInscription;
     documents: BackendDocument[];
   }>> {
-    // Obtener todos los usuarios y buscar por DNI localmente (como en la API de documentos)
     const userResponse = await this.getUsers({ size: 1000 });
     
     if (!userResponse.success || !userResponse.data?.content.length) {
@@ -390,7 +460,6 @@ class BackendClient {
       };
     }
 
-    // Find the exact user by DNI
     const user = userResponse.data.content.find((u: any) => 
       (u.dni === dni) || (u.username === dni)
     );
@@ -402,7 +471,6 @@ class BackendClient {
       };
     }
     
-    // Obtener inscripción y documentos del usuario
     const [inscriptionResponse, documentsResponse] = await Promise.all([
       this.getInscriptions({ userId: user.id }),
       this.getDocuments({ usuarioId: user.id })
@@ -418,19 +486,7 @@ class BackendClient {
     };
   }
 
-  /**
-   * Aprueba una inscripción cambiando su estado a APPROVED
-   */
   async approveInscription(inscriptionId: string, note?: string): Promise<ApiResponse<BackendInscription>> {
-    console.log('🟡 Backend Client - Enviando aprobación:', {
-      url: `/admin/inscriptions/${inscriptionId}/state`,
-      body: {
-        inscriptionId,
-        newState: 'APPROVED',
-        note: note || 'Postulación aprobada tras validación de documentos'
-      }
-    });
-
     return this.request<BackendInscription>(`/admin/inscriptions/${inscriptionId}/state`, {
       method: 'PATCH',
       body: JSON.stringify({
@@ -441,19 +497,7 @@ class BackendClient {
     });
   }
 
-  /**
-   * Rechaza una inscripción cambiando su estado a REJECTED
-   */
   async rejectInscription(inscriptionId: string, note?: string): Promise<ApiResponse<BackendInscription>> {
-    console.log('🟡 Backend Client - Enviando rechazo:', {
-      url: `/admin/inscriptions/${inscriptionId}/state`,
-      body: {
-        inscriptionId,
-        newState: 'REJECTED',
-        note: note || 'Postulación rechazada tras validación de documentos'
-      }
-    });
-
     return this.request<BackendInscription>(`/admin/inscriptions/${inscriptionId}/state`, {
       method: 'PATCH',
       body: JSON.stringify({
@@ -464,19 +508,7 @@ class BackendClient {
     });
   }
 
-  /**
-   * Inicia el proceso de validación cambiando el estado a PENDING
-   */
   async startValidation(inscriptionId: string, note?: string): Promise<ApiResponse<BackendInscription>> {
-    console.log('🟡 Backend Client - Iniciando validación:', {
-      url: `/admin/inscriptions/${inscriptionId}/state`,
-      body: {
-        inscriptionId,
-        newState: 'PENDING',
-        note: note || 'Inicio de proceso de validación administrativa'
-      }
-    });
-
     return this.request<BackendInscription>(`/admin/inscriptions/${inscriptionId}/state`, {
       method: 'PATCH',
       body: JSON.stringify({
@@ -488,10 +520,11 @@ class BackendClient {
   }
 
   /**
-   * Establece token de autenticación
+   * Establece token de autenticación manualmente (para debugging)
    */
   setAuthToken(token: string): void {
     this.authToken = token;
+    this.tokenExpiry = Date.now() + (24 * 60 * 60 * 1000); // 24 horas
   }
 
   /**
@@ -499,6 +532,7 @@ class BackendClient {
    */
   clearAuthToken(): void {
     this.authToken = null;
+    this.tokenExpiry = 0;
   }
 }
 

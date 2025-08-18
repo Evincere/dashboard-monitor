@@ -84,7 +84,7 @@ export async function GET(
       // Local development path with real documents
       path.join(process.env.LOCAL_DOCUMENTS_PATH || 'B:\\concursos_situacion_post_gracia\\descarga_administracion_20250814_191745\\documentos', filePath),
       // Production Docker volume path
-      path.join(process.env.DOCUMENT_STORAGE_PATH || '/var/lib/docker/volumes/mpd_concursos_document_storage_prod/_data', filePath),
+      path.join(process.env.DOCUMENT_STORAGE_PATH || '/var/lib/docker/volumes/mpd_concursos_storage_data_prod/_data/documents', filePath),
       // Alternative paths
       path.join(process.cwd(), 'storage', 'documents', filePath),
       path.join('/app/storage/documents', filePath),

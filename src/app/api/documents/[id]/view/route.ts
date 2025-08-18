@@ -157,8 +157,8 @@ export async function GET(
 
     // Try to read the file from various possible locations
     const basePaths = [
-      process.env.LOCAL_DOCUMENTS_PATH || 'B:\\concursos_situacion_post_gracia\\descarga_administracion_20250814_191745\\documentos',
-      process.env.DOCUMENT_STORAGE_PATH || '/var/lib/docker/volumes/mpd_concursos_document_storage_prod/_data',
+      process.env.LOCAL_DOCUMENTS_PATH || '/var/lib/docker/volumes/mpd_concursos_storage_data_prod/_data/documents',
+      process.env.DOCUMENT_STORAGE_PATH || '/var/lib/docker/volumes/mpd_concursos_storage_data_prod/_data/documents',
       path.join(process.cwd(), 'storage', 'documents'),
       '/app/storage/documents'
     ];

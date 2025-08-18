@@ -83,7 +83,7 @@ const DOCUMENTS_DIR = process.env.APP_STORAGE_DOCUMENTS_DIR || 'documents';
 const LOCAL_DOCS_PATH = process.env.LOCAL_DOCUMENTS_PATH || 'B:\\concursos_situacion_post_gracia\\descarga_administracion_20250814_191745\\documentos';
 
 // Backend storage path (for development when running both frontend and backend)
-const BACKEND_STORAGE_PATH = process.env.BACKEND_STORAGE_PATH || 'B:\\CODE\\PROYECTOS\\concursos-mpd\\concurso-backend\\storage\\documents';
+const BACKEND_STORAGE_PATH = process.env.DOCUMENT_STORAGE_PATH || "/var/lib/docker/volumes/mpd_concursos_storage_data_prod/_data/documents";
 
 // Production-ready path resolution
 const getDocumentBasePaths = (): string[] => {

@@ -6,10 +6,16 @@ import { getClientIP, getUserAgent } from './src/lib/request-utils';
 // Define protected routes
 const protectedRoutes = [
   '/api/users',
-  '/api/documents',
+  '/api/documents/approve',
+  '/api/documents/reject',
   '/api/backups',
   '/api/dashboard',
   '/api/security'
+];
+
+// Document view/download endpoints that should be public
+const documentViewRoutes = [
+  '/api/documents/'
 ];
 
 // Define admin-only routes
@@ -24,11 +30,15 @@ const publicRoutes = [
   '/api/auth/login',
   '/api/auth/refresh',
   '/api/health',
-  '/api/test'
+  '/api/test',
+  '/api/documents/[id]/view',
+  '/api/documents/[id]/download'
 ];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  
+  console.log('🔍 Middleware check for:', pathname);
 
   // Skip middleware for static files and Next.js internals
   if (
@@ -42,6 +52,12 @@ export function middleware(request: NextRequest) {
 
   // Allow public routes
   if (publicRoutes.some(route => pathname.startsWith(route))) {
+    return NextResponse.next();
+  }
+
+  // Check if this is a document view/download endpoint
+  if (pathname.includes('/api/documents/') && (pathname.endsWith('/view') || pathname.endsWith('/download'))) {
+    console.log('✅ Document endpoint - allowing access:', pathname);
     return NextResponse.next();
   }
 
