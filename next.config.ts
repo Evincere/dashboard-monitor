@@ -9,8 +9,8 @@ const nextConfig: NextConfig = {
     ignoreDuringBuilds: true,
   },
   // Configuración para subpath (temporarily disabled for testing)
-  // basePath: '/dashboard-monitor',
-  // assetPrefix: '/dashboard-monitor',
+  basePath: '/dashboard-monitor',
+  assetPrefix: '/dashboard-monitor',
   images: {
     remotePatterns: [
       {
