@@ -441,6 +441,8 @@ export default function PostulationsManagementPage() {
                 <SelectItem value="ALL">Todos los estados</SelectItem>
                 <SelectItem value="COMPLETED_WITH_DOCS">Con documentos completos</SelectItem>
                 <SelectItem value="ACTIVE">Activas</SelectItem>
+                // AGREGADO SEGÚN AUDITORÍA: Opción para ver inscripciones rechazadas
+                                <SelectItem value="REJECTED">Rechazadas</SelectItem>
                 <SelectItem value="COMPLETED_PENDING_DOCS">Pendientes de documentos</SelectItem>
               </SelectContent>
             </Select>
