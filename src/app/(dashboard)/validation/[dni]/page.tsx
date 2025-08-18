@@ -1,5 +1,6 @@
 'use client';
 
+import { apiUrl } from '@/lib/utils';
 import { useState, useEffect, Suspense } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { 
@@ -133,7 +134,7 @@ function PostulantExpedienteContent() {
   const fetchPostulantData = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/validation/postulant/${dni}`);
+      const response = await fetch(apiUrl(`validation/postulant/${dni}`));
       if (!response.ok) throw new Error('Failed to fetch postulant data');
 
       const data = await response.json();
@@ -172,7 +173,7 @@ function PostulantExpedienteContent() {
       fetchPostulantData();
       
       // Fetch navigation data (list of all postulants for keyboard navigation)
-      fetch('/api/validation/postulants?getAllDNIs=true')
+      fetch(apiUrl('validation/postulants?getAllDNIs=true'))
         .then(res => res.json())
         .then(data => {
           if (data.allDNIs) {
@@ -215,8 +216,8 @@ function PostulantExpedienteContent() {
     setSubmitting(true);
     try {
       const endpoint = decision.action === 'approve' 
-        ? '/api/validation/approve' 
-        : '/api/validation/reject';
+        ? apiUrl('validation/approve') 
+        : apiUrl('validation/reject');
 
       const response = await fetch(endpoint, {
         method: 'POST',

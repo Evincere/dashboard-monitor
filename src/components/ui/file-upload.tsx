@@ -1,5 +1,7 @@
 'use client';
 
+import { apiUrl } from "@/lib/utils";
+
 import { useState } from 'react';
 import { Upload, File, X, Loader2 } from 'lucide-react';
 import { Button } from './button';
@@ -59,7 +61,7 @@ export function FileUpload({
       formData.append('contestId', contestId);
       formData.append('fileType', fileType);
 
-      const response = await fetch('/api/contests/upload', {
+      const response = await fetch(apiUrl('contests/upload'), {
         method: 'POST',
         body: formData,
       });

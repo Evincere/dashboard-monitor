@@ -1,4 +1,5 @@
 'use client';
+import { routeUrl } from '@/lib/utils';
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -179,7 +180,7 @@ function ValidationPageContent() {
   };
 
   const handleViewPostulant = (dni: string) => {
-    router.push(`/validation/${dni}`);
+    router.push(routeUrl(`validation/${dni}`));
   };
 
   if (loading && !postulants.length) {

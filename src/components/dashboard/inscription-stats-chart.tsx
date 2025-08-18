@@ -1,5 +1,7 @@
 'use client';
 
+import { apiUrl } from "@/lib/utils";
+
 import { useState, useEffect, useRef } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import {
@@ -104,7 +106,7 @@ export function InscriptionStatsChart() {
   const fetchContests = async () => {
     try {
       setContestsLoading(true);
-      const response = await fetch('/api/dashboard/contests-list');
+      const response = await fetch(apiUrl('dashboard/contests-list'));
       const result = await response.json();
 
       if (result.success) {
@@ -124,8 +126,8 @@ export function InscriptionStatsChart() {
       setLoading(true);
       setError(null);
       const url = contestId && contestId !== 'all' 
-        ? `/api/dashboard/inscriptions-stats?contestId=${contestId}`
-        : '/api/dashboard/inscriptions-stats';
+        ? apiUrl(`dashboard/inscriptions-stats?contestId=${contestId}`)
+        : apiUrl('dashboard/inscriptions-stats');
       const response = await fetch(url);
       const result = await response.json();
 

@@ -1,5 +1,6 @@
-// src/components/dashboard/schema-inspector.tsx
 'use client';
+
+import { apiUrl } from '@/lib/utils';
 
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -80,7 +81,7 @@ export function SchemaInspector() {
 
   const fetchOverview = async () => {
     try {
-      const response = await fetch('/api/schema?overview=true');
+      const response = await fetch(apiUrl('schema?overview=true'));
       const result = await response.json();
       if (result.success) {
         setOverview(result.data);
@@ -94,7 +95,7 @@ export function SchemaInspector() {
 
   const fetchMetadata = async () => {
     try {
-      const response = await fetch('/api/schema?metadata=true');
+      const response = await fetch(apiUrl('schema?metadata=true'));
       const result = await response.json();
       if (result.success) {
         setMetadata(result.data);
@@ -106,7 +107,7 @@ export function SchemaInspector() {
 
   const fetchValidation = async () => {
     try {
-      const response = await fetch('/api/schema?validate=true');
+      const response = await fetch(apiUrl('schema?validate=true'));
       const result = await response.json();
       if (result.success) {
         setValidation(result.data);
@@ -118,7 +119,7 @@ export function SchemaInspector() {
 
   const fetchCacheInfo = async () => {
     try {
-      const response = await fetch('/api/schema?cache=info');
+      const response = await fetch(apiUrl('schema?cache=info'));
       const result = await response.json();
       if (result.success) {
         setCacheInfo(result.data);
@@ -132,7 +133,7 @@ export function SchemaInspector() {
     setLoading(true);
     setError(null);
     try {
-      const url = refresh ? '/api/schema?refresh=true' : '/api/schema';
+      const url = refresh ? apiUrl('schema?refresh=true') : apiUrl('schema');
       const response = await fetch(url);
       const result = await response.json();
       if (result.success) {
@@ -155,7 +156,7 @@ export function SchemaInspector() {
 
   const clearCache = async () => {
     try {
-      const response = await fetch('/api/schema', { method: 'DELETE' });
+      const response = await fetch(apiUrl('schema'), { method: 'DELETE' });
       const result = await response.json();
       if (result.success) {
         await fetchCacheInfo();

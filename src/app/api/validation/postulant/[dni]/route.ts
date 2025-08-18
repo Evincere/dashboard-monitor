@@ -162,9 +162,9 @@ export async function GET(
 
     // Mapear circunscripción (simplificado por ahora)
     const circunscripcion = {
-      code: inscription.centroDeVida,
-      name: inscription.centroDeVida,
-      region: inscription.centroDeVida.includes('CAPITAL') ? 'Capital' : 'Interior'
+      code: inscription.centroDeVida || 'UNKNOWN',
+      name: inscription.centroDeVida || 'UNKNOWN',
+      region: inscription.centroDeVida?.includes('CAPITAL') ? 'Capital' : 'Interior'
     };
 
     const expediente: PostulantExpediente = {

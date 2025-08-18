@@ -1,5 +1,6 @@
 
 'use client';
+import { routeUrl } from '@/lib/utils';
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -360,7 +361,7 @@ function DocumentsPageContent() {
           </div>
           
           <div className="flex gap-3">
-            <Link href="/postulations">
+            <Link href={routeUrl("postulations")}>
               <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg hover:shadow-xl transition-all">
                 <FileCheck className="w-4 h-4 mr-2" />
                 Validación de Documentos
@@ -388,7 +389,7 @@ function DocumentsPageContent() {
                   </p>
                 </div>
               </div>
-              <Link href="/postulations">
+              <Link href={routeUrl("postulations")}>
                 <Button variant="outline" className="border-blue-300 text-blue-600 hover:bg-blue-50">
                   <FileCheck className="w-4 h-4 mr-2" />
                   Ir a Validación

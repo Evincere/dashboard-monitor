@@ -1,5 +1,7 @@
-
 'use client';
+
+import { apiUrl, routeUrl } from "@/lib/utils";
+
 
 import { useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
@@ -75,7 +77,7 @@ export default function DatabasePage() {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch('/api/database/stats');
+      const response = await fetch(apiUrl('database/stats'));
       const data = await response.json();
       
       if (data.success) {
@@ -346,7 +348,7 @@ export default function DatabasePage() {
                         </div>
                         <Separator className="my-4 bg-border/50" />
                         <div className="flex justify-center">
-                            <Link href="/documents">
+                            <Link href={routeUrl("documents")}>
                                <Button>Gestionar Documentos</Button>
                             </Link>
                         </div>
@@ -365,7 +367,7 @@ export default function DatabasePage() {
                         </div>
                          <Separator className="my-4 bg-border/50" />
                         <div className="flex justify-center">
-                            <Link href="/documents">
+                            <Link href={routeUrl("documents")}>
                                <Button>Gestionar Documentos</Button>
                             </Link>
                         </div>

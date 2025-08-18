@@ -1,4 +1,5 @@
 "use client";
+import { apiUrl, routeUrl } from '@/lib/utils';
 
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -156,7 +157,7 @@ export default function DocumentValidationPage() {
     console.log('🔄 fetchAllPostulantsList - Iniciando carga de lista de postulantes...');
     try {
       console.log('📡 Haciendo fetch a /api/backend/inscriptions con tamaño=1000');
-      const response = await fetch('/api/backend/inscriptions?size=1000');
+      const response = await fetch(apiUrl('backend/inscriptions?size=1000'));
       console.log('📨 Respuesta recibida:', {
         ok: response.ok,
         status: response.status,
@@ -232,7 +233,7 @@ export default function DocumentValidationPage() {
   const fetchValidationData = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/postulations/${dni}/documents`);
+      const response = await fetch(apiUrl(`postulations/${dni}/documents`));
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -300,7 +301,7 @@ export default function DocumentValidationPage() {
   // Handle download
   const handleDownload = useCallback(() => {
     if (!currentDocument) return;
-    window.open(`/api/documents/${currentDocument.id}/download`, "_blank");
+    window.open(apiUrl(`documents/${currentDocument.id}/download`), "_blank");
   }, [currentDocument]);
 
   // Handle document approval
@@ -465,7 +466,7 @@ export default function DocumentValidationPage() {
         description: "No hay más postulantes pendientes de validación.",
       });
       setTimeout(() => {
-        router.push('/postulations');
+        router.push(routeUrl('postulations'));
       }, 2000);
       return;
     }
@@ -483,7 +484,7 @@ export default function DocumentValidationPage() {
       if (allPostulantsList.length > 0) {
         const firstPendingDni = allPostulantsList[0];
         console.log(`✅ Navegando al primer postulante pendiente: ${firstPendingDni}`);
-        const targetUrl = `/postulations/${firstPendingDni}/documents/validation`;
+        const targetUrl = routeUrl(`postulations/${firstPendingDni}/documents/validation`);
         console.log(`🎯 Target URL: ${targetUrl}`);
         router.push(targetUrl);
         return;
@@ -494,7 +495,7 @@ export default function DocumentValidationPage() {
           description: "No hay más postulantes pendientes de validación.",
         });
         setTimeout(() => {
-          router.push('/postulations');
+          router.push(routeUrl('postulations'));
         }, 2000);
         return;
       }
@@ -508,7 +509,7 @@ export default function DocumentValidationPage() {
     if (nextIndex < allPostulantsList.length) {
       const nextDni = allPostulantsList[nextIndex];
       console.log(`✅ Navegando al siguiente postulante pendiente: ${nextDni} (index: ${nextIndex})`);
-      const targetUrl = `/postulations/${nextDni}/documents/validation`;
+      const targetUrl = routeUrl(`postulations/${nextDni}/documents/validation`);
       console.log(`🎯 Target URL: ${targetUrl}`);
       router.push(targetUrl);
     } else {
@@ -518,7 +519,7 @@ export default function DocumentValidationPage() {
         description: "Has validado todos los postulantes pendientes. Redirigiendo al panel principal...",
       });
       setTimeout(() => {
-        router.push('/postulations');
+        router.push(routeUrl('postulations'));
       }, 2000);
     }
   };
@@ -560,7 +561,7 @@ export default function DocumentValidationPage() {
       if (postulant.inscription.state === 'COMPLETED_WITH_DOCS') {
         console.log('🟡 Estado actual es COMPLETED_WITH_DOCS, cambiando primero a PENDING...');
         
-        const initiateResponse = await fetch(`/api/postulations/${dni}/initiate-validation`, {
+        const initiateResponse = await fetch(apiUrl(`postulations/${dni}/initiate-validation`), {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
@@ -583,7 +584,7 @@ export default function DocumentValidationPage() {
       // PASO 2: Ahora aprobar la postulación (PENDING -> APPROVED)
       console.log('🟢 Aprobando postulación (PENDING -> APPROVED)...');
       
-      const response = await fetch(`/api/postulations/${dni}/approve`, {
+      const response = await fetch(apiUrl(`postulations/${dni}/approve`), {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -624,11 +625,11 @@ export default function DocumentValidationPage() {
         if (availablePostulants.length > 0) {
           const nextPostulant = availablePostulants[0];
           console.log(`✅ Navegando al siguiente postulante disponible: ${nextPostulant}`);
-          const targetUrl = `/postulations/${nextPostulant}/documents/validation`;
+          const targetUrl = routeUrl(`postulations/${nextPostulant}/documents/validation`);
           router.push(targetUrl);
         } else {
           console.log('🎉 No hay más postulantes pendientes, redirigiendo al dashboard');
-          router.push('/postulations');
+          router.push(routeUrl('postulations'));
         }
       }, 1500);
       
@@ -652,7 +653,7 @@ export default function DocumentValidationPage() {
       
       setShowCompletionModal(false);
       setTimeout(() => {
-        router.push('/postulations');
+        router.push(routeUrl('postulations'));
       }, 2000);
       
     } catch (error) {
@@ -686,7 +687,7 @@ export default function DocumentValidationPage() {
       });
 
       // Call the API route to initiate validation (change to PENDING)
-      const response = await fetch(`/api/postulations/${dni}/initiate-validation`, {
+      const response = await fetch(apiUrl(`postulations/${dni}/initiate-validation`), {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -749,7 +750,7 @@ export default function DocumentValidationPage() {
       });
 
       // Llamar al API route local para rechazar la inscripción
-      const response = await fetch(`/api/postulations/${dni}/reject`, {
+      const response = await fetch(apiUrl(`postulations/${dni}/reject`), {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -810,7 +811,7 @@ export default function DocumentValidationPage() {
       // Small delay to show toast, then redirect
       setTimeout(() => {
         // Navigate back to postulations list
-        router.push('/postulations');
+        router.push(routeUrl('postulations'));
       }, 2000);
       
     } catch (error) {
@@ -1422,7 +1423,7 @@ function DocumentViewer({
           {document.fileName.toLowerCase().endsWith(".pdf") ? (
             <iframe
               key={`${document.id}-${iframeKey}`}
-              src={`/api/documents/${document.id}/view`}
+              src={apiUrl(`documents/${document.id}/view`)}
               className="w-full h-full border-0"
               title={document.originalName}
               onLoad={() => {
@@ -1432,7 +1433,7 @@ function DocumentViewer({
           ) : (
             <div className="h-full flex items-center justify-center">
               <img
-                src={`/api/documents/${document.id}/view`}
+                src={apiUrl(`documents/${document.id}/view`)}
                 alt={document.originalName}
                 className="max-w-full max-h-full object-contain"
               />

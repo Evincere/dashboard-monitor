@@ -1,6 +1,7 @@
-// src/components/dashboard/performance-monitor.tsx
-
 'use client';
+
+
+import { apiUrl } from '@/lib/utils';
 
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
@@ -107,7 +108,7 @@ export function PerformanceMonitor() {
   const fetchPerformanceData = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/performance?recommendations=false');
+      const response = await fetch(apiUrl('performance?recommendations=false'));
       if (!response.ok) {
         throw new Error('Failed to fetch performance data');
       }
@@ -123,7 +124,7 @@ export function PerformanceMonitor() {
 
   const clearMetrics = async (action: string) => {
     try {
-      const response = await fetch('/api/performance', {
+      const response = await fetch(apiUrl('performance'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action })

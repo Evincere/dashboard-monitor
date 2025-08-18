@@ -1,5 +1,7 @@
-
 'use client';
+
+import { apiUrl } from "@/lib/utils";
+
 
 import { useState, useEffect } from 'react';
 import { TrendingUp, RefreshCw } from "lucide-react"
@@ -66,7 +68,7 @@ export function ContestStatusChart() {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch('/api/dashboard/contests-status');
+      const response = await fetch(apiUrl('dashboard/contests-status'));
       const result = await response.json();
 
       if (result.success) {

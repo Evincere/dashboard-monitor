@@ -1,4 +1,5 @@
 'use client';
+import { apiUrl } from '@/lib/utils';
 
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -91,7 +92,7 @@ export default function BackupsPage() {
   const fetchBackups = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/backups');
+      const response = await fetch(apiUrl('backups'));
       const result = await response.json();
 
       if (result.success) {
@@ -130,7 +131,7 @@ export default function BackupsPage() {
 
     try {
       setCreating(true);
-      const response = await fetch('/api/backups', {
+      const response = await fetch(apiUrl('backups'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -173,7 +174,7 @@ export default function BackupsPage() {
   const restoreBackup = async (backupId: string) => {
     try {
       setRestoring(backupId);
-      const response = await fetch('/api/backups', {
+      const response = await fetch(apiUrl('backups'), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -216,7 +217,7 @@ export default function BackupsPage() {
   const deleteBackup = async (backupId: string) => {
     try {
       setDeleting(backupId);
-      const response = await fetch(`/api/backups?id=${backupId}`, {
+      const response = await fetch(apiUrl(`backups?id=${backupId}`), {
         method: 'DELETE',
       });
 

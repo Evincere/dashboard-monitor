@@ -1,5 +1,7 @@
-
 'use client';
+
+import { apiUrl } from "@/lib/utils";
+
 
 import { useState, useEffect } from 'react';
 import { Library, Edit, Trash2, Plus, Calendar as CalendarIcon, Loader2 } from 'lucide-react';
@@ -93,7 +95,7 @@ interface Contest {
 // Función para obtener concursos de la API
 const fetchContests = async (): Promise<Contest[]> => {
     try {
-        const response = await fetch('/api/dashboard/contests-list', {
+        const response = await fetch(apiUrl('dashboard/contests-list'), {
             cache: 'no-store' // Evitar cache para datos actualizados
         });
         
@@ -318,7 +320,7 @@ export default function ContestsPage() {
             }
             
             // Llamar a la API para actualizar
-            const response = await fetch('/api/contests', {
+            const response = await fetch(apiUrl('contests'), {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -385,7 +387,7 @@ export default function ContestsPage() {
             }
             
             // Llamar a la API para crear
-            const response = await fetch('/api/contests', {
+            const response = await fetch(apiUrl('contests'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

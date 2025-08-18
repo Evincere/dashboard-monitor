@@ -1,5 +1,7 @@
-
 'use client';
+
+import { apiUrl } from "@/lib/utils";
+
 
 import { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from "recharts"
@@ -40,7 +42,7 @@ export function DocumentTypeChart() {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch('/api/dashboard/documents-by-category');
+      const response = await fetch(apiUrl('dashboard/documents-by-category'));
       const result = await response.json();
 
       if (result.success) {

@@ -1,5 +1,6 @@
 
 'use client';
+import { apiUrl, routeUrl } from '@/lib/utils';
 
 import { useState, useEffect, useCallback } from 'react';
 import { Users, Search, Edit, Trash2, Files, Plus, RefreshCw, UserCheck, UserX, UserMinus } from 'lucide-react';
@@ -125,7 +126,7 @@ export default function UsersPage() {
                 ...(filters.status && filters.status !== 'all' && { status: filters.status })
             });
 
-            const response = await fetch(`/api/users?${params}`);
+            const response = await fetch(apiUrl(`users?${params}`));
             const data = await response.json();
 
             if (response.ok) {
@@ -174,7 +175,7 @@ export default function UsersPage() {
         if (!editingUser) return;
 
         try {
-            const response = await fetch(`/api/users/${editingUser.id}`, {
+            const response = await fetch(apiUrl(`users/${editingUser.id}`), {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -214,7 +215,7 @@ export default function UsersPage() {
 
     const handleCreateUser = async () => {
         try {
-            const response = await fetch('/api/users', {
+            const response = await fetch(apiUrl('users'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -255,7 +256,7 @@ export default function UsersPage() {
 
     const handleDelete = async (id: string, name: string) => {
         try {
-            const response = await fetch(`/api/users/${id}`, {
+            const response = await fetch(apiUrl(`users/${id}`), {
                 method: 'DELETE',
             });
 
@@ -283,7 +284,7 @@ export default function UsersPage() {
 
     const handleStatusChange = async (id: string, action: 'activate' | 'deactivate' | 'block') => {
         try {
-            const response = await fetch(`/api/users/${id}`, {
+            const response = await fetch(apiUrl(`users/${id}`), {
                 method: 'PATCH',
                 headers: {
                     'Content-Type': 'application/json',
@@ -468,7 +469,7 @@ export default function UsersPage() {
                                                 <TableCell className="text-right">
                                                     <div className="flex justify-end gap-1">
                                                         <Button variant="outline" size="icon" asChild title="Ver Documentos">
-                                                            <Link href={`/documents?user=${user.username}`}>
+                                                            <Link href={routeUrl(`documents?user=${user.username}`)}>
                                                                 <Files className="h-4 w-4" />
                                                             </Link>
                                                         </Button>

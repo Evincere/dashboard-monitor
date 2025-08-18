@@ -1,4 +1,5 @@
 'use client';
+import { apiUrl, routeUrl } from '@/lib/utils';
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
@@ -108,7 +109,7 @@ export default function PostulantDocumentsPage() {
     setLoading(true);
     try {
       console.log(`Fetching documents for DNI: ${dni}`);
-      const response = await fetch(`/api/postulations/${dni}/documents`);
+      const response = await fetch(apiUrl(`postulations/${dni}/documents`));
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -155,7 +156,7 @@ export default function PostulantDocumentsPage() {
 
   const handleDocumentValidation = async (documentId: string, action: 'approve' | 'reject', reason?: string) => {
     try {
-      const endpoint = action === 'approve' ? '/api/documents/approve' : '/api/documents/reject';
+      const endpoint = action === 'approve' ? apiUrl('documents/approve') : apiUrl('documents/reject');
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -300,7 +301,7 @@ export default function PostulantDocumentsPage() {
           
           <div className="flex items-center gap-2">
             <Button 
-              onClick={() => router.push(`/postulations/${dni}/documents/validation`)}
+              onClick={() => router.push(routeUrl(`postulations/${dni}/documents/validation`))}
               size="lg"
               className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg hover:shadow-xl transition-all duration-200"
             >

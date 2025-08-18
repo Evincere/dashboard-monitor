@@ -1,5 +1,6 @@
 
 'use client';
+import { apiUrl } from '@/lib/utils';
 
 import { useState, useEffect } from 'react';
 import { Users, FileText, Library, UserCheck, HardDrive, RefreshCw } from 'lucide-react';
@@ -48,7 +49,7 @@ export default function DashboardPage() {
   const fetchDashboardStats = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/dashboard/stats');
+      const response = await fetch(apiUrl('dashboard/stats'));
       const result = await response.json();
 
       if (result.success) {

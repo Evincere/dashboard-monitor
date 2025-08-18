@@ -8,7 +8,7 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  // Configuración para subpath (temporarily disabled for testing)
+  // Restore basePath for assets, but configure nginx to handle API rewriting
   basePath: '/dashboard-monitor',
   assetPrefix: '/dashboard-monitor',
   images: {

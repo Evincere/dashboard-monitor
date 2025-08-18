@@ -1,4 +1,5 @@
 'use client';
+import { apiUrl } from '@/lib/utils';
 
 import { useState, useEffect } from 'react';
 import { Settings, KeyRound, Save, Loader, CheckCircle, XCircle, AlertCircle, Cpu } from 'lucide-react';
@@ -46,7 +47,7 @@ export default function SettingsPage() {
 
   const loadAIProviders = async () => {
     try {
-      const response = await fetch('/api/ai-providers');
+      const response = await fetch(apiUrl('ai-providers'));
       const result = await response.json();
       if (result.success) {
         setAiProviders(result.data);
@@ -87,7 +88,7 @@ export default function SettingsPage() {
 
   const handleSetDefaultProvider = async (provider: string) => {
     try {
-      const response = await fetch('/api/ai-providers', {
+      const response = await fetch(apiUrl('ai-providers'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'setDefault', provider }),
@@ -120,7 +121,7 @@ export default function SettingsPage() {
   const handleTestProvider = async (provider: string) => {
     setIsTestingProvider(provider);
     try {
-      const response = await fetch('/api/ai-providers', {
+      const response = await fetch(apiUrl('ai-providers'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'test', provider }),

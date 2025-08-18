@@ -1,5 +1,6 @@
 'use client';
 
+import { apiUrl, routeUrl } from '@/lib/utils';
 import { useState, useEffect } from 'react';
 import { 
   Users,
@@ -91,7 +92,7 @@ export default function PostulationsManagementPage() {
   // Fetch postulations stats only (fast)
   const fetchStats = async () => {
     try {
-      const response = await fetch('/api/postulations/management?onlyStats=true', {
+      const response = await fetch(apiUrl('postulations/management?onlyStats=true'), {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
         signal: AbortSignal.timeout(10000) // 10 seconds
@@ -123,7 +124,7 @@ export default function PostulationsManagementPage() {
         pageSize: pageSize.toString()
       });
       
-      const response = await fetch(`/api/postulations/management?${params}`, {
+      const response = await fetch(apiUrl(`postulations/management?${params}`), {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
         signal: AbortSignal.timeout(60000) // 60 seconds for document processing
@@ -441,8 +442,6 @@ export default function PostulationsManagementPage() {
                 <SelectItem value="ALL">Todos los estados</SelectItem>
                 <SelectItem value="COMPLETED_WITH_DOCS">Con documentos completos</SelectItem>
                 <SelectItem value="ACTIVE">Activas</SelectItem>
-                // AGREGADO SEGÚN AUDITORÍA: Opción para ver inscripciones rechazadas
-                                <SelectItem value="REJECTED">Rechazadas</SelectItem>
                 <SelectItem value="COMPLETED_PENDING_DOCS">Pendientes de documentos</SelectItem>
               </SelectContent>
             </Select>
@@ -538,7 +537,7 @@ export default function PostulationsManagementPage() {
                   postulation={postulation}
                 onClick={() => {
                   // Navigate directly to document validation (bypassing the intermediate documents view)
-                  window.location.href = `/postulations/${postulation.user.dni}/documents/validation`;
+                  window.location.href = routeUrl(`postulations/${postulation.user.dni}/documents/validation`);
                 }}
                 />
               ))}
