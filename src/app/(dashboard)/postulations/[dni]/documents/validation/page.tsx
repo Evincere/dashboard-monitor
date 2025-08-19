@@ -37,6 +37,18 @@ import {
   Phone,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { RefreshCw } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -486,6 +498,7 @@ export default function DocumentValidationPage() {
         console.log(`✅ Navegando al primer postulante pendiente: ${firstPendingDni}`);
         const targetUrl = routeUrl(`postulations/${firstPendingDni}/documents/validation`);
         console.log(`🎯 Target URL: ${targetUrl}`);
+        console.log("🎯 DEBUG - Current URL before navigation:", window.location.href);
         router.push(targetUrl);
         return;
       } else {
@@ -521,6 +534,49 @@ export default function DocumentValidationPage() {
       setTimeout(() => {
         router.push(routeUrl('postulations'));
       }, 2000);
+    }
+  };
+
+
+  // Función para revertir estado de postulación
+  const revertPostulationState = async () => {
+    if (!postulant?.user?.dni) return;
+    try {
+      setLoading(true);
+      console.log('🔄 Revirtiendo estado de postulación:', postulant.user.dni);
+      
+      const response = await fetch(`/dashboard-monitor/api/postulations/${postulant.user.dni}/revert`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          revertedBy: 'admin',
+          reason: 'Reversión administrativa para nueva evaluación'
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to revert');
+      }
+      
+      toast({ 
+        title: 'Estado Revertido', 
+        description: `Postulación revertida de ${result.data.inscription.previousState} a PENDING`
+      });
+      
+      // Refresh validation data to update the UI
+      await fetchValidationData();
+      
+    } catch (error) {
+      console.error('Error reverting postulation:', error);
+      toast({ 
+        title: 'Error', 
+        description: error instanceof Error ? error.message : 'Error al revertir', 
+        variant: 'destructive' 
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -641,7 +697,86 @@ export default function DocumentValidationPage() {
         variant: "destructive",
       });
     }
-  };
+  }
+
+  const handleApproveAndContinue = async () => {
+    try {
+      setIsProcessing(true);
+      console.log("✅ Iniciando aprobación y navegación...");
+      
+      // 1. Aprobar la postulación actual
+      const approveResponse = await fetch(apiUrl(`postulations/${dni}/approve`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          note: 'Postulación aprobada - Navegando a siguiente automáticamente' 
+        })
+      });
+      
+      if (!approveResponse.ok) {
+        const errorData = await approveResponse.json();
+        throw new Error(errorData.error || 'Error al aprobar postulación');
+      }
+      
+      console.log("✅ Postulación aprobada, buscando siguiente...");
+      
+      // 2. Buscar próxima postulación inmediatamente
+      const nextResponse = await fetch(
+        apiUrl(`validation/next-postulation?currentDni=${dni}&excludeStates=APPROVED,REJECTED`),
+        { signal: AbortSignal.timeout(10000) }
+      );
+      
+      if (!nextResponse.ok) {
+        throw new Error(`Error HTTP ${nextResponse.status} al buscar próxima postulación`);
+      }
+      
+      const nextData = await nextResponse.json();
+      
+      if (!nextData.success) {
+        throw new Error(nextData.error || 'Error al obtener próxima postulación');
+      }
+      
+      if (!nextData.hasNext || !nextData.dni) {
+        toast({
+          title: "🎉 Validación completa",
+          description: "No hay más postulaciones pendientes de validación",
+          variant: "default"
+        });
+        
+        // Navegar al listado principal
+        setTimeout(() => {
+          router.push(routeUrl('postulations'));
+        }, 1500);
+        return;
+      }
+      
+      // 3. Navegar directamente a la próxima postulación
+      console.log(`🚀 Navegando a próxima postulación: ${nextData.dni}`);
+      
+      toast({
+        title: "✅ Aprobada",
+        description: `Navegando a postulación ${nextData.dni}...`,
+        variant: "default"
+      });
+      
+      // Navegación inmediata
+      const targetPath = routeUrl(`postulations/${nextData.dni}/documents/validation`);
+      console.log("🎯 DEBUG - Target path:", targetPath);
+      console.log("🎯 DEBUG - Base path from env:", process.env.NEXT_PUBLIC_BASE_PATH);
+      console.log("🎯 DEBUG - Current URL:", window.location.href);
+      router.push(targetPath);
+      
+    } catch (error) {
+      console.error("❌ Error en aprobación y navegación:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Error desconocido",
+        variant: "destructive"
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };;
 
   // Keep the old function for compatibility when only approving without continuing
   const handleApprovePostulation = async () => {
@@ -935,9 +1070,46 @@ export default function DocumentValidationPage() {
               <h1 className="text-2xl font-bold text-card-foreground">
                 Validación de Documentos
               </h1>
-              <p className="text-muted-foreground">
-                {postulant.user.fullName} • DNI: {postulant.user.dni}
-              </p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="text-muted-foreground">
+                  {postulant.user.fullName} • DNI: {postulant.user.dni}
+                </p>
+                <Badge 
+                  variant={
+                    postulant.inscription.state === 'APPROVED' ? 'default' :
+                    postulant.inscription.state === 'REJECTED' ? 'destructive' :
+                    postulant.inscription.state === 'PENDING' ? 'secondary' :
+                    'outline'
+                  }
+                >
+                  {postulant.inscription.state}
+                </Badge>
+                {(postulant.inscription.state === 'APPROVED' || postulant.inscription.state === 'REJECTED') && (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="outline" size="sm" className="gap-1">
+                        <RefreshCw className="w-4 h-4" />
+                        Revertir a Pendiente
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>¿Revertir Estado de Postulación?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Esta acción revertirá el estado de la postulación de "{postulant.inscription.state}" a "PENDING", 
+                          permitiendo una nueva evaluación administrativa. Esta acción se registrará en el historial.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={revertPostulationState}>
+                          Confirmar Reversión
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
+              </div>
             </div>
           </div>
 
@@ -1387,9 +1559,8 @@ function DocumentViewer({
                 size="sm" 
                 className="bg-green-600 hover:bg-green-700 text-white"
                 onClick={() => {
-                  // Navigate to next postulation
-                  // This would trigger the completion modal first
-                  console.log("Navigate to next postulation");
+                  console.log("🚀 Próxima Postulación clicked");
+                  navigateToNextPostulant();
                 }}
               >
                 <Target className="w-4 h-4 mr-2" />

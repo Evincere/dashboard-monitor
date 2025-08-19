@@ -1,6 +1,6 @@
 'use client';
 
-import { apiUrl, routeUrl } from '@/lib/utils';
+import { apiUrl, routeUrl, fullRouteUrl } from "@/lib/utils";
 import { useState, useEffect } from 'react';
 import { 
   Users,
@@ -78,7 +78,7 @@ export default function PostulationsManagementPage() {
   const [stats, setStats] = useState<PostulationsStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('COMPLETED_WITH_DOCS');
+  const [statusFilter, setStatusFilter] = useState('ALL');
   const [validationFilter, setValidationFilter] = useState('ALL');
   const [priorityFilter, setPriorityFilter] = useState('ALL');
   const [sortBy, setSortBy] = useState('PRIORITY');
@@ -87,7 +87,7 @@ export default function PostulationsManagementPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const pageSize = 15;
+  const pageSize = 300;
 
   // Fetch postulations stats only (fast)
   const fetchStats = async () => {
@@ -95,7 +95,7 @@ export default function PostulationsManagementPage() {
       const response = await fetch(apiUrl('postulations/management?onlyStats=true'), {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
-        signal: AbortSignal.timeout(10000) // 10 seconds
+        signal: AbortSignal.timeout(45000) // 30 seconds
       });
       
       if (response.ok) {
@@ -142,6 +142,7 @@ export default function PostulationsManagementPage() {
       }
       
       const newPostulations = data.postulations || [];
+      console.log("🔄 Received postulations:", newPostulations.length, "first:", newPostulations[0]);
       
       if (append) {
         // Append to existing data (infinite scroll)
@@ -239,24 +240,20 @@ export default function PostulationsManagementPage() {
     }
 
     setFilteredPostulations(filtered);
+    console.log("🔍 Filtered postulations:", filtered.length, "from", data.length);
   };
 
   // Handle filter changes
   useEffect(() => {
-    if (postulations.length > 0) {
-      applyFilters(postulations, statusFilter, validationFilter, priorityFilter, searchTerm, sortBy);
-    }
-  }, [postulations, statusFilter, validationFilter, priorityFilter, searchTerm, sortBy]);
-
-  useEffect(() => {
-    // Cargar estadísticas rápido primero
+    console.log('🚀 Iniciando carga de postulaciones...');
+    // Cargar estadísticas primero
     fetchStats();
-    // Luego cargar primera página (con un pequeño delay para evitar llamadas simultáneas)
-    const timeoutId = setTimeout(() => {
-      fetchPostulations(1, false);
-    }, 100);
     
-    return () => clearTimeout(timeoutId);
+    // Cargar TODAS las postulaciones directamente
+    setTimeout(() => {
+      console.log('📡 Cargando todas las postulaciones...');
+      fetchPostulations(0, false);
+    }, 1000);
   }, []);
 
   const getValidationStatusIcon = (status: string) => {
@@ -537,7 +534,7 @@ export default function PostulationsManagementPage() {
                   postulation={postulation}
                 onClick={() => {
                   // Navigate directly to document validation (bypassing the intermediate documents view)
-                  window.location.href = routeUrl(`postulations/${postulation.user.dni}/documents/validation`);
+                  window.location.href = fullRouteUrl(`postulations/${postulation.user.dni}/documents/validation`);
                 }}
                 />
               ))}
@@ -569,7 +566,7 @@ export default function PostulationsManagementPage() {
               )}
               
               {/* Información de paginación */}
-              {currentPage >= totalPages && totalPages > 1 && (
+              {postulations.length > 0 && (
                 <div className="text-center py-4 text-sm text-muted-foreground">
                   ✅ Se han cargado todas las postulaciones ({postulations.length} de {stats?.total})
                 </div>
