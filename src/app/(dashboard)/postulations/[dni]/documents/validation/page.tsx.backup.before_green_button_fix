@@ -481,106 +481,100 @@ export default function DocumentValidationPage() {
     modalDismissed,
   ]);
 
-  // Helper function to navigate to next postulant - UPDATED WITH FRESH BACKEND QUERY
-  const navigateToNextPostulant = async () => {
-    console.log("🚀 navigateToNextPostulant called - usando consulta fresca");
-    
-    try {
-      // Obtener lista fresca directamente del backend (igual lógica que el modal)
-      console.log("🔄 Obteniendo lista fresca de postulantes...");
-      const response = await fetch(apiUrl("backend/inscriptions?size=1000"));
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status} al obtener postulantes`);
-      }
-      
-      const result = await response.json();
-      if (!result.success || !result.data || !result.data.content) {
-        throw new Error("No se pudieron obtener postulantes del backend");
-      }
-      
-      // Filtrar postulantes que necesiten validación (igual que fetchAllPostulantsList)
-      const needsValidation = result.data.content.filter((p: any) => {
-        return (
-          p.userInfo?.fullName &&
-          p.userInfo?.dni &&
-          (p.state === "COMPLETED_WITH_DOCS" || p.state === "PENDING")
-        );
+  // Helper function to navigate to next postulant in alphabetical order
+  const navigateToNextPostulant = () => {
+    console.log("🚀 navigateToNextPostulant called");
+    console.log("📋 allPostulantsList:", allPostulantsList);
+    console.log("🔍 Current DNI:", dni);
+    console.log("📊 Lista length:", allPostulantsList?.length || 0);
+
+    // Verificar si hay postulantes disponibles
+    if (!allPostulantsList || allPostulantsList.length === 0) {
+      console.log(
+        "❌ No hay postulantes pendientes en la lista, redirigiendo al dashboard"
+      );
+      toast({
+        title: "Validación Completada",
+        description: "No hay más postulantes pendientes de validación.",
       });
-      
-      console.log(`📊 Postulantes que necesitan validación: ${needsValidation.length}`);
-      
-      if (needsValidation.length === 0) {
-        console.log("❌ No hay postulantes pendientes de validación");
+      setTimeout(() => {
+        router.push(routeUrl("postulations"));
+      }, 2000);
+      return;
+    }
+
+    // Buscar el índice del postulante actual
+    const currentIndex = allPostulantsList.indexOf(dni);
+    console.log("📍 Current index:", currentIndex);
+
+    // SI EL POSTULANTE ACTUAL NO ESTÁ EN LA LISTA (porque fue aprobado/rechazado)
+    if (currentIndex === -1) {
+      console.log(
+        "🔍 Current postulant not found in pending list (likely approved/rejected)"
+      );
+      console.log(
+        "📋 Available pending DNIs:",
+        allPostulantsList.slice(0, 5)
+      ); // Mostrar primeros 5
+
+      // Ir al primer postulante pendiente disponible
+      if (allPostulantsList.length > 0) {
+        const firstPendingDni = allPostulantsList[0];
+        console.log(
+          `✅ Navegando al primer postulante pendiente: ${firstPendingDni}`
+        );
+        const targetUrl = routeUrl(
+          `postulations/${firstPendingDni}/documents/validation`
+        );
+        console.log(`🎯 Target URL: ${targetUrl}`);
+        console.log(
+          "🎯 DEBUG - Current URL before navigation:",
+          window.location.href
+        );
+        router.push(targetUrl);
+        return;
+      } else {
+        console.log("🎉 No hay más postulantes pendientes");
         toast({
           title: "Validación Completada",
           description: "No hay más postulantes pendientes de validación.",
         });
-        setTimeout(() => router.push(routeUrl("postulations")), 2000);
+        setTimeout(() => {
+          router.push(routeUrl("postulations"));
+        }, 2000);
         return;
       }
-      
-      // Ordenar y extraer DNIs (igual lógica que el modal)
-      const sortedDnis = needsValidation
-        .sort((a: any, b: any) =>
-          a.userInfo.fullName
-            .toLowerCase()
-            .localeCompare(b.userInfo.fullName.toLowerCase(), "es")
-        )
-        .map((p: any) => p.userInfo.dni);
-      
-      console.log("📝 Lista fresca ordenada:", sortedDnis.slice(0, 3), "...");
-      console.log("🔍 DNI actual:", dni);
-      
-      // Encontrar el índice del postulante actual
-      const currentIndex = sortedDnis.indexOf(dni);
-      console.log("📍 Índice actual:", currentIndex);
-      
-      if (currentIndex === -1) {
-        // Postulante actual no está en la lista (ya procesado)
-        console.log("🔍 Postulante actual no está en lista, navegando al primero disponible");
-        if (sortedDnis.length > 0) {
-          const nextPostulant = sortedDnis[0];
-          console.log(`✅ Navegando al primer postulante: ${nextPostulant}`);
-          router.push(routeUrl(`postulations/${nextPostulant}/documents/validation`));
-        } else {
-          console.log("🎉 No hay más postulantes");
-          toast({
-            title: "Validación Completada",
-            description: "No hay más postulantes pendientes de validación.",
-          });
-          setTimeout(() => router.push(routeUrl("postulations")), 2000);
-        }
-      } else {
-        // Postulante actual está en la lista, ir al siguiente
-        const nextIndex = currentIndex + 1;
-        console.log(`⏭️ Siguiente índice: ${nextIndex}/${sortedDnis.length}`);
-        
-        if (nextIndex < sortedDnis.length) {
-          const nextPostulant = sortedDnis[nextIndex];
-          console.log(`✅ Navegando al siguiente postulante: ${nextPostulant}`);
-          router.push(routeUrl(`postulations/${nextPostulant}/documents/validation`));
-        } else {
-          console.log("🎉 Era el último postulante en la lista");
-          toast({
-            title: "Validación Completada",
-            description: "Has llegado al final de la lista de postulantes pendientes.",
-          });
-          setTimeout(() => router.push(routeUrl("postulations")), 2000);
-        }
-      }
-    } catch (error) {
-      console.error("❌ Error en navigateToNextPostulant:", error);
+    }
+
+    // NAVEGAR AL SIGUIENTE POSTULANTE PENDIENTE
+    const nextIndex = currentIndex + 1;
+    console.log("⏭️ Next index:", nextIndex);
+    console.log("📏 List length:", allPostulantsList.length);
+
+    if (nextIndex < allPostulantsList.length) {
+      const nextDni = allPostulantsList[nextIndex];
+      console.log(
+        `✅ Navegando al siguiente postulante pendiente: ${nextDni} (index: ${nextIndex})`
+      );
+      const targetUrl = routeUrl(
+        `postulations/${nextDni}/documents/validation`
+      );
+      console.log(`🎯 Target URL: ${targetUrl}`);
+      router.push(targetUrl);
+    } else {
+      console.log(
+        "🎉 Era el último postulante pendiente, redirigiendo al dashboard"
+      );
       toast({
-        title: "Error",
-        description: "No se pudo obtener la siguiente postulación",
-        variant: "destructive",
+        title: "Validación Completada",
+        description:
+          "Has validado todos los postulantes pendientes. Redirigiendo al panel principal...",
       });
-      // Fallback: ir al listado
-      setTimeout(() => router.push(routeUrl("postulations")), 1500);
+      setTimeout(() => {
+        router.push(routeUrl("postulations"));
+      }, 2000);
     }
   };
-
 
   // Función para revertir estado de postulación
   const revertPostulationState = async () => {
@@ -1663,9 +1657,7 @@ function DocumentViewer({
   );
   const showNextPostulationButton =
     postulant?.inscription?.state === "COMPLETED_WITH_DOCS" ||
-    postulant?.inscription?.state === "PENDING" ||
-    postulant?.inscription?.state === "APPROVED" ||
-    postulant?.inscription?.state === "REJECTED";
+    postulant?.inscription?.state === "PENDING";
   if (!document) {
     return (
       <div className="h-full flex items-center justify-center">
