@@ -452,8 +452,9 @@ export default function PostulationsManagementPage() {
               <SelectContent>
                 <SelectItem value="ALL">Todos los estados</SelectItem>
                 <SelectItem value="COMPLETED_WITH_DOCS">Con documentos completos</SelectItem>
-                <SelectItem value="ACTIVE">Activas</SelectItem>
-                <SelectItem value="COMPLETED_PENDING_DOCS">Pendientes de documentos</SelectItem>
+                <SelectItem value="ACTIVE">Fuera del concurso (No completadas)</SelectItem>
+                <SelectItem value="APPROVED">Aprobadas</SelectItem>
+                <SelectItem value="COMPLETED_PENDING_DOCS">Fuera del concurso (Sin documentos)</SelectItem>
               </SelectContent>
             </Select>
 
@@ -475,10 +476,11 @@ export default function PostulationsManagementPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ALL">Todas las prioridades</SelectItem>
-                <SelectItem value="HIGH">Alta prioridad</SelectItem>
-                <SelectItem value="MEDIUM">Prioridad media</SelectItem>
-                <SelectItem value="LOW">Prioridad baja</SelectItem>
+                <SelectItem value="ALL">Todas las circunscripciones</SelectItem>
+                <SelectItem value="PRIMERA_CIRCUNSCRIPCION">Primera Circunscripción</SelectItem>
+                <SelectItem value="SEGUNDA_CIRCUNSCRIPCION">Segunda Circunscripción</SelectItem>
+                <SelectItem value="TERCERA_CIRCUNSCRIPCION">Tercera Circunscripción</SelectItem>
+                <SelectItem value="CUARTA_CIRCUNSCRIPCION">Cuarta Circunscripción</SelectItem>
               </SelectContent>
             </Select>
 
