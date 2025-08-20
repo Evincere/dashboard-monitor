@@ -72,7 +72,7 @@ const menuItems = [
     icon: FileText,
   },
   {
-    href: '/validation',
+    href: '/postulations',
     label: 'Validación Docs',
     icon: FileCheck,
   },
