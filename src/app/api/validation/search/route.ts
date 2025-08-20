@@ -1,33 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const BACKEND_API_URL = process.env.BACKEND_API_URL || 'http://localhost:8080/api';
-const JWT_SECRET = process.env.BACKEND_JWT_SECRET || 'RcmUR2yePNGr5pjZ9bXL_dx7h_xeIliI4iS4ESXDMMs';
-
-// Generate admin token
-function generateAdminToken(): string {
-  const header = {
-    alg: 'HS256',
-    typ: 'JWT'
-  };
-
-  const payload = {
-    sub: 'admin',
-    authorities: ['ROLE_ADMIN', 'ROLE_USER'],
-    iat: Math.floor(Date.now() / 1000),
-    exp: Math.floor(Date.now() / 1000) + (60 * 60) // 1 hour
-  };
-
-  const base64Header = Buffer.from(JSON.stringify(header)).toString('base64url');
-  const base64Payload = Buffer.from(JSON.stringify(payload)).toString('base64url');
-  
-  const crypto = require('crypto');
-  const signature = crypto
-    .createHmac('sha256', JWT_SECRET)
-    .update(`${base64Header}.${base64Payload}`)
-    .digest('base64url');
-
-  return `${base64Header}.${base64Payload}.${signature}`;
-}
+import backendClient from '@/lib/backend-client';
 
 export async function GET(request: NextRequest) {
   try {
@@ -42,60 +14,55 @@ export async function GET(request: NextRequest) {
       }, { status: 400 });
     }
 
-    const token = generateAdminToken();
+    console.log('🔍 Validation search request:', { query, limit });
 
-    // Search in users
-    const usersResponse = await fetch(`${BACKEND_API_URL}/admin/users`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    });
+    // Search in users using the robust backend client
+    const [usersResponse, inscriptionsResponse] = await Promise.all([
+      backendClient.getUsers({ size: 1000 }),
+      backendClient.getInscriptions({ size: 1000 })
+    ]);
 
-    if (!usersResponse.ok) {
-      throw new Error('Failed to fetch users from backend');
+    if (!usersResponse.success || !inscriptionsResponse.success) {
+      console.error('Backend search error:', {
+        users: usersResponse.error,
+        inscriptions: inscriptionsResponse.error
+      });
+      
+      // Return empty results with fallback message
+      return NextResponse.json({
+        success: true,
+        results: [],
+        total: 0,
+        limit: limit,
+        query: query,
+        message: 'Búsqueda temporalmente no disponible',
+        fallback: true
+      });
     }
 
-    const usersData = await usersResponse.json();
-    
-    // Search in inscriptions for apt users
-    const inscriptionsResponse = await fetch(`${BACKEND_API_URL}/admin/inscriptions`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    });
+    const usersData = usersResponse.data?.content || [];
+    const inscriptionsData = inscriptionsResponse.data?.content || [];
 
-    if (!inscriptionsResponse.ok) {
-      throw new Error('Failed to fetch inscriptions from backend');
-    }
-
-    const inscriptionsData = await inscriptionsResponse.json();
-
-    // Get eligible users (COMPLETED_WITH_DOCS state)
+    // Get eligible inscriptions - estados que requieren validación
+    const validationStates = ['COMPLETED_WITH_DOCS', 'PENDING', 'APPROVED', 'REJECTED'];
     const eligibleInscriptions = inscriptionsData.filter((inscription: any) => 
-      inscription.state === 'COMPLETED_WITH_DOCS'
+      validationStates.includes(inscription.status || inscription.state)
     );
 
     // Create a map of eligible user IDs
     const eligibleUserIds = new Set(eligibleInscriptions.map((ins: any) => ins.userId));
 
-    // Filter and search users
-    const eligibleUsers = usersData.filter((user: any) => 
-      eligibleUserIds.has(user.id)
-    );
-
-    // Perform search
+    // Filter eligible users and perform manual search
     const searchTermLower = query.toLowerCase();
-    const filteredUsers = eligibleUsers.filter((user: any) => {
-      return (
+    const filteredUsers = usersData.filter((user: any) => 
+      eligibleUserIds.has(user.id) && (
         user.dni?.toLowerCase().includes(searchTermLower) ||
         user.fullName?.toLowerCase().includes(searchTermLower) ||
         user.firstName?.toLowerCase().includes(searchTermLower) ||
         user.lastName?.toLowerCase().includes(searchTermLower) ||
         user.email?.toLowerCase().includes(searchTermLower)
-      );
-    });
+      )
+    );
 
     // Combine with inscription data and format results
     const results = filteredUsers.slice(0, limit).map((user: any) => {
@@ -121,11 +88,12 @@ export async function GET(request: NextRequest) {
         else circunscripcion = 'PRIMERA_CIRCUNSCRIPCION'; // Default fallback
       }
 
-      // Determine validation status (simplified logic)
+      // Determine validation status
+      const inscriptionState = inscription?.status || inscription?.state;
       let validationStatus = 'PENDING';
-      if (inscription?.state === 'APPROVED') validationStatus = 'APPROVED';
-      else if (inscription?.state === 'REJECTED') validationStatus = 'REJECTED';
-      else if (inscription?.state === 'IN_REVIEW') validationStatus = 'IN_REVIEW';
+      if (inscriptionState === 'APPROVED') validationStatus = 'APPROVED';
+      else if (inscriptionState === 'REJECTED') validationStatus = 'REJECTED';
+      else if (inscriptionState === 'IN_REVIEW') validationStatus = 'IN_REVIEW';
 
       return {
         dni: user.dni,
@@ -137,6 +105,8 @@ export async function GET(request: NextRequest) {
       };
     });
 
+    console.log(`✅ Search found ${results.length} results for query: "${query}"`);
+
     return NextResponse.json({
       success: true,
       results,
@@ -147,10 +117,17 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error('Search API error:', error);
+    
+    // Return empty results with error message
     return NextResponse.json({
-      success: false,
-      error: 'Internal server error',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 });
+      success: true,
+      results: [],
+      total: 0,
+      limit: parseInt(new URL(request.url).searchParams.get('limit') || '10'),
+      query: new URL(request.url).searchParams.get('q'),
+      message: 'Error en la búsqueda - intente nuevamente',
+      fallback: true,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
 }

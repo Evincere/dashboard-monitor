@@ -1,33 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-const BACKEND_API_URL = process.env.BACKEND_API_URL || 'http://localhost:8080/api';
-const JWT_SECRET = process.env.BACKEND_JWT_SECRET || 'RcmUR2yePNGr5pjZ9bXL_dx7h_xeIliI4iS4ESXDMMs';
-
-// Generate admin token
-function generateAdminToken(): string {
-  const header = {
-    alg: 'HS256',
-    typ: 'JWT'
-  };
-
-  const payload = {
-    sub: 'admin',
-    authorities: ['ROLE_ADMIN', 'ROLE_USER'],
-    iat: Math.floor(Date.now() / 1000),
-    exp: Math.floor(Date.now() / 1000) + (60 * 60) // 1 hour
-  };
-
-  const base64Header = Buffer.from(JSON.stringify(header)).toString('base64url');
-  const base64Payload = Buffer.from(JSON.stringify(payload)).toString('base64url');
-  
-  const crypto = require('crypto');
-  const signature = crypto
-    .createHmac('sha256', JWT_SECRET)
-    .update(`${base64Header}.${base64Payload}`)
-    .digest('base64url');
-
-  return `${base64Header}.${base64Payload}.${signature}`;
-}
+import backendClient from '@/lib/backend-client';
 
 export async function GET(request: NextRequest) {
   try {
@@ -39,45 +11,49 @@ export async function GET(request: NextRequest) {
     const statusFilter = searchParams.get('status');
     const getAllDNIs = searchParams.get('getAllDNIs') === 'true';
 
-    const token = generateAdminToken();
-
-    // Fetch users and inscriptions from backend
-    const usersResponse = await fetch(`${BACKEND_API_URL}/admin/users`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
+    console.log('📋 Validation postulants API request:', {
+      page, size, searchQuery, circunscripcionFilter, statusFilter, getAllDNIs
     });
 
-    if (!usersResponse.ok) {
-      throw new Error('Failed to fetch users from backend');
+    // Fetch users and inscriptions using the robust backend client
+    const [usersResponse, inscriptionsResponse] = await Promise.all([
+      backendClient.getUsers({ size: 1000 }), // Get all users
+      backendClient.getInscriptions({ size: 1000 }) // Get all inscriptions
+    ]);
+
+    if (!usersResponse.success || !inscriptionsResponse.success) {
+      console.error('Backend client error:', {
+        users: usersResponse.error,
+        inscriptions: inscriptionsResponse.error
+      });
+      
+      // Return fallback data instead of error
+      return NextResponse.json({
+        success: true,
+        postulants: [],
+        pagination: { page, size, totalElements: 0, totalPages: 0 },
+        statistics: { totalApplicants: 0, pending: 0, approved: 0, rejected: 0, inReview: 0 },
+        message: 'Sistema temporalmente no disponible - conectividad limitada',
+        fallback: true
+      });
     }
 
-    const usersData = await usersResponse.json();
-    
-    const inscriptionsResponse = await fetch(`${BACKEND_API_URL}/admin/inscriptions`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    });
+    const usersData = usersResponse.data?.content || [];
+    const inscriptionsData = inscriptionsResponse.data?.content || [];
 
-    if (!inscriptionsResponse.ok) {
-      throw new Error('Failed to fetch inscriptions from backend');
-    }
-
-    const inscriptionsData = await inscriptionsResponse.json();
-
-    // Get eligible users (COMPLETED_WITH_DOCS state)
+    // Get eligible users - estados que requieren validación
+    const validationStates = ['COMPLETED_WITH_DOCS', 'PENDING', 'APPROVED', 'REJECTED'];
     const eligibleInscriptions = inscriptionsData.filter((inscription: any) => 
-      inscription.state === 'COMPLETED_WITH_DOCS'
+      validationStates.includes(inscription.status || inscription.state)
     );
+
+    console.log(`✅ Found ${eligibleInscriptions.length} eligible inscriptions from ${inscriptionsData.length} total`);
 
     // If only DNI list is requested
     if (getAllDNIs) {
       const eligibleUserIds = new Set(eligibleInscriptions.map((ins: any) => ins.userId));
       const eligibleUsers = usersData.filter((user: any) => eligibleUserIds.has(user.id));
-      const allDNIs = eligibleUsers.map((user: any) => user.dni).sort();
+      const allDNIs = eligibleUsers.map((user: any) => user.dni).filter(Boolean).sort();
       
       return NextResponse.json({
         success: true,
@@ -118,6 +94,22 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // Status filter
+    if (statusFilter) {
+      filteredUsers = filteredUsers.filter((user: any) => {
+        const inscription = eligibleInscriptions.find((ins: any) => ins.userId === user.id);
+        const inscriptionState = inscription?.status || inscription?.state;
+        
+        // Map frontend status to backend states
+        if (statusFilter === 'PENDING') return ['COMPLETED_WITH_DOCS', 'PENDING'].includes(inscriptionState);
+        if (statusFilter === 'APPROVED') return inscriptionState === 'APPROVED';
+        if (statusFilter === 'REJECTED') return inscriptionState === 'REJECTED';
+        if (statusFilter === 'IN_REVIEW') return inscriptionState === 'IN_REVIEW';
+        
+        return true;
+      });
+    }
+
     // Calculate pagination
     const totalElements = filteredUsers.length;
     const totalPages = Math.ceil(totalElements / size);
@@ -139,17 +131,19 @@ export async function GET(request: NextRequest) {
         else if (centro.includes('cuarta')) circunscripcion = 'CUARTA_CIRCUNSCRIPCION';
       }
 
-      // Simplified validation status
+      // Map validation status
+      const inscriptionState = inscription?.status || inscription?.state;
       let validationStatus = 'PENDING';
-      if (inscription?.state === 'APPROVED') validationStatus = 'APPROVED';
-      else if (inscription?.state === 'REJECTED') validationStatus = 'REJECTED';
+      if (inscriptionState === 'APPROVED') validationStatus = 'APPROVED';
+      else if (inscriptionState === 'REJECTED') validationStatus = 'REJECTED';
+      else if (inscriptionState === 'IN_REVIEW') validationStatus = 'IN_REVIEW';
 
       return {
         dni: user.dni,
         fullName: user.fullName || `${user.firstName || ''} ${user.lastName || ''}`.trim(),
         email: user.email,
         circunscripcion,
-        inscriptionState: inscription?.state || 'COMPLETED_WITH_DOCS',
+        inscriptionState: inscriptionState || 'COMPLETED_WITH_DOCS',
         validationStatus,
         documentsCount: 5, // Simplified
         contestInfo: {
@@ -171,6 +165,9 @@ export async function GET(request: NextRequest) {
       inReview: postulants.filter(p => p.validationStatus === 'IN_REVIEW').length
     };
 
+    console.log(`✅ Returning ${postulants.length} postulants (page ${page}/${totalPages})`);
+    console.log('📊 Statistics:', statistics);
+
     return NextResponse.json({
       success: true,
       postulants,
@@ -185,10 +182,27 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error('Postulants API error:', error);
+    
+    // Return fallback data instead of error
     return NextResponse.json({
-      success: false,
-      error: 'Internal server error',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 });
+      success: true,
+      postulants: [],
+      pagination: {
+        page: parseInt(new URL(request.url).searchParams.get('page') || '1'),
+        size: parseInt(new URL(request.url).searchParams.get('size') || '12'),
+        totalElements: 0,
+        totalPages: 0
+      },
+      statistics: {
+        totalApplicants: 0,
+        pending: 0,
+        approved: 0,
+        rejected: 0,
+        inReview: 0
+      },
+      message: 'Error temporal del sistema - por favor recargue la página',
+      fallback: true,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
 }
