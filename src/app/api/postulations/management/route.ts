@@ -246,6 +246,7 @@ export async function GET(request: NextRequest) {
             id: inscription.id,
             state: inscription.state,
             centroDeVida: realCentroDeVida || 'Sin especificar',
+            selectedCircunscripciones: inscription.selectedCircunscripciones || [],
             createdAt: inscription.inscriptionDate
           },
           contest: {

@@ -45,7 +45,6 @@ interface Postulation {
     id: string;
     state: string;
     centroDeVida: string;
-    selectedCircunscripciones: string[];
     createdAt: string;
   };
   contest: {
@@ -211,19 +210,11 @@ export default function PostulationsManagementPage() {
     // Filter by circunscripcion
     if (circunscripcion !== 'ALL') {
       filtered = filtered.filter(post => {
-        const selectedCirc = post.inscription.selectedCircunscripciones || [];
-        if (circunscripcion === "PRIMERA_CIRCUNSCRIPCION") {
-          return selectedCirc.some(circ => circ.toLowerCase().includes("primera"));
-        }
-        if (circunscripcion === "SEGUNDA_CIRCUNSCRIPCION") {
-          return selectedCirc.some(circ => circ.toLowerCase().includes("segunda"));
-        }
-        if (circunscripcion === "TERCERA_CIRCUNSCRIPCION") {
-          return selectedCirc.some(circ => circ.toLowerCase().includes("tercera"));
-        }
-        if (circunscripcion === "CUARTA_CIRCUNSCRIPCION") {
-          return selectedCirc.some(circ => circ.toLowerCase().includes("cuarta"));
-        }
+        const centroDeVida = post.inscription.centroDeVida?.toLowerCase() || '';
+        if (circunscripcion === 'PRIMERA_CIRCUNSCRIPCION') return centroDeVida.includes('primera');
+        if (circunscripcion === 'SEGUNDA_CIRCUNSCRIPCION') return centroDeVida.includes('segunda');
+        if (circunscripcion === 'TERCERA_CIRCUNSCRIPCION') return centroDeVida.includes('tercera');
+        if (circunscripcion === 'CUARTA_CIRCUNSCRIPCION') return centroDeVida.includes('cuarta');
         return true;
       });
     }
