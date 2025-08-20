@@ -255,6 +255,13 @@ export default function PostulationsManagementPage() {
       fetchPostulations(0, false);
     }, 1000);
   }, []);
+  
+  // Apply filters whenever filter values change
+  useEffect(() => {
+    if (postulations.length > 0) {
+      applyFilters(postulations, statusFilter, validationFilter, priorityFilter, searchTerm, sortBy);
+    }
+  }, [postulations, statusFilter, validationFilter, priorityFilter, searchTerm, sortBy]);
 
   const getValidationStatusIcon = (status: string) => {
     switch (status) {
