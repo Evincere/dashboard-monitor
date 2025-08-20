@@ -123,7 +123,7 @@ function ValidationPageContent() {
       if (circunscripcionFilter) params.append('circunscripcion', circunscripcionFilter);
       if (statusFilter) params.append('status', statusFilter);
 
-      const response = await fetch(`/api/validation/postulants?${params}`, { credentials: 'include' });
+      const response = await fetch(`/api/validation/postulants?${params}`);
       if (!response.ok) throw new Error('Failed to fetch postulants');
 
       const data: PostulantsResponse = await response.json();
