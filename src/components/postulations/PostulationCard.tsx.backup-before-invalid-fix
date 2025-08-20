@@ -55,20 +55,7 @@ interface PostulationCardProps {
 }
 
 // Función para obtener el icono y color según el estado de validación
-function getValidationStatusDisplay(status: string, inscriptionState: string) {
-  // Casos especiales: COMPLETED_PENDING_DOCS y ACTIVE = fuera del concurso
-  if (inscriptionState === "COMPLETED_PENDING_DOCS" || inscriptionState === "ACTIVE") {
-    return {
-      badgeColor:
-        "bg-gray-100/80 text-gray-800 border-gray-300/70 dark:bg-gray-900/50 dark:text-gray-100 dark:border-gray-600/50",
-      icon: <XCircle className="w-5 h-5 text-gray-600 dark:text-gray-400" />,
-      text: "Fuera del concurso",
-      description: inscriptionState === "COMPLETED_PENDING_DOCS" 
-        ? "Documentación no presentada en plazo"
-        : "Inscripción no completada en plazo",
-    };
-  }
-
+function getValidationStatusDisplay(status: string) {
   switch (status) {
     case "COMPLETED":
       return {
@@ -183,7 +170,7 @@ export default function PostulationCard({
     priority,
     completionPercentage,
   } = postulation;
-  const validationDisplay = getValidationStatusDisplay(validationStatus, inscription.state);
+  const validationDisplay = getValidationStatusDisplay(validationStatus);
   const priorityDisplay = getPriorityDisplay(priority);
   const inscriptionStatusColor = getInscriptionStatusColor(inscription.state);
 
