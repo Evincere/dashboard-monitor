@@ -1,7 +1,7 @@
 "use client";
 import { apiUrl, routeUrl } from '@/lib/utils';
 
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useValidationStore } from "@/stores/validationStore";
 import { useValidationShortcuts } from "@/hooks/useKeyboardShortcuts";
@@ -1077,7 +1077,7 @@ export default function DocumentValidationPage() {
                 <Badge 
                   variant={
                     postulant.inscription.state === 'APPROVED' ? 'default' :
-                    (postulant.inscription.state === 'APPROVED' || postulant.inscription.state === 'REJECTED') ? 'destructive' :
+                    postulant.inscription.state === 'REJECTED' ? 'destructive' :
                     postulant.inscription.state === 'PENDING' ? 'secondary' :
                     'outline'
                   }
@@ -1474,6 +1474,66 @@ function DocumentListItem({
   );
 }
 
+// Visor de PDF con autenticación usando Blob URLs
+function BlobViewer({ document, authFetch, apiUrl }: { document: Document | null; authFetch: any; apiUrl: any; }) {
+  const [blobUrl, setBlobUrl] = React.useState<string | null>(null);
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!document?.id) {
+      setBlobUrl(null);
+      setError(null);
+      return;
+    }
+
+    let objectUrl: string | null = null;
+    let isMounted = true;
+
+    const loadDocument = async () => {
+      setIsLoading(true);
+      setError(null);
+      
+      try {
+        const response = await authFetch(apiUrl(`documents/${document.id}/view`));
+        if (!response.ok) {
+          throw new Error(`Error ${response.status}: ${response.statusText}`);
+        }
+        
+        const blob = await response.blob();
+        objectUrl = window.URL.createObjectURL(blob);
+        if (isMounted) setBlobUrl(objectUrl);
+      } catch (err: any) {
+        console.error('[BlobViewer] Error:', err);
+        if (isMounted) setError(err.message || 'Error cargando documento');
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    };
+
+    loadDocument();
+
+    return () => {
+      isMounted = false;
+      if (objectUrl) {
+        window.URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [document?.id, authFetch, apiUrl]);
+
+  if (isLoading) return <div className="flex items-center justify-center h-full">Cargando documento...</div>;
+  if (error) return <div className="flex items-center justify-center h-full text-red-500">Error: {error}</div>;
+  if (!blobUrl) return <div className="flex items-center justify-center h-full">Seleccione un documento</div>;
+
+  const isPdf = (document?.fileName || '').toLowerCase().endsWith('.pdf');
+  
+  return isPdf ? (
+    <iframe src={blobUrl} className="w-full h-full border-0" title="Documento" />
+  ) : (
+    <img src={blobUrl} alt="Documento" className="max-w-full max-h-full object-contain" />
+  );
+}
+
 // Document Viewer Component
 function DocumentViewer({
   document,
@@ -1484,6 +1544,11 @@ function DocumentViewer({
   postulant,
   isFullscreen = false,
   onFullscreenToggle,
+  allPostulantsList = [], // Provide default value
+  onNavigateToNext,
+  pdfBlobUrl,
+  authFetch,
+  apiUrl,
 }: {
   document: Document | null;
   onNext: () => void;
@@ -1511,7 +1576,7 @@ function DocumentViewer({
   // Check if all required documents are validated
   const requiredDocs = documents?.filter(doc => doc.isRequired) || [];
   const requiredValidated = requiredDocs.every(doc => doc.validationStatus !== "PENDING");
-  const showNextPostulationButton = postulant?.inscription?.state === "COMPLETED_WITH_DOCS" || postulant?.inscription?.state === "PENDING";
+  const showNextPostulationButton = requiredValidated && requiredDocs.length > 0;
   if (!document) {
     return (
       <div className="h-full flex items-center justify-center">

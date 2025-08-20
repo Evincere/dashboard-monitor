@@ -1,3 +1,4 @@
+import { apiUrl } from "@/lib/utils";
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 
@@ -102,7 +103,7 @@ export const useValidationStore = create<ValidationState>()(
         set({ submitting: true });
         
         try {
-          const response = await fetch('/api/documents/approve', {
+          const response = await fetch(apiUrl('documents/approve'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -149,7 +150,7 @@ export const useValidationStore = create<ValidationState>()(
         set({ submitting: true });
         
         try {
-          const response = await fetch('/api/documents/reject', {
+          const response = await fetch(apiUrl('documents/reject'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
