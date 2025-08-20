@@ -80,7 +80,7 @@ export default function PostulationsManagementPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [validationFilter, setValidationFilter] = useState('ALL');
-  const [circunscripcionFilter, setCircunscripcionFilter] = useState('ALL');
+  const [priorityFilter, setPriorityFilter] = useState('ALL');
   const [sortBy, setSortBy] = useState('PRIORITY');
   const { toast } = useToast();
 
@@ -161,7 +161,7 @@ export default function PostulationsManagementPage() {
       
       // Apply filters to ALL loaded postulations
       const allPostulations = append ? [...postulations, ...newPostulations] : newPostulations;
-      applyFilters(allPostulations, statusFilter, validationFilter, circunscripcionFilter, searchTerm, sortBy);
+      applyFilters(allPostulations, statusFilter, validationFilter, priorityFilter, searchTerm, sortBy);
       
     } catch (error) {
       console.error('Error fetching postulations:', error);
@@ -191,7 +191,7 @@ export default function PostulationsManagementPage() {
     data: Postulation[],
     status: string,
     validation: string,
-    circunscripcion: string,
+    priority: string,
     search: string,
     sort: string
   ) => {
@@ -207,16 +207,9 @@ export default function PostulationsManagementPage() {
       filtered = filtered.filter(post => post.validationStatus === validation);
     }
 
-    // Filter by circunscripcion
-    if (circunscripcion !== 'ALL') {
-      filtered = filtered.filter(post => {
-        const centroDeVida = post.inscription.centroDeVida?.toLowerCase() || '';
-        if (circunscripcion === 'PRIMERA_CIRCUNSCRIPCION') return centroDeVida.includes('primera');
-        if (circunscripcion === 'SEGUNDA_CIRCUNSCRIPCION') return centroDeVida.includes('segunda');
-        if (circunscripcion === 'TERCERA_CIRCUNSCRIPCION') return centroDeVida.includes('tercera');
-        if (circunscripcion === 'CUARTA_CIRCUNSCRIPCION') return centroDeVida.includes('cuarta');
-        return true;
-      });
+    // Filter by priority
+    if (priority !== 'ALL') {
+      filtered = filtered.filter(post => post.priority === priority);
     }
 
     // Search filter
@@ -266,9 +259,9 @@ export default function PostulationsManagementPage() {
   // Apply filters whenever filter values change
   useEffect(() => {
     if (postulations.length > 0) {
-      applyFilters(postulations, statusFilter, validationFilter, circunscripcionFilter, searchTerm, sortBy);
+      applyFilters(postulations, statusFilter, validationFilter, priorityFilter, searchTerm, sortBy);
     }
-  }, [postulations, statusFilter, validationFilter, circunscripcionFilter, searchTerm, sortBy]);
+  }, [postulations, statusFilter, validationFilter, priorityFilter, searchTerm, sortBy]);
 
   const getValidationStatusIcon = (status: string) => {
     switch (status) {
@@ -470,7 +463,7 @@ export default function PostulationsManagementPage() {
               </SelectContent>
             </Select>
 
-            <Select value={circunscripcionFilter} onValueChange={setCircunscripcionFilter}>
+            <Select value={priorityFilter} onValueChange={setPriorityFilter}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
