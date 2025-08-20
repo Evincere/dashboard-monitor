@@ -1,33 +1,57 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const BACKEND_API_URL = process.env.BACKEND_API_URL || 'http://localhost:8080/api';
-const JWT_SECRET = process.env.BACKEND_JWT_SECRET || 'RcmUR2yePNGr5pjZ9bXL_dx7h_xeIliI4iS4ESXDMMs';
+// ====================================================================
+// MAPEO MEJORADO DE CIRCUNSCRIPCIONES - 2025-08-19
+// ====================================================================
 
-// Generate admin token
-function generateAdminToken(): string {
-  const header = {
-    alg: 'HS256',
-    typ: 'JWT'
-  };
-
-  const payload = {
-    sub: 'admin',
-    authorities: ['ROLE_ADMIN', 'ROLE_USER'],
-    iat: Math.floor(Date.now() / 1000),
-    exp: Math.floor(Date.now() / 1000) + (60 * 60) // 1 hour
-  };
-
-  const base64Header = Buffer.from(JSON.stringify(header)).toString('base64url');
-  const base64Payload = Buffer.from(JSON.stringify(payload)).toString('base64url');
+const mapearCircunscripcionReal = (inscription: any): string => {
+  // 1. Usar selectedCircunscripciones si existe y tiene datos
+  if (inscription.selectedCircunscripciones && inscription.selectedCircunscripciones.length > 0) {
+    const primera = inscription.selectedCircunscripciones.find((c: string) => c.toLowerCase().includes('primera'));
+    if (primera) return 'PRIMERA_CIRCUNSCRIPCION';
+    
+    const segunda = inscription.selectedCircunscripciones.find((c: string) => c.toLowerCase().includes('segunda'));
+    if (segunda) return 'SEGUNDA_CIRCUNSCRIPCION';
+    
+    const tercera = inscription.selectedCircunscripciones.find((c: string) => c.toLowerCase().includes('tercera'));
+    if (tercera) return 'TERCERA_CIRCUNSCRIPCION';
+    
+    const cuarta = inscription.selectedCircunscripciones.find((c: string) => c.toLowerCase().includes('cuarta'));
+    if (cuarta) return 'CUARTA_CIRCUNSCRIPCION';
+  }
   
-  const crypto = require('crypto');
-  const signature = crypto
-    .createHmac('sha256', JWT_SECRET)
-    .update(`${base64Header}.${base64Payload}`)
-    .digest('base64url');
+  // 2. Fallback: analizar centroDeVida
+  if (inscription.centroDeVida) {
+    const centro = inscription.centroDeVida.toLowerCase();
+    
+    // Segunda circunscripción (San Rafael, Alvear, Malargüe)
+    if (centro.includes('san rafael') || centro.includes('alvear') || centro.includes('malargüe') || centro.includes('malargue')) {
+      return 'SEGUNDA_CIRCUNSCRIPCION';
+    }
+    
+    // Tercera circunscripción (San Martín, Rivadavia, Junín, Santa Rosa)
+    if (centro.includes('san martín') || centro.includes('san martin') || centro.includes('rivadavia') || 
+        centro.includes('junín') || centro.includes('junin') || centro.includes('santa rosa')) {
+      return 'TERCERA_CIRCUNSCRIPCION';
+    }
+    
+    // Cuarta circunscripción (Tunuyán, Tupungato, San Carlos)
+    if (centro.includes('tunuyán') || centro.includes('tunuyan') || centro.includes('tupungato') || centro.includes('san carlos')) {
+      return 'CUARTA_CIRCUNSCRIPCION';
+    }
+    
+    // Primera circunscripción (Capital, Guaymallén, Maipú, Las Heras, Godoy Cruz, Luján)
+    if (centro.includes('ciudad') || centro.includes('mendoza') || centro.includes('capital') || 
+        centro.includes('guaymallén') || centro.includes('guaymallen') || centro.includes('maipú') || centro.includes('maipu') ||
+        centro.includes('las heras') || centro.includes('godoy cruz') || centro.includes('luján') || centro.includes('lujan')) {
+      return 'PRIMERA_CIRCUNSCRIPCION';
+    }
+  }
+  
+  // 3. Default fallback
+  return 'PRIMERA_CIRCUNSCRIPCION';
+};
 
-  return `${base64Header}.${base64Payload}.${signature}`;
-}
 
 export async function GET(request: NextRequest) {
   try {
@@ -42,111 +66,127 @@ export async function GET(request: NextRequest) {
       }, { status: 400 });
     }
 
-    const token = generateAdminToken();
+    console.log('🔍 Quick Search Request:', { query, limit });
 
-    // Search in users
-    const usersResponse = await fetch(`${BACKEND_API_URL}/admin/users`, {
+    // Login to get token (exactly like test-backend)
+    const loginResponse = await fetch('http://localhost:8080/api/auth/login', {
+      method: 'POST',
       headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        username: 'admin',
+        password: 'admin123'
+      })
+    });
+
+    if (!loginResponse.ok) {
+      throw new Error('Login failed');
+    }
+
+    const loginData = await loginResponse.json();
+
+    // Search in users with the query parameter
+    const userParams = new URLSearchParams({
+      query: query.trim(),
+      size: (limit * 3).toString() // Get more results to filter for eligible users
+    });
+
+    const usersResponse = await fetch(`http://localhost:8080/api/users?${userParams}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${loginData.token}`
       }
     });
 
     if (!usersResponse.ok) {
-      throw new Error('Failed to fetch users from backend');
+      const errorText = await usersResponse.text();
+      throw new Error(`Failed to fetch users: ${usersResponse.status} - ${errorText}`);
     }
 
     const usersData = await usersResponse.json();
     
-    // Search in inscriptions for apt users
-    const inscriptionsResponse = await fetch(`${BACKEND_API_URL}/admin/inscriptions`, {
+    // Search in inscriptions for eligible users
+    const inscriptionsResponse = await fetch('http://localhost:8080/api/admin/inscriptions?size=500', {
+      method: 'GET',
       headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${loginData.token}`
       }
     });
 
     if (!inscriptionsResponse.ok) {
-      throw new Error('Failed to fetch inscriptions from backend');
+      const errorText = await inscriptionsResponse.text();
+      throw new Error(`Failed to fetch inscriptions: ${inscriptionsResponse.status} - ${errorText}`);
     }
 
     const inscriptionsData = await inscriptionsResponse.json();
 
     // Get eligible users (COMPLETED_WITH_DOCS state)
-    const eligibleInscriptions = inscriptionsData.filter((inscription: any) => 
+    const eligibleInscriptions = inscriptionsData.content.filter((inscription: any) => 
       inscription.state === 'COMPLETED_WITH_DOCS'
     );
 
     // Create a map of eligible user IDs
     const eligibleUserIds = new Set(eligibleInscriptions.map((ins: any) => ins.userId));
 
-    // Filter and search users
-    const eligibleUsers = usersData.filter((user: any) => 
+    // Filter search results to only include eligible users
+    const eligibleUsers = usersData.content.filter((user: any) => 
       eligibleUserIds.has(user.id)
     );
 
-    // Perform search
-    const searchTermLower = query.toLowerCase();
-    const filteredUsers = eligibleUsers.filter((user: any) => {
-      return (
-        user.dni?.toLowerCase().includes(searchTermLower) ||
-        user.fullName?.toLowerCase().includes(searchTermLower) ||
-        user.firstName?.toLowerCase().includes(searchTermLower) ||
-        user.lastName?.toLowerCase().includes(searchTermLower) ||
-        user.email?.toLowerCase().includes(searchTermLower)
-      );
-    });
+    // Create inscription map for faster lookup
+    const inscriptionsByUser = eligibleInscriptions.reduce((acc: any, ins: any) => {
+      acc[ins.userId] = ins;
+      return acc;
+    }, {});
 
-    // Combine with inscription data and format results
-    const results = filteredUsers.slice(0, limit).map((user: any) => {
-      const inscription = eligibleInscriptions.find((ins: any) => ins.userId === user.id);
+    // Transform and limit results
+    const results = eligibleUsers.slice(0, limit).map((user: any) => {
+      const inscription = inscriptionsByUser[user.id];
       
-      // Map contest info
-      const contestInfo = {
-        title: inscription?.contest?.title || 'Concurso Multifuero MPD',
-        position: inscription?.contest?.position || 'Magistrado/a'
-      };
+      // Determine circunscripcion usando datos reales del backend
+      const circunscripcion = mapearCircunscripcionReal(inscription);
 
-      // Map circunscripcion from contest or inscription
-      let circunscripcion = 'NO_ESPECIFICADA';
-      if (inscription?.contest?.circunscripcion) {
-        circunscripcion = inscription.contest.circunscripcion;
-      } else if (inscription?.centroDeVida) {
-        // Try to map centroDeVida to circunscripcion
-        const centro = inscription.centroDeVida.toLowerCase();
-        if (centro.includes('primera')) circunscripcion = 'PRIMERA_CIRCUNSCRIPCION';
-        else if (centro.includes('segunda')) circunscripcion = 'SEGUNDA_CIRCUNSCRIPCION';
-        else if (centro.includes('tercera')) circunscripcion = 'TERCERA_CIRCUNSCRIPCION';
-        else if (centro.includes('cuarta')) circunscripcion = 'CUARTA_CIRCUNSCRIPCION';
-        else circunscripcion = 'PRIMERA_CIRCUNSCRIPCION'; // Default fallback
-      }
-
-      // Determine validation status (simplified logic)
+      // Map backend state to validation status
       let validationStatus = 'PENDING';
       if (inscription?.state === 'APPROVED') validationStatus = 'APPROVED';
       else if (inscription?.state === 'REJECTED') validationStatus = 'REJECTED';
-      else if (inscription?.state === 'IN_REVIEW') validationStatus = 'IN_REVIEW';
+      else if (inscription?.state === 'PENDING') validationStatus = 'IN_REVIEW';
 
       return {
-        dni: user.dni,
-        fullName: user.fullName || `${user.firstName || ''} ${user.lastName || ''}`.trim(),
-        email: user.email,
+        dni: user.dni || 'N/A',
+        fullName: user.fullName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Sin nombre',
+        email: user.email || 'Sin email',
         circunscripcion,
         validationStatus,
-        contestInfo
+        contestInfo: {
+          title: 'Concurso Multifuero MPD',
+          position: 'Magistrado/a'
+        }
       };
+    });
+
+    console.log('✅ Quick Search Response:', {
+      query,
+      totalEligibleUsers: eligibleUsers.length,
+      resultsReturned: results.length
     });
 
     return NextResponse.json({
       success: true,
       results,
-      total: filteredUsers.length,
+      total: eligibleUsers.length,
       limit: limit,
       query: query
     });
 
   } catch (error) {
-    console.error('Search API error:', error);
+    console.error('❌ Search API error:', error);
     return NextResponse.json({
       success: false,
       error: 'Internal server error',

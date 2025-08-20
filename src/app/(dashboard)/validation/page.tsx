@@ -1,7 +1,7 @@
 'use client';
 import { routeUrl } from '@/lib/utils';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { 
   ShieldCheck, 
@@ -17,7 +17,8 @@ import {
   MapPin,
   ArrowRight,
   Eye,
-  Keyboard
+  Keyboard,
+  X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -81,18 +82,38 @@ interface PostulantsResponse {
   statistics: ValidationStats;
 }
 
+// Debounce utility function
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
 function ValidationPageContent() {
   const [postulants, setPostulants] = useState<Postulant[]>([]);
   const [statistics, setStatistics] = useState<ValidationStats | null>(null);
   const [pagination, setPagination] = useState<PostulantsResponse['pagination'] | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [circunscripcionFilter, setCircunscripcionFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  const [circunscripcionFilter, setCircunscripcionFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const { toast } = useToast();
   const searchParams = useSearchParams();
   const router = useRouter();
+
+  // Debounce search term to avoid too many API calls
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
   // Get list of DNIs for keyboard navigation
   const postulantsDNIList = postulants.map(p => p.dni);
@@ -103,7 +124,7 @@ function ValidationPageContent() {
     disabled: false
   });
 
-  // Available circunscripciones (could be fetched from API)
+  // Available circunscripciones
   const circunscripciones = [
     'PRIMERA_CIRCUNSCRIPCION',
     'SEGUNDA_CIRCUNSCRIPCION', 
@@ -111,7 +132,7 @@ function ValidationPageContent() {
     'CUARTA_CIRCUNSCRIPCION'
   ];
 
-  const fetchPostulants = async () => {
+  const fetchPostulants = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({
@@ -119,32 +140,68 @@ function ValidationPageContent() {
         size: '12' // 12 cards per page
       });
 
-      if (searchTerm) params.append('search', searchTerm);
-      if (circunscripcionFilter) params.append('circunscripcion', circunscripcionFilter);
-      if (statusFilter) params.append('status', statusFilter);
+      // Only add search term if it has meaningful content
+      if (debouncedSearchTerm && debouncedSearchTerm.trim().length >= 2) {
+        params.append('search', debouncedSearchTerm.trim());
+      }
+      
+      // Only add filters if they're not 'all'
+      if (circunscripcionFilter && circunscripcionFilter !== 'all') {
+        params.append('circunscripcion', circunscripcionFilter);
+      }
+      
+      if (statusFilter && statusFilter !== 'all') {
+        params.append('status', statusFilter);
+      }
 
-      const response = await fetch(`/api/validation/postulants?${params}`);
-      if (!response.ok) throw new Error('Failed to fetch postulants');
+      console.log('📡 Fetching postulants with params:', Object.fromEntries(params));
+
+      const response = await fetch(`/dashboard-monitor/api/validation/postulants?${params}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to fetch postulants: ${response.status} - ${errorText}`);
+      }
 
       const data: PostulantsResponse = await response.json();
-      setPostulants(data.postulants);
-      setStatistics(data.statistics);
-      setPagination(data.pagination);
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Unknown error from API');
+      }
+
+      setPostulants(data.postulants || []);
+      setStatistics(data.statistics || null);
+      setPagination(data.pagination || null);
+
+      console.log('✅ Postulants loaded:', {
+        count: data.postulants?.length || 0,
+        totalElements: data.pagination?.totalElements || 0
+      });
+
     } catch (error) {
-      console.error('Error fetching postulants:', error);
+      console.error('❌ Error fetching postulants:', error);
       toast({
         title: 'Error',
-        description: 'No se pudieron cargar los postulantes',
+        description: error instanceof Error ? error.message : 'No se pudieron cargar los postulantes',
         variant: 'destructive',
       });
+      
+      // Set empty state on error
+      setPostulants([]);
+      setStatistics(null);
+      setPagination(null);
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentPage, debouncedSearchTerm, circunscripcionFilter, statusFilter, toast]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearchTerm, circunscripcionFilter, statusFilter]);
 
   useEffect(() => {
     fetchPostulants();
-  }, [currentPage, searchTerm, circunscripcionFilter, statusFilter]);
+  }, [fetchPostulants]);
 
   const getStatusBadgeVariant = (status: Postulant['validationStatus']) => {
     switch (status) {
@@ -181,6 +238,19 @@ function ValidationPageContent() {
 
   const handleViewPostulant = (dni: string) => {
     router.push(routeUrl(`validation/${dni}`));
+  };
+
+  const clearFilters = () => {
+    setSearchTerm('');
+    setCircunscripcionFilter('all');
+    setStatusFilter('all');
+    setCurrentPage(1);
+  };
+
+  const hasActiveFilters = () => {
+    return searchTerm.trim().length > 0 || 
+           circunscripcionFilter !== 'all' || 
+           statusFilter !== 'all';
   };
 
   if (loading && !postulants.length) {
@@ -258,7 +328,7 @@ function ValidationPageContent() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {statistics?.totalApplicants || '252'}
+              {statistics?.totalApplicants || '0'}
             </div>
             <p className="text-xs text-muted-foreground">
               Postulantes aptos
@@ -282,7 +352,7 @@ function ValidationPageContent() {
               />
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              {statistics ? (statistics.approved + statistics.rejected) : 0} de {statistics?.totalApplicants || 252} completados
+              {statistics ? (statistics.approved + statistics.rejected) : 0} de {statistics?.totalApplicants || 0} completados
             </p>
           </CardContent>
         </Card>
@@ -294,7 +364,7 @@ function ValidationPageContent() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {statistics?.pending || 252}
+              {statistics?.pending || 0}
             </div>
             <p className="text-xs text-muted-foreground">
               Requieren revisión
@@ -318,12 +388,17 @@ function ValidationPageContent() {
         </Card>
       </div>
 
-      {/* Filters */}
+      {/* Enhanced Filters */}
       <Card className="bg-card/60 backdrop-blur-sm border-white/10 shadow-lg mb-6">
         <CardHeader>
           <CardTitle className="font-headline flex items-center gap-2">
             <Filter className="w-5 h-5" />
             Filtros y Búsqueda
+            {hasActiveFilters() && (
+              <Badge variant="secondary" className="ml-2">
+                Filtros activos
+              </Badge>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -338,6 +413,16 @@ function ValidationPageContent() {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 data-search="true"
               />
+              {searchTerm && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 p-0"
+                  onClick={() => setSearchTerm('')}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              )}
             </div>
 
             <Select value={circunscripcionFilter} onValueChange={setCircunscripcionFilter}>
@@ -368,7 +453,7 @@ function ValidationPageContent() {
             </Select>
 
             <div className="flex gap-2">
-              <QuickSearch className="min-w-[200px]" />
+              <QuickSearch className="min-w-[160px]" />
               <KeyboardShortcutsHelp />
               <Button 
                 variant="outline" 
@@ -379,72 +464,158 @@ function ValidationPageContent() {
                 <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                 Actualizar
               </Button>
+              {hasActiveFilters() && (
+                <Button 
+                  variant="outline"
+                  onClick={clearFilters}
+                  className="bg-input/80 border-white/10"
+                >
+                  <X className="w-4 h-4 mr-2" />
+                  Limpiar
+                </Button>
+              )}
             </div>
           </div>
+
+          {/* Filter Status */}
+          {hasActiveFilters() && (
+            <div className="mt-4 pt-4 border-t border-border/50">
+              <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                <span>Filtros activos:</span>
+                {searchTerm.trim() && (
+                  <Badge variant="outline">
+                    Búsqueda: "{searchTerm.trim()}"
+                  </Badge>
+                )}
+                {circunscripcionFilter !== 'all' && (
+                  <Badge variant="outline">
+                    {circunscripcionFilter.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase())}
+                  </Badge>
+                )}
+                {statusFilter !== 'all' && (
+                  <Badge variant="outline">
+                    Estado: {statusFilter === 'IN_REVIEW' ? 'En revisión' : statusFilter}
+                  </Badge>
+                )}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Postulants Grid */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 mb-8">
-        {postulants.map((postulant) => (
-          <Card key={postulant.dni} className="bg-card/60 backdrop-blur-sm border-white/10 shadow-lg hover:shadow-xl transition-shadow cursor-pointer">
-            <CardHeader className="pb-3">
-              <div className="flex justify-between items-start">
-                <div>
-                  <CardTitle className="text-lg font-semibold">{postulant.fullName}</CardTitle>
-                  <CardDescription className="font-mono">
-                    DNI: {postulant.dni}
-                  </CardDescription>
-                </div>
-                <Badge 
-                  variant={getStatusBadgeVariant(postulant.validationStatus)}
-                  className="flex items-center gap-1"
-                >
-                  {getStatusIcon(postulant.validationStatus)}
-                  {postulant.validationStatus === 'IN_REVIEW' ? 'En Revisión' : 
-                   postulant.validationStatus === 'PENDING' ? 'Pendiente' :
-                   postulant.validationStatus}
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <MapPin className="w-4 h-4" />
-                <span>{postulant.circunscripcion.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase())}</span>
-              </div>
-              
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <FileText className="w-4 h-4" />
-                <span>{postulant.documentsCount} documentos</span>
-              </div>
+      {/* Results Status */}
+      {!loading && (
+        <div className="mb-4 flex items-center justify-between">
+          <div className="text-sm text-muted-foreground">
+            {pagination ? (
+              <>
+                Mostrando {((pagination.page - 1) * pagination.size) + 1} a{' '}
+                {Math.min(pagination.page * pagination.size, pagination.totalElements)} de{' '}
+                {pagination.totalElements} postulantes
+                {hasActiveFilters() && ' (filtrados)'}
+              </>
+            ) : (
+              'Cargando resultados...'
+            )}
+          </div>
+          {loading && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <RefreshCw className="w-4 h-4 animate-spin" />
+              Actualizando...
+            </div>
+          )}
+        </div>
+      )}
 
-              <div className="text-sm">
-                <p className="font-medium">{postulant.contestInfo.title}</p>
-                <p className="text-muted-foreground text-xs">{postulant.contestInfo.position}</p>
-              </div>
-
-              <div className="text-xs text-muted-foreground">
-                <p>Inscrito: {formatDate(postulant.inscriptionDate)}</p>
-                {postulant.lastValidated && (
-                  <p>Validado: {formatDate(postulant.lastValidated)}</p>
-                )}
-              </div>
-
+      {/* No Results Message */}
+      {!loading && postulants.length === 0 && (
+        <Card className="bg-card/60 backdrop-blur-sm border-white/10 shadow-lg">
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Search className="w-12 h-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold mb-2">No se encontraron postulantes</h3>
+            <p className="text-muted-foreground text-center">
+              {hasActiveFilters() 
+                ? 'Intenta modificar los filtros de búsqueda o limpiarlos para ver más resultados.'
+                : 'No hay postulantes disponibles para validación en este momento.'
+              }
+            </p>
+            {hasActiveFilters() && (
               <Button 
-                onClick={() => handleViewPostulant(postulant.dni)}
-                className="w-full mt-4"
-                size="sm"
+                variant="outline" 
+                className="mt-4"
+                onClick={clearFilters}
               >
-                <Eye className="w-4 h-4 mr-2" />
-                Revisar Expediente
-                <ArrowRight className="w-4 h-4 ml-2" />
+                <X className="w-4 h-4 mr-2" />
+                Limpiar filtros
               </Button>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
-      {/* Pagination */}
+      {/* Postulants Grid */}
+      {!loading && postulants.length > 0 && (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 mb-8">
+          {postulants.map((postulant) => (
+            <Card key={postulant.dni} className="bg-card/60 backdrop-blur-sm border-white/10 shadow-lg hover:shadow-xl transition-shadow cursor-pointer">
+              <CardHeader className="pb-3">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <CardTitle className="text-lg font-semibold">{postulant.fullName}</CardTitle>
+                    <CardDescription className="font-mono">
+                      DNI: {postulant.dni}
+                    </CardDescription>
+                  </div>
+                  <Badge 
+                    variant={getStatusBadgeVariant(postulant.validationStatus)}
+                    className="flex items-center gap-1"
+                  >
+                    {getStatusIcon(postulant.validationStatus)}
+                    {postulant.validationStatus === 'IN_REVIEW' ? 'En Revisión' : 
+                     postulant.validationStatus === 'PENDING' ? 'Pendiente' :
+                     postulant.validationStatus}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <MapPin className="w-4 h-4" />
+                  <span>{postulant.circunscripcion.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase())}</span>
+                </div>
+                
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <FileText className="w-4 h-4" />
+                  <span>{postulant.documentsCount} documentos</span>
+                </div>
+
+                <div className="text-sm">
+                  <p className="font-medium">{postulant.contestInfo.title}</p>
+                  <p className="text-muted-foreground text-xs">{postulant.contestInfo.position}</p>
+                </div>
+
+                <div className="text-xs text-muted-foreground">
+                  <p>Inscrito: {formatDate(postulant.inscriptionDate)}</p>
+                  {postulant.lastValidated && (
+                    <p>Validado: {formatDate(postulant.lastValidated)}</p>
+                  )}
+                </div>
+
+                <Button 
+                  onClick={() => handleViewPostulant(postulant.dni)}
+                  className="w-full mt-4"
+                  size="sm"
+                >
+                  <Eye className="w-4 h-4 mr-2" />
+                  Revisar Expediente
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Enhanced Pagination */}
       {pagination && pagination.totalPages > 1 && (
         <div className="flex items-center justify-between">
           <div className="text-sm text-muted-foreground">
@@ -457,7 +628,7 @@ function ValidationPageContent() {
               variant="outline"
               size="sm"
               onClick={() => setCurrentPage(pagination.page - 1)}
-              disabled={pagination.page <= 1}
+              disabled={pagination.page <= 1 || loading}
             >
               Anterior
             </Button>
@@ -468,7 +639,7 @@ function ValidationPageContent() {
               variant="outline"
               size="sm"
               onClick={() => setCurrentPage(pagination.page + 1)}
-              disabled={pagination.page >= pagination.totalPages}
+              disabled={pagination.page >= pagination.totalPages || loading}
             >
               Siguiente
             </Button>

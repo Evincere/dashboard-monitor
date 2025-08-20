@@ -109,7 +109,7 @@ export default function PostulantDocumentsPage() {
     setLoading(true);
     try {
       console.log(`Fetching documents for DNI: ${dni}`);
-      const response = await fetch(apiUrl(`postulations/${dni}/documents`));
+      const response = await fetch(`/dashboard-monitor/api/postulations/${dni}/documents`);
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -156,7 +156,10 @@ export default function PostulantDocumentsPage() {
 
   const handleDocumentValidation = async (documentId: string, action: 'approve' | 'reject', reason?: string) => {
     try {
-      const endpoint = action === 'approve' ? apiUrl('documents/approve') : apiUrl('documents/reject');
+      const endpoint = action === 'approve' ? '/dashboard-monitor/api/documents/approve' : '/dashboard-monitor/api/documents/reject';
+      console.log("🔧 Fixed endpoint URL:", endpoint);
+      console.log("🔍 Generated endpoint URL:", endpoint);
+      console.log("🌍 NEXT_PUBLIC_BASE_PATH:", process.env.NEXT_PUBLIC_BASE_PATH);
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

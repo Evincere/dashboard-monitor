@@ -25,6 +25,7 @@ interface PostulantInfo {
     email: string;
   };
   inscription: {
+    id: string;
     state: string;
     centroDeVida: string;
     createdAt: string;
@@ -80,12 +81,12 @@ interface ValidationState {
 export const useValidationStore = create<ValidationState>()(
   devtools(
     (set, get) => ({
-      // Initial state
+      // Initial state with proper default loading state
       documents: [],
       currentDocument: null,
       postulant: null,
       stats: null,
-      loading: false,
+      loading: true,  // Start with true by default
       submitting: false,
 
       // Basic setters
@@ -108,7 +109,7 @@ export const useValidationStore = create<ValidationState>()(
             body: JSON.stringify({
               documentId,
               comments: comments?.trim() || undefined,
-              validatedBy: 'admin' // TODO: Get from auth context
+              validatedBy: 'admin'
             })
           });
 
@@ -155,7 +156,7 @@ export const useValidationStore = create<ValidationState>()(
             body: JSON.stringify({
               documentId,
               reason,
-              validatedBy: 'admin' // TODO: Get from auth context
+              validatedBy: 'admin'
             })
           });
 
@@ -275,7 +276,7 @@ export const useValidationStore = create<ValidationState>()(
           currentDocument: null,
           postulant: null,
           stats: null,
-          loading: false,
+          loading: true, // Reset to true so UI shows loading again
           submitting: false
         });
       }

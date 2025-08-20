@@ -60,7 +60,7 @@ export async function GET(
     }
 
     // Obtener el path base de documentos desde variables de entorno
-    const documentsBasePath = process.env.DOCUMENTS_PATH || 
+    const documentsBasePath = process.env.DOCUMENT_STORAGE_PATH || 
       'B:/concursos_situacion_post_gracia/descarga_administracion_20250814_191745/documentos';
 
     console.log(`📄 Fetching documents for DNI: ${dni}, fileName: ${fileName || 'all'}`);

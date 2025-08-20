@@ -14,7 +14,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils';
+import { cn, routeUrl } from '@/lib/utils';
 
 interface SearchResult {
   dni: string;
@@ -57,7 +57,7 @@ export default function QuickSearch({
 
       setLoading(true);
       try {
-        const response = await fetch(`/api/validation/search?q=${encodeURIComponent(searchQuery)}&limit=8`);
+        const response = await fetch(`/dashboard-monitor/api/validation/search?q=${encodeURIComponent(searchQuery)}&limit=8`);
         if (!response.ok) throw new Error('Search failed');
         
         const data = await response.json();
@@ -122,7 +122,7 @@ export default function QuickSearch({
   };
 
   const navigateToPostulant = (dni: string) => {
-    router.push(`/validation/${dni}`);
+    router.push(routeUrl(`validation/${dni}`));
     setOpen(false);
     setQuery('');
     setResults([]);

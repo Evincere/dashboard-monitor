@@ -432,6 +432,31 @@ class BackendClient {
     });
   }
 
+  async revertDocument(documentId: string): Promise<ApiResponse<BackendDocument>> {
+    return this.request<BackendDocument>(`/admin/documentos/${documentId}/revertir`, {
+      method: 'PATCH'
+    });
+  }
+
+  /**
+   * Cambia el estado de una inscripción
+   */
+  async changeInscriptionState(
+    inscriptionId: string,
+    newState: string,
+    note?: string
+  ): Promise<ApiResponse<any>> {
+    console.log(`🔄 Changing inscription ${inscriptionId} to state ${newState}`);
+    
+    return this.request(`/admin/inscriptions/${inscriptionId}/state`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        newState,
+        note: note || `Estado cambiado a ${newState} desde frontend`
+      })
+    });
+  }
+
   async getPostulationsManagement(): Promise<ApiResponse<{
     success: boolean;
     postulations: any[];

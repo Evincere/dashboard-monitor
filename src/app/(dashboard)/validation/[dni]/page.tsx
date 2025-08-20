@@ -212,6 +212,61 @@ function PostulantExpedienteContent() {
     disabled: submitting
   });
 
+
+  // Función para navegar a la siguiente postulación automáticamente
+  const navigateToNextPostulation = async (currentDni: string) => {
+    try {
+      console.log('🔍 Buscando siguiente postulación después de procesar:', currentDni);
+      
+      const response = await fetch(`/dashboard-monitor/api/validation/next-postulation?currentDni=${currentDni}`, {
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      const result = await response.json();
+      
+      if (response.ok && result.success && result.data?.nextPostulation) {
+        const nextDni = result.data.nextPostulation.dni;
+        const nextName = result.data.nextPostulation.fullName;
+        
+        console.log(`✅ Siguiente postulación encontrada: ${nextName} (DNI: ${nextDni})`);
+        
+        toast({
+          title: 'Navegando a siguiente postulación',
+          description: `Cargando documentos de ${nextName}`,
+          duration: 2000
+        });
+        
+        // Navegar a la siguiente postulación
+        router.push(`/validation/${nextDni}`);
+        return true;
+      } else {
+        console.log('ℹ️ No se encontraron más postulaciones para validar');
+        
+        toast({
+          title: 'Validación completada',
+          description: 'No hay más postulaciones disponibles para validar en este momento',
+          duration: 3000
+        });
+        
+        // Regresar al listado
+        router.push('/validation');
+        return false;
+      }
+    } catch (error) {
+      console.error('❌ Error al buscar siguiente postulación:', error);
+      
+      toast({
+        title: 'Error de navegación',
+        description: 'No se pudo cargar la siguiente postulación. Regresando al listado.',
+        variant: 'destructive',
+        duration: 3000
+      });
+      
+      // En caso de error, regresar al listado
+      router.push('/validation');
+      return false;
+    }
+  };
   const handleValidationDecision = async (decision: ValidationDecision) => {
     setSubmitting(true);
     try {
@@ -233,12 +288,12 @@ function PostulantExpedienteContent() {
 
       toast({
         title: `Postulante ${decision.action === 'approve' ? 'Aprobado' : 'Rechazado'}`,
-        description: `La decisión ha sido registrada exitosamente`,
+        description: `La decisión ha sido registrada exitosamente. Buscando siguiente postulación...`,
         variant: decision.action === 'approve' ? 'default' : 'destructive',
       });
 
-      // Refresh data
-      await fetchPostulantData();
+      // Navegar automáticamente a la siguiente postulación
+      await navigateToNextPostulation(dni);
     } catch (error) {
       console.error('Error submitting decision:', error);
       toast({
@@ -248,6 +303,40 @@ function PostulantExpedienteContent() {
       });
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // Función para revertir estado de postulación
+  const revertPostulationState = async () => {
+    if (!postulant?.user?.dni) return;
+    try {
+      const response = await fetch(`/dashboard-monitor/api/postulations/${postulant.user.dni}/revert`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          revertedBy: 'admin', // TODO: obtener usuario actual
+          reason: 'Reversión administrativa para nueva evaluación'
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to revert');
+      }
+      
+      toast({ 
+        title: 'Estado Revertido', 
+        description: `Postulación revertida de ${result.data.inscription.previousState} a PENDING`
+      });
+      await fetchPostulantData();
+    } catch (error) {
+      console.error('Error reverting postulation:', error);
+      toast({ 
+        title: 'Error', 
+        description: error instanceof Error ? error.message : 'Error al revertir', 
+        variant: 'destructive' 
+      });
     }
   };
 
@@ -281,6 +370,24 @@ function PostulantExpedienteContent() {
     });
   };
 
+
+  // Función para aprobar y continuar automáticamente
+  const handleApproveAndContinue = async () => {
+    await handleValidationDecision({
+      action: 'approve',
+      comments: validationComments,
+      documentDecisions: documentComments
+    });
+  };
+
+  // Función para rechazar y continuar automáticamente  
+  const handleRejectAndContinue = async () => {
+    await handleValidationDecision({
+      action: 'reject',
+      comments: validationComments,
+      documentDecisions: documentComments
+    });
+  };
   if (loading) {
     return (
       <div className="flex flex-col h-full p-4 md:p-8">
@@ -473,9 +580,17 @@ function PostulantExpedienteContent() {
               <div>
                 <p className="text-sm">{postulant.contest.description}</p>
               </div>
-              <Badge variant="outline">
-                Estado: {postulant.inscription.state}
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline">
+                  Estado: {postulant.inscription.state}
+                </Badge>
+                {(postulant.inscription.state === 'APPROVED' || postulant.inscription.state === 'REJECTED' || postulant.inscription.state === 'COMPLETED') && (
+                  <Button variant="outline" size="sm" onClick={revertPostulationState} className="gap-1">
+                    <RefreshCw className="w-4 h-4" />
+                    Revertir
+                  </Button>
+                )}
+              </div>
             </CardContent>
           </Card>
 
@@ -566,17 +681,26 @@ function PostulantExpedienteContent() {
                         Esta acción será registrada en el historial.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
-                    <AlertDialogFooter>
+                    <AlertDialogFooter className="flex-col sm:flex-row gap-2">
                       <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                      <AlertDialogAction 
-                        onClick={() => handleValidationDecision({
-                          action: 'approve',
-                          comments: validationComments,
-                          documentDecisions: documentComments
-                        })}
-                      >
-                        Aprobar
-                      </AlertDialogAction>
+                      <div className="flex gap-2">
+                        <AlertDialogAction 
+                          variant="outline"
+                          onClick={() => handleValidationDecision({
+                            action: 'approve',
+                            comments: validationComments,
+                            documentDecisions: documentComments
+                          })}
+                        >
+                          Solo Aprobar
+                        </AlertDialogAction>
+                        <AlertDialogAction 
+                          onClick={handleApproveAndContinue}
+                          className="bg-green-600 hover:bg-green-700"
+                        >
+                          Aprobar y Continuar →
+                        </AlertDialogAction>
+                      </div>
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
@@ -601,18 +725,26 @@ function PostulantExpedienteContent() {
                         Esta acción será registrada en el historial.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
-                    <AlertDialogFooter>
+                    <AlertDialogFooter className="flex-col sm:flex-row gap-2">
                       <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                      <AlertDialogAction 
-                        variant="destructive"
-                        onClick={() => handleValidationDecision({
-                          action: 'reject',
-                          comments: validationComments,
-                          documentDecisions: documentComments
-                        })}
-                      >
-                        Rechazar
-                      </AlertDialogAction>
+                      <div className="flex gap-2">
+                        <AlertDialogAction 
+                          variant="outline"
+                          onClick={() => handleValidationDecision({
+                            action: 'reject',
+                            comments: validationComments,
+                            documentDecisions: documentComments
+                          })}
+                        >
+                          Solo Rechazar
+                        </AlertDialogAction>
+                        <AlertDialogAction 
+                          variant="destructive"
+                          onClick={handleRejectAndContinue}
+                        >
+                          Rechazar y Continuar →
+                        </AlertDialogAction>
+                      </div>
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>

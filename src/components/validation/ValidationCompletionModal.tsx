@@ -72,11 +72,13 @@ interface ValidationCompletionModalProps {
   documents: Document[];
   postulant: PostulantInfo;
   onApprovePostulation: () => void;
+  onApprovePostulationOnly?: () => void; // Nueva función para aprobar sin continuar
   onRejectPostulation: () => void;
   onInitiateValidation?: () => void; // Nueva función para iniciar validación
   onGenerateEmailTemplate: (emailContent: string) => void;
   onNextPostulation: () => void;
-}
+  setModalDismissed?: (dismissed: boolean) => void;
+  onApproveAndContinue?: () => void;}
 
 export default function ValidationCompletionModal({
   open,
@@ -84,6 +86,7 @@ export default function ValidationCompletionModal({
   documents,
   postulant,
   onApprovePostulation,
+  onApprovePostulationOnly,
   onRejectPostulation,
   onInitiateValidation,
   onGenerateEmailTemplate,
@@ -443,17 +446,34 @@ Equipo de Validación de Documentos`;
             onClick={() => onOpenChange(false)}
           >
             Cancelar
-          </Button>
-          
-          {/* CASO 1: Todos los documentos están aprobados - Permitir aprobación directa */}
+          </Button>          {/* CASO 1: Todos los documentos están aprobados - Permitir aprobación directa */}
           {showDirectApproval ? (
-            <Button
-              onClick={onApprovePostulation}
-              className="bg-green-600 hover:bg-green-700 text-white gap-2"
-            >
-              <CheckCircle className="w-4 h-4" />
-              Aprobar y Continuar con Siguiente
-            </Button>
+            <>
+              <Button
+                onClick={() => {
+                  console.log("🟡 Aprobando sin continuar automáticamente");
+                  if (onApprovePostulationOnly) {
+                    onApprovePostulationOnly();
+                  } else {
+                    // Fallback a función original
+                    onApprovePostulation();
+                    onOpenChange(false);
+                  }
+                }}
+                variant="outline"
+                className="bg-blue-600 hover:bg-blue-700 text-white gap-2"
+              >
+                <CheckCircle className="w-4 h-4" />
+                Aprobar sin Continuar
+              </Button>
+              <Button
+                onClick={onApprovePostulation}
+                className="bg-green-600 hover:bg-green-700 text-white gap-2"
+              >
+                <CheckCircle className="w-4 h-4" />
+                Aprobar y Continuar con Siguiente
+              </Button>
+            </>
           
           /* CASO 2: No todos aprobados pero sí validados - Mostrar opciones basadas en estado */
           ) : canDecide ? (

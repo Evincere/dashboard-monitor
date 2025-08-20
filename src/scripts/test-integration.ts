@@ -74,7 +74,7 @@ class IntegrationTester {
 
   async testBackendConnection() {
     return this.runTest('Backend Connection Test', async () => {
-      const data = await this.makeRequest('/api/backend/test');
+      const data = await this.makeRequest('/api/proxy-backend/test');
       if (!data.success) {
         throw new Error(data.error || 'Backend test failed');
       }
@@ -84,7 +84,7 @@ class IntegrationTester {
 
   async testBackendStatistics() {
     return this.runTest('Backend Statistics', async () => {
-      const data = await this.makeRequest('/api/backend/statistics');
+      const data = await this.makeRequest('/api/proxy-backend/statistics');
       if (!data.success) {
         throw new Error(data.error || 'Statistics test failed');
       }
@@ -94,7 +94,7 @@ class IntegrationTester {
 
   async testBackendUsers() {
     return this.runTest('Backend Users API', async () => {
-      const data = await this.makeRequest('/api/backend/users?page=0&size=5');
+      const data = await this.makeRequest('/api/proxy-backend/users?page=0&size=5');
       if (!data.success) {
         throw new Error(data.error || 'Users API failed');
       }
@@ -104,7 +104,7 @@ class IntegrationTester {
 
   async testBackendDocuments() {
     return this.runTest('Backend Documents API', async () => {
-      const data = await this.makeRequest('/api/backend/documents?page=0&size=5');
+      const data = await this.makeRequest('/api/proxy-backend/documents?page=0&size=5');
       if (!data.success) {
         throw new Error(data.error || 'Documents API failed');
       }
@@ -114,7 +114,7 @@ class IntegrationTester {
 
   async testBackendInscriptions() {
     return this.runTest('Backend Inscriptions API', async () => {
-      const data = await this.makeRequest('/api/backend/inscriptions?page=0&size=5');
+      const data = await this.makeRequest('/api/proxy-backend/inscriptions?page=0&size=5');
       if (!data.success) {
         throw new Error(data.error || 'Inscriptions API failed');
       }

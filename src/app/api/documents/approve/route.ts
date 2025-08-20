@@ -28,55 +28,37 @@ export async function POST(request: NextRequest) {
 
     console.log(`✅ Approving document ${documentId} by ${validatedBy}`);
 
-    // Check if backend integration is enabled
-    if (backendClient.isEnabled()) {
-      try {
-        // Usar el backend client para aprobar el documento
-        const approvalResponse = await backendClient.approveDocument(documentId);
+    // ALWAYS use real backend - no fallback to mock
+    try {
+      console.log('🔗 Using real backend client for document approval');
+      const approvalResponse = await backendClient.approveDocument(documentId);
 
-        if (!approvalResponse.success) {
-          console.error('Backend approval failed:', approvalResponse.error);
-          // Fall back to mock response instead of failing
-        } else {
-          console.log(`✅ Document ${documentId} approved successfully via backend`);
-          return NextResponse.json({
-            success: true,
-            message: 'Document approved successfully',
-            data: {
-              documentId,
-              validatedBy,
-              comments: comments || undefined,
-              approvedDocument: approvalResponse.data
-            },
-            timestamp: new Date().toISOString()
-          });
-        }
-      } catch (error) {
-        console.warn('Backend approval failed, using mock response:', error);
+      if (approvalResponse.success) {
+        console.log(`✅ Document ${documentId} approved successfully via REAL backend`);
+        return NextResponse.json({
+          success: true,
+          message: 'Document approved successfully',
+          data: {
+            documentId,
+            validatedBy,
+            comments: comments || undefined,
+            approvedDocument: approvalResponse.data
+          },
+          timestamp: new Date().toISOString()
+        });
+      } else {
+        console.error('❌ Real backend approval failed:', approvalResponse.error);
+        throw new Error(approvalResponse.error || 'Backend approval failed');
       }
+    } catch (error) {
+      console.error('❌ Backend approval error:', error);
+      return NextResponse.json({
+        success: false,
+        error: 'Failed to approve document in backend',
+        details: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      }, { status: 500 });
     }
-
-    // Mock response when backend is not available
-    console.log(`✅ Document ${documentId} approved successfully (mock mode)`);
-    
-    return NextResponse.json({
-      success: true,
-      message: 'Document approved successfully',
-      data: {
-        documentId,
-        validatedBy,
-        comments: comments || undefined,
-        approvedDocument: {
-          id: documentId,
-          fileName: 'mock-document.pdf',
-          status: 'APPROVED',
-          validatedAt: new Date().toISOString(),
-          validatedBy,
-          comments: comments || undefined
-        }
-      },
-      timestamp: new Date().toISOString()
-    });
 
   } catch (error) {
     console.error('❌ Document approval API error:', error);

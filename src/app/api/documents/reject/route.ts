@@ -26,57 +26,39 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    console.log(`❌ Rejecting document ${documentId} by ${validatedBy}, reason: ${reason}`);
+    console.log(`❌ Rejecting document ${documentId} by ${validatedBy} with reason: ${reason}`);
 
-    // Check if backend integration is enabled
-    if (backendClient.isEnabled()) {
-      try {
-        // Usar el backend client para rechazar el documento
-        const rejectionResponse = await backendClient.rejectDocument(documentId, reason);
+    // ALWAYS use real backend - no fallback to mock
+    try {
+      console.log('🔗 Using real backend client for document rejection');
+      const rejectionResponse = await backendClient.rejectDocument(documentId, reason);
 
-        if (!rejectionResponse.success) {
-          console.error('Backend rejection failed:', rejectionResponse.error);
-          // Fall back to mock response instead of failing
-        } else {
-          console.log(`❌ Document ${documentId} rejected successfully via backend`);
-          return NextResponse.json({
-            success: true,
-            message: 'Document rejected successfully',
-            data: {
-              documentId,
-              validatedBy,
-              reason,
-              rejectedDocument: rejectionResponse.data
-            },
-            timestamp: new Date().toISOString()
-          });
-        }
-      } catch (error) {
-        console.warn('Backend rejection failed, using mock response:', error);
+      if (rejectionResponse.success) {
+        console.log(`❌ Document ${documentId} rejected successfully via REAL backend`);
+        return NextResponse.json({
+          success: true,
+          message: 'Document rejected successfully',
+          data: {
+            documentId,
+            validatedBy,
+            reason,
+            rejectedDocument: rejectionResponse.data
+          },
+          timestamp: new Date().toISOString()
+        });
+      } else {
+        console.error('❌ Real backend rejection failed:', rejectionResponse.error);
+        throw new Error(rejectionResponse.error || 'Backend rejection failed');
       }
+    } catch (error) {
+      console.error('❌ Backend rejection error:', error);
+      return NextResponse.json({
+        success: false,
+        error: 'Failed to reject document in backend',
+        details: error instanceof Error ? error.message : 'Unknown error',
+        timestamp: new Date().toISOString()
+      }, { status: 500 });
     }
-
-    // Mock response when backend is not available
-    console.log(`❌ Document ${documentId} rejected successfully (mock mode)`);
-
-    return NextResponse.json({
-      success: true,
-      message: 'Document rejected successfully',
-      data: {
-        documentId,
-        validatedBy,
-        reason,
-        rejectedDocument: {
-          id: documentId,
-          fileName: 'mock-document.pdf',
-          status: 'REJECTED',
-          validatedAt: new Date().toISOString(),
-          validatedBy,
-          rejectionReason: reason
-        }
-      },
-      timestamp: new Date().toISOString()
-    });
 
   } catch (error) {
     console.error('❌ Document rejection API error:', error);
