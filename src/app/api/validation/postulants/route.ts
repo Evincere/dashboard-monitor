@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
         users: usersResponse.error,
         inscriptions: inscriptionsResponse.error
       });
-      
+
       // Return fallback data instead of error
       return NextResponse.json({
         success: true,
@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
 
     // Get eligible users - estados que requieren validación
     const validationStates = ['COMPLETED_WITH_DOCS', 'PENDING', 'APPROVED', 'REJECTED'];
-    const eligibleInscriptions = inscriptionsData.filter((inscription: any) => 
+    const eligibleInscriptions = inscriptionsData.filter((inscription: any) =>
       validationStates.includes(inscription.status || inscription.state)
     );
 
@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
       const eligibleUserIds = new Set(eligibleInscriptions.map((ins: any) => ins.userId));
       const eligibleUsers = usersData.filter((user: any) => eligibleUserIds.has(user.id));
       const allDNIs = eligibleUsers.map((user: any) => user.dni).filter(Boolean).sort();
-      
+
       return NextResponse.json({
         success: true,
         allDNIs
@@ -84,12 +84,12 @@ export async function GET(request: NextRequest) {
       filteredUsers = filteredUsers.filter((user: any) => {
         const inscription = eligibleInscriptions.find((ins: any) => ins.userId === user.id);
         const centro = inscription?.centroDeVida?.toLowerCase() || '';
-        
+
         if (circunscripcionFilter === 'PRIMERA_CIRCUNSCRIPCION') return centro.includes('primera');
         if (circunscripcionFilter === 'SEGUNDA_CIRCUNSCRIPCION') return centro.includes('segunda');
         if (circunscripcionFilter === 'TERCERA_CIRCUNSCRIPCION') return centro.includes('tercera');
         if (circunscripcionFilter === 'CUARTA_CIRCUNSCRIPCION') return centro.includes('cuarta');
-        
+
         return true;
       });
     }
@@ -98,14 +98,14 @@ export async function GET(request: NextRequest) {
     if (statusFilter) {
       filteredUsers = filteredUsers.filter((user: any) => {
         const inscription = eligibleInscriptions.find((ins: any) => ins.userId === user.id);
-        const inscriptionState = inscription?.status || inscription?.state;
-        
+        const inscriptionState = inscription?.status || inscription?.state || '';
+
         // Map frontend status to backend states
         if (statusFilter === 'PENDING') return ['COMPLETED_WITH_DOCS', 'PENDING'].includes(inscriptionState);
         if (statusFilter === 'APPROVED') return inscriptionState === 'APPROVED';
         if (statusFilter === 'REJECTED') return inscriptionState === 'REJECTED';
         if (statusFilter === 'IN_REVIEW') return inscriptionState === 'IN_REVIEW';
-        
+
         return true;
       });
     }
@@ -120,7 +120,7 @@ export async function GET(request: NextRequest) {
     // Transform to expected format
     const postulants = paginatedUsers.map((user: any) => {
       const inscription = eligibleInscriptions.find((ins: any) => ins.userId === user.id);
-      
+
       // Determine circunscripcion
       let circunscripcion = 'PRIMERA_CIRCUNSCRIPCION';
       if (inscription?.centroDeVida) {
@@ -182,7 +182,7 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error('Postulants API error:', error);
-    
+
     // Return fallback data instead of error
     return NextResponse.json({
       success: true,

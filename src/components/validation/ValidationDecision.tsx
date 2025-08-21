@@ -7,6 +7,21 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { CheckCircleIcon, XCircleIcon, MessageCircleIcon, LoaderIcon } from 'lucide-react';
 
+interface DocumentStats {
+  total: number;
+  pending: number;
+  approved: number;
+  rejected: number;
+  required: number;
+  list: { id: string; fileName: string; status: string; }[];
+}
+
+// Tipo para los tamaños de botón soportados
+type ButtonSize = 'default' | 'sm' | 'lg' | 'icon';
+
+// Constante para el tamaño de botón usado en el componente
+const BUTTON_SIZE: ButtonSize = 'sm';
+
 /**
  * @fileOverview Componente ValidationDecision para aprobar/rechazar postulaciones
  */
@@ -86,7 +101,7 @@ export default function ValidationDecision({
 
   // Función para manejar la selección de documentos
   const toggleDocumentSelection = (documentId: string) => {
-    setSelectedDocuments(prev => 
+    setSelectedDocuments(prev =>
       prev.includes(documentId)
         ? prev.filter(id => id !== documentId)
         : [...prev, documentId]
@@ -114,7 +129,7 @@ export default function ValidationDecision({
         documentIds: selectedDocuments.length > 0 ? selectedDocuments : undefined,
         approveAll: selectedDocuments.length === 0 || selectedDocuments.length === pendingDocuments.length
       });
-      
+
       // Limpiar formulario
       setDecisionMode(null);
       setSelectedDocuments([]);
@@ -138,7 +153,7 @@ export default function ValidationDecision({
         documentIds: selectedDocuments.length > 0 ? selectedDocuments : undefined,
         rejectAll: selectedDocuments.length === 0 || selectedDocuments.length === pendingDocuments.length
       });
-      
+
       // Limpiar formulario
       setDecisionMode(null);
       setSelectedDocuments([]);
@@ -161,7 +176,7 @@ export default function ValidationDecision({
         comment: comments,
         commentType
       });
-      
+
       // Limpiar formulario
       setDecisionMode(null);
       setComments('');
@@ -194,13 +209,13 @@ export default function ValidationDecision({
       <CardHeader>
         <CardTitle className="text-lg flex items-center justify-between">
           <span>Decisión de Validación</span>
-          <Badge 
-            variant={postulant.validationStatus === 'APPROVED' ? 'default' : 
-                   postulant.validationStatus === 'REJECTED' ? 'destructive' : 'secondary'}
+          <Badge
+            variant={postulant.validationStatus === 'APPROVED' ? 'default' :
+              postulant.validationStatus === 'REJECTED' ? 'destructive' : 'secondary'}
           >
             {postulant.validationStatus === 'APPROVED' ? 'Aprobado' :
-             postulant.validationStatus === 'REJECTED' ? 'Rechazado' :
-             postulant.validationStatus === 'PARTIAL' ? 'Parcial' : 'Pendiente'}
+              postulant.validationStatus === 'REJECTED' ? 'Rechazado' :
+                postulant.validationStatus === 'PARTIAL' ? 'Parcial' : 'Pendiente'}
           </Badge>
         </CardTitle>
       </CardHeader>
@@ -211,7 +226,7 @@ export default function ValidationDecision({
           <h4 className="font-medium text-sm mb-2">Postulante: {postulant.user.name}</h4>
           <div className="grid grid-cols-2 gap-4 text-sm text-gray-600">
             <div>DNI: {postulant.user.dni}</div>
-            <div>Docs. Obligatorios: {postulant.documents.required || 0} de 7</div>
+            <div>Docs. Obligatorios: 7</div>
             <div className="text-green-600">Aprobados: {postulant.documents.approved}</div>
             <div className="text-blue-600">Pendientes: {postulant.documents.pending}</div>
             <div className="text-red-600">Rechazados: {postulant.documents.rejected}</div>
@@ -230,7 +245,7 @@ export default function ValidationDecision({
               <CheckCircleIcon className="w-4 h-4 mr-1" />
               Aprobar
             </Button>
-            
+
             <Button
               onClick={() => setDecisionMode('reject')}
               disabled={!hasDocumentsToValidate || loading}
@@ -240,7 +255,7 @@ export default function ValidationDecision({
               <XCircleIcon className="w-4 h-4 mr-1" />
               Rechazar
             </Button>
-            
+
             <Button
               onClick={() => setDecisionMode('comment')}
               disabled={loading}
@@ -257,31 +272,31 @@ export default function ValidationDecision({
         {decisionMode === 'approve' && (
           <div className="space-y-3 border-l-4 border-green-500 pl-4">
             <h4 className="font-medium text-green-800">Aprobar documentos</h4>
-            
+
             {pendingDocuments.length > 0 && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <label className="text-sm font-medium">Documentos a aprobar:</label>
                   <div className="space-x-2">
-                    <Button 
-                      type="button" 
-                      variant="outline" 
-                      size="xs"
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size={BUTTON_SIZE}
                       onClick={selectAllPendingDocuments}
                     >
                       Seleccionar todos
                     </Button>
-                    <Button 
-                      type="button" 
-                      variant="outline" 
-                      size="xs"
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size={BUTTON_SIZE}
                       onClick={clearSelection}
                     >
                       Limpiar
                     </Button>
                   </div>
                 </div>
-                
+
                 <div className="max-h-32 overflow-y-auto space-y-1">
                   {pendingDocuments.map(doc => (
                     <label key={doc.id} className="flex items-center space-x-2 text-sm">
@@ -295,13 +310,13 @@ export default function ValidationDecision({
                     </label>
                   ))}
                 </div>
-                
+
                 {selectedDocuments.length === 0 && (
                   <p className="text-xs text-gray-600">Se aprobarán todos los documentos pendientes</p>
                 )}
               </div>
             )}
-            
+
             <Textarea
               placeholder="Comentarios (opcional)"
               value={comments}
@@ -315,7 +330,7 @@ export default function ValidationDecision({
         {decisionMode === 'reject' && (
           <div className="space-y-3 border-l-4 border-red-500 pl-4">
             <h4 className="font-medium text-red-800">Rechazar documentos</h4>
-            
+
             <div className="space-y-2">
               <label className="text-sm font-medium">Motivo del rechazo:</label>
               <select
@@ -336,25 +351,25 @@ export default function ValidationDecision({
                 <div className="flex items-center justify-between">
                   <label className="text-sm font-medium">Documentos a rechazar:</label>
                   <div className="space-x-2">
-                    <Button 
-                      type="button" 
-                      variant="outline" 
-                      size="xs"
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size={BUTTON_SIZE}
                       onClick={selectAllPendingDocuments}
                     >
                       Seleccionar todos
                     </Button>
-                    <Button 
-                      type="button" 
-                      variant="outline" 
-                      size="xs"
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size={BUTTON_SIZE}
                       onClick={clearSelection}
                     >
                       Limpiar
                     </Button>
                   </div>
                 </div>
-                
+
                 <div className="max-h-32 overflow-y-auto space-y-1">
                   {pendingDocuments.map(doc => (
                     <label key={doc.id} className="flex items-center space-x-2 text-sm">
@@ -368,13 +383,13 @@ export default function ValidationDecision({
                     </label>
                   ))}
                 </div>
-                
+
                 {selectedDocuments.length === 0 && (
                   <p className="text-xs text-gray-600">Se rechazarán todos los documentos pendientes</p>
                 )}
               </div>
             )}
-            
+
             <Textarea
               placeholder="Comentarios adicionales (opcional)"
               value={comments}
@@ -388,7 +403,7 @@ export default function ValidationDecision({
         {decisionMode === 'comment' && (
           <div className="space-y-3 border-l-4 border-blue-500 pl-4">
             <h4 className="font-medium text-blue-800">Agregar comentario</h4>
-            
+
             <div className="space-y-2">
               <label className="text-sm font-medium">Tipo de comentario:</label>
               <select
@@ -401,7 +416,7 @@ export default function ValidationDecision({
                 ))}
               </select>
             </div>
-            
+
             <Textarea
               placeholder="Escribir comentario..."
               value={comments}
@@ -418,14 +433,14 @@ export default function ValidationDecision({
             <Button
               onClick={
                 decisionMode === 'approve' ? handleApprove :
-                decisionMode === 'reject' ? handleReject :
-                handleComment
+                  decisionMode === 'reject' ? handleReject :
+                    handleComment
               }
               disabled={!canSubmit() || isSubmitting}
               className={
                 decisionMode === 'approve' ? 'bg-green-600 hover:bg-green-700' :
-                decisionMode === 'reject' ? 'bg-red-600 hover:bg-red-700' :
-                'bg-blue-600 hover:bg-blue-700'
+                  decisionMode === 'reject' ? 'bg-red-600 hover:bg-red-700' :
+                    'bg-blue-600 hover:bg-blue-700'
               }
               size="sm"
             >
@@ -433,14 +448,14 @@ export default function ValidationDecision({
                 <LoaderIcon className="w-4 h-4 mr-1 animate-spin" />
               ) : (
                 decisionMode === 'approve' ? <CheckCircleIcon className="w-4 h-4 mr-1" /> :
-                decisionMode === 'reject' ? <XCircleIcon className="w-4 h-4 mr-1" /> :
-                <MessageCircleIcon className="w-4 h-4 mr-1" />
+                  decisionMode === 'reject' ? <XCircleIcon className="w-4 h-4 mr-1" /> :
+                    <MessageCircleIcon className="w-4 h-4 mr-1" />
               )}
               {decisionMode === 'approve' ? 'Aprobar' :
-               decisionMode === 'reject' ? 'Rechazar' :
-               'Agregar comentario'}
+                decisionMode === 'reject' ? 'Rechazar' :
+                  'Agregar comentario'}
             </Button>
-            
+
             <Button
               onClick={handleCancel}
               disabled={isSubmitting}

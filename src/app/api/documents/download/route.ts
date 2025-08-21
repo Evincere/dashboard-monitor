@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const documentId = searchParams.get('id');
-    
+
     if (!documentId) {
       return NextResponse.json(
         { error: 'Document ID is required' },
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
       `;
 
       const [result] = await connection.execute(query, [documentId]) as [RowDataPacket[], any];
-      
+
       if (result.length === 0) {
         return NextResponse.json(
           { error: 'Document not found' },
@@ -53,15 +53,18 @@ export async function GET(request: NextRequest) {
       try {
         // Attempt to read the file (this would work if the volume is mounted)
         const fileBuffer = await readFile(fullFilePath);
-        
+
         // Set appropriate headers for file download
         const headers = new Headers();
         headers.set('Content-Type', document.mime_type || 'application/octet-stream');
         headers.set('Content-Disposition', `attachment; filename="${document.original_name}"`);
         headers.set('Content-Length', document.file_size.toString());
         headers.set('X-Document-User', document.user_name);
-        
-        return new NextResponse(fileBuffer, {
+
+        // Convert Buffer to Uint8Array for NextResponse
+        const uint8Array = new Uint8Array(fileBuffer);
+
+        return new NextResponse(uint8Array, {
           status: 200,
           headers
         });
@@ -69,7 +72,7 @@ export async function GET(request: NextRequest) {
       } catch (fileError) {
         // If file cannot be read, return metadata with download instructions
         console.error('File read error:', fileError);
-        
+
         return NextResponse.json({
           error: 'File not accessible',
           message: 'Document exists in database but file cannot be accessed',

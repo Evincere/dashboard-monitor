@@ -34,7 +34,7 @@ let commentsStore: CommentResponse[] = [];
 export async function POST(request: NextRequest) {
   try {
     const body: CommentRequest = await request.json();
-    
+
     const { userId, dni, documentId, comment, commentType, isPublic = false, validatedBy } = body;
 
     // Validar que tengamos el identificador del usuario
@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
     // Si tenemos DNI pero no userId, buscar el usuario
     if (!targetUserId && dni) {
       const postulantResponse = await backendClient.getPostulantByDni(dni);
-      
+
       if (!postulantResponse.success || !postulantResponse.data?.user) {
         return NextResponse.json({
           success: false,
@@ -70,17 +70,17 @@ export async function POST(request: NextRequest) {
           timestamp: new Date().toISOString()
         }, { status: 404 });
       }
-      
+
       targetUserId = postulantResponse.data.user.id;
     }
 
     // Si se especifica un documento, verificar que existe
     if (documentId) {
-      const documentsResponse = await backendClient.getDocuments({ 
+      const documentsResponse = await backendClient.getDocuments({
         usuarioId: targetUserId,
         size: 100
       });
-      
+
       if (!documentsResponse.success) {
         console.error('Error fetching user documents:', documentsResponse.error);
         return NextResponse.json({
@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
 
       const userDocuments = documentsResponse.data?.content || [];
       const documentExists = userDocuments.some(doc => doc.id === documentId);
-      
+
       if (!documentExists) {
         return NextResponse.json({
           success: false,
@@ -100,6 +100,11 @@ export async function POST(request: NextRequest) {
           timestamp: new Date().toISOString()
         }, { status: 404 });
       }
+    }
+
+    // Verificar que tenemos el ID del usuario
+    if (!targetUserId) {
+      throw new Error('Target user ID is required but was not found');
     }
 
     // Crear el comentario
@@ -120,7 +125,11 @@ export async function POST(request: NextRequest) {
     console.log(`💬 Comment added successfully: ${newComment.id}`);
 
     // Obtener estado actualizado del postulante
-    const updatedPostulantResponse = await backendClient.getPostulantByDni(dni || targetUserId);
+    if (!targetUserId) {
+      throw new Error('Target user ID is required but was not found');
+    }
+
+    const updatedPostulantResponse = await backendClient.getPostulantByDni(targetUserId);
     const updatedPostulant = updatedPostulantResponse.data;
 
     return NextResponse.json({
@@ -135,7 +144,7 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Comment API error:', error);
-    
+
     return NextResponse.json({
       success: false,
       error: 'Failed to add comment',
@@ -158,7 +167,7 @@ export async function GET(request: NextRequest) {
     // Si tenemos DNI pero no userId, buscar el usuario
     if (!targetUserId && dni) {
       const postulantResponse = await backendClient.getPostulantByDni(dni);
-      
+
       if (!postulantResponse.success || !postulantResponse.data?.user) {
         return NextResponse.json({
           success: false,
@@ -166,7 +175,7 @@ export async function GET(request: NextRequest) {
           timestamp: new Date().toISOString()
         }, { status: 404 });
       }
-      
+
       targetUserId = postulantResponse.data.user.id;
     }
 
@@ -205,7 +214,7 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error('Get comments API error:', error);
-    
+
     return NextResponse.json({
       success: false,
       error: 'Failed to fetch comments',

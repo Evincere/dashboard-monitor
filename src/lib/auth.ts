@@ -1,10 +1,12 @@
 // src/lib/auth.ts
 import * as jwt from 'jsonwebtoken';
+import type { SignOptions } from 'jsonwebtoken';
 import * as bcrypt from 'bcryptjs';
 import { z } from 'zod';
 
 // JWT Configuration
-const JWT_SECRET = process.env.JWT_SECRET;
+// Asegurarnos de que JWT_SECRET es string
+const JWT_SECRET = process.env.JWT_SECRET as string;
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
 const REFRESH_TOKEN_EXPIRES_IN = process.env.REFRESH_TOKEN_EXPIRES_IN || '7d';
 
@@ -57,24 +59,26 @@ export const verifyPassword = async (password: string, hashedPassword: string): 
 
 // JWT token utilities
 export const generateAccessToken = (payload: Omit<JWTPayload, 'iat' | 'exp'>): string => {
-    return jwt.sign(payload, JWT_SECRET, {
-        expiresIn: JWT_EXPIRES_IN,
+    const signOptions: jwt.SignOptions = {
+        expiresIn: JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'],
         issuer: 'dashboard-monitor',
         audience: 'mpd-concursos'
-    });
+    };
+    return jwt.sign(payload, Buffer.from(JWT_SECRET), signOptions);
 };
 
 export const generateRefreshToken = (userId: string): string => {
-    return jwt.sign({ userId, type: 'refresh' }, JWT_SECRET, {
-        expiresIn: REFRESH_TOKEN_EXPIRES_IN,
+    const signOptions: jwt.SignOptions = {
+        expiresIn: REFRESH_TOKEN_EXPIRES_IN as jwt.SignOptions['expiresIn'],
         issuer: 'dashboard-monitor',
         audience: 'mpd-concursos'
-    });
+    };
+    return jwt.sign({ userId, type: 'refresh' }, Buffer.from(JWT_SECRET), signOptions);
 };
 
 export const verifyAccessToken = (token: string): JWTPayload | null => {
     try {
-        const decoded = jwt.verify(token, JWT_SECRET, {
+        const decoded = jwt.verify(token, Buffer.from(JWT_SECRET), {
             issuer: 'dashboard-monitor',
             audience: 'mpd-concursos'
         }) as JWTPayload;
@@ -87,7 +91,7 @@ export const verifyAccessToken = (token: string): JWTPayload | null => {
 
 export const verifyRefreshToken = (token: string): { userId: string } | null => {
     try {
-        const decoded = jwt.verify(token, JWT_SECRET, {
+        const decoded = jwt.verify(token, Buffer.from(JWT_SECRET), {
             issuer: 'dashboard-monitor',
             audience: 'mpd-concursos'
         }) as any;

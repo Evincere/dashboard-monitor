@@ -8,7 +8,7 @@ export async function GET() {
       port: process.env.DB_PORT,
       database: process.env.DB_DATABASE
     });
-    
+
     // Simple connection test using env vars
     const connection = await mysql.createConnection({
       host: process.env.DB_HOST || '127.0.0.1',
@@ -20,23 +20,23 @@ export async function GET() {
     });
 
     console.log('[TEST-DB] Connection created, testing query...');
-    
-    const [result] = await connection.execute('SELECT COUNT(*) as user_count FROM user_entity');
-    
+
+    const [rows] = await connection.execute<mysql.RowDataPacket[]>('SELECT COUNT(*) as user_count FROM user_entity');
+
     await connection.end();
-    
-    console.log('[TEST-DB] Query successful:', result);
+
+    console.log('[TEST-DB] Query successful:', rows);
 
     return NextResponse.json({
       success: true,
       message: 'Conexión exitosa',
-      result: result[0],
+      result: rows[0],
       timestamp: new Date().toISOString()
     });
 
   } catch (error: any) {
     console.error('[TEST-DB] Connection failed:', error);
-    
+
     return NextResponse.json({
       success: false,
       message: 'Error al conectar con la base de datos',

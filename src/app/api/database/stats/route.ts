@@ -65,8 +65,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
       const [documentsStatsResult] = await connection.query(documentsStatsQuery) as [RowDataPacket[], any];
 
+      interface BackupInfo {
+        lastBackup: string;
+        recentBackups: Array<{
+          date: string;
+          size: string;
+        }>;
+      }
+
       // Get backup information (from actual backup tables if they exist)
-      let backupInfo = {
+      let backupInfo: BackupInfo = {
         lastBackup: 'No disponible',
         recentBackups: []
       };
@@ -133,7 +141,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   } catch (error) {
     console.error('Database stats API error:', error);
-    
+
     // Return fallback data in case of error
     return NextResponse.json({
       success: false,

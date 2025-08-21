@@ -32,7 +32,7 @@ function getContentType(filePath: string): string {
     '.txt': 'text/plain',
     '.rtf': 'application/rtf'
   };
-  
+
   return contentTypes[ext] || 'application/octet-stream';
 }
 
@@ -50,7 +50,7 @@ export async function GET(
     const dni = params.dni;
     const fileName = searchParams.get('file');
     const download = searchParams.get('download') === 'true';
-    
+
     if (!dni) {
       return NextResponse.json({
         success: false,
@@ -60,7 +60,7 @@ export async function GET(
     }
 
     // Obtener el path base de documentos desde variables de entorno
-    const documentsBasePath = process.env.DOCUMENTS_PATH || 
+    const documentsBasePath = process.env.DOCUMENTS_PATH ||
       'B:/concursos_situacion_post_gracia/descarga_administracion_20250814_191745/documentos';
 
     console.log(`📄 Fetching documents for DNI: ${dni}, fileName: ${fileName || 'all'}`);
@@ -185,7 +185,7 @@ export async function GET(
 
       console.log(`📄 Serving document: ${fileName} (${stats.size} bytes, ${contentType})`);
 
-      return new NextResponse(fileBuffer, {
+      return new NextResponse(new Blob([new Uint8Array(fileBuffer)]), {
         status: 200,
         headers
       });
@@ -202,7 +202,7 @@ export async function GET(
 
   } catch (error) {
     console.error('Documents API error:', error);
-    
+
     return NextResponse.json({
       success: false,
       error: 'Failed to process document request',

@@ -2,9 +2,9 @@
 
 import { apiUrl, routeUrl, fullRouteUrl } from "@/lib/utils";
 import { useState, useEffect } from 'react';
-import { 
+import {
   Users,
-  Search, 
+  Search,
   Filter,
   RefreshCw,
   CheckCircle,
@@ -98,7 +98,7 @@ export default function PostulationsManagementPage() {
         headers: { 'Content-Type': 'application/json' },
         signal: AbortSignal.timeout(45000) // 30 seconds
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
@@ -118,33 +118,33 @@ export default function PostulationsManagementPage() {
     } else {
       setIsLoadingMore(true);
     }
-    
+
     try {
       const params = new URLSearchParams({
         page: page.toString(),
         pageSize: pageSize.toString()
       });
-      
+
       const response = await fetch(apiUrl(`postulations/management?${params}`), {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
         signal: AbortSignal.timeout(60000) // 60 seconds for document processing
       });
-      
+
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`Failed to fetch postulations: ${response.status} ${response.statusText} - ${errorText}`);
       }
-      
+
       const data = await response.json();
-      
+
       if (!data.success) {
         throw new Error(`API returned error: ${data.error || 'Unknown error'}`);
       }
-      
+
       const newPostulations = data.postulations || [];
       console.log("🔄 Received postulations:", newPostulations.length, "first:", newPostulations[0]);
-      
+
       if (append) {
         // Append to existing data (infinite scroll)
         setPostulations(prev => [...prev, ...newPostulations]);
@@ -152,22 +152,23 @@ export default function PostulationsManagementPage() {
         // Replace data (new search/filter)
         setPostulations(newPostulations);
       }
-      
+
       setStats(data.stats || null);
       setCurrentPage(page);
-      
+
       if (data.pagination) {
         setTotalPages(data.pagination.totalPages);
       }
-      
+
       // Apply filters to ALL loaded postulations
       const allPostulations = append ? [...postulations, ...newPostulations] : newPostulations;
       applyFilters(allPostulations, statusFilter, validationFilter, circunscripcionFilter, searchTerm, sortBy);
-      
+
     } catch (error) {
       console.error('Error fetching postulations:', error);
-      
-      if (error.name !== 'AbortError') {
+
+      // Verificamos que el error sea una instancia de Error
+      if (error instanceof Error && error.name !== 'AbortError') {
         toast({
           title: 'Error',
           description: `No se pudieron cargar las postulaciones: ${error.message}`,
@@ -231,7 +232,7 @@ export default function PostulationsManagementPage() {
     // Search filter
     if (search.trim()) {
       const searchLower = search.toLowerCase();
-      filtered = filtered.filter(post => 
+      filtered = filtered.filter(post =>
         post.user.dni.toLowerCase().includes(searchLower) ||
         post.user.fullName.toLowerCase().includes(searchLower) ||
         post.user.email.toLowerCase().includes(searchLower)
@@ -264,7 +265,7 @@ export default function PostulationsManagementPage() {
     console.log('🚀 Iniciando carga de postulaciones...');
     // Cargar estadísticas primero
     fetchStats();
-    
+
     // Cargar TODAS las postulaciones directamente
     setTimeout(() => {
       console.log('📡 Cargando todas las postulaciones...');
@@ -346,8 +347,8 @@ export default function PostulationsManagementPage() {
               Administre y valide las postulaciones al concurso de manera organizada
             </p>
           </div>
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             onClick={() => {
               // Reset pagination and filters
               setCurrentPage(1);
@@ -517,7 +518,7 @@ export default function PostulationsManagementPage() {
               Postulaciones ({filteredPostulations.length})
             </span>
           </div>
-          
+
           {filteredPostulations.length > 0 && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <div className="flex items-center gap-1">
@@ -557,13 +558,13 @@ export default function PostulationsManagementPage() {
                 <PostulationCard
                   key={postulation.id}
                   postulation={postulation}
-                onClick={() => {
-                  // Navigate directly to document validation (bypassing the intermediate documents view)
-                  window.location.href = fullRouteUrl(`postulations/${postulation.user.dni}/documents/validation`);
-                }}
+                  onClick={() => {
+                    // Navigate directly to document validation (bypassing the intermediate documents view)
+                    window.location.href = fullRouteUrl(`postulations/${postulation.user.dni}/documents/validation`);
+                  }}
                 />
               ))}
-              
+
               {/* Load More Button */}
               {currentPage < totalPages && (
                 <div className="text-center py-6">
@@ -589,7 +590,7 @@ export default function PostulationsManagementPage() {
                   </Button>
                 </div>
               )}
-              
+
               {/* Información de paginación */}
               {postulations.length > 0 && (
                 <div className="text-center py-4 text-sm text-muted-foreground">

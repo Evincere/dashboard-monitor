@@ -5,6 +5,69 @@
  */
 
 import mysql from 'mysql2/promise';
+import { RowDataPacket, ResultSetHeader } from 'mysql2';
+
+/**
+ * Details of a database column
+ */
+export interface ColumnDetails {
+  name: string;
+  type: string;
+  nullable: boolean;
+  defaultValue?: string;
+  isPrimary: boolean;
+  isUnique: boolean;
+  comment?: string;
+}
+
+/**
+ * Details of a table index
+ */
+export interface IndexDetails {
+  name: string;
+  table: string;
+  columns: string[];
+  isUnique: boolean;
+  type: 'BTREE' | 'HASH' | 'FULLTEXT' | 'SPATIAL';
+}
+
+/**
+ * Details of a foreign key constraint
+ */
+export interface ForeignKey {
+  name: string;
+  fromTable: string;
+  fromColumns: string[];
+  toTable: string;
+  toColumns: string[];
+  onDelete?: string;
+  onUpdate?: string;
+}
+
+/**
+ * Details of a database table
+ */
+export interface TableDetails {
+  name: string;
+  columns: ColumnDetails[];
+  primaryKey?: string[];
+  engine?: string;
+  comment?: string;
+  // Size information
+  dataLength?: number | null;
+  indexLength?: number | null;
+  avgRowLength?: number | null;
+  rowCount?: number | null;
+}
+
+/**
+ * Complete schema details
+ */
+export interface SchemaDetails {
+  tables: TableDetails[];
+  foreignKeys: ForeignKey[];
+  indexes: IndexDetails[];
+}
 
 let pool: mysql.Pool | null = null;
 
@@ -19,12 +82,12 @@ function getConnectionPool(): mysql.Pool {
       user: process.env.DB_USER || 'root',
       password: process.env.DB_PASSWORD || 'root1234',
       database: process.env.DB_DATABASE || 'mpd_concursos',
-      
+
       // Only use valid MySQL2 options
       connectionLimit: 10,
       waitForConnections: true,
       queueLimit: 0,
-      
+
       // Basic settings
       multipleStatements: false,
       dateStrings: false,
@@ -41,9 +104,11 @@ function getConnectionPool(): mysql.Pool {
 
     pool = mysql.createPool(poolConfig);
 
-    // Basic error handling
-    pool.on('error', (err) => {
-      console.error('[DB] Pool error:', err);
+    // Error handling through process events since Pool doesn't expose error event
+    process.on('uncaughtException', (err) => {
+      if (err.message.includes('mysql')) {
+        console.error('[DB] Pool error:', err);
+      }
     });
   }
   return pool;
@@ -63,7 +128,7 @@ export async function getDatabaseConnection(): Promise<mysql.PoolConnection> {
 export async function executeQuery(query: string, params?: any[]): Promise<any> {
   const connectionPool = getConnectionPool();
   const connection = await connectionPool.getConnection();
-  
+
   try {
     const result = await connection.execute(query, params);
     return result;
@@ -78,18 +143,28 @@ export async function executeQuery(query: string, params?: any[]): Promise<any> 
 /**
  * Test database connection
  */
-export async function testDatabaseConnection(): Promise<any> {
+interface TestQueryResult extends RowDataPacket {
+  test: number;
+  current_time: Date;
+  database_name: string;
+}
+
+export async function testDatabaseConnection(): Promise<{
+  connection: string;
+  test_query: TestQueryResult;
+}> {
   try {
     const connectionPool = getConnectionPool();
     const connection = await connectionPool.getConnection();
-    
-    const [result] = await connection.execute('SELECT 1 as test, NOW() as current_time, DATABASE() as database_name');
-    
+
+    // The result will be a tuple of [rows, fields]
+    const [rows] = await connection.execute<(TestQueryResult & RowDataPacket)[]>('SELECT 1 as test, NOW() as current_time, DATABASE() as database_name');
+
     connection.release();
-    
+
     return {
       connection: 'successful',
-      test_query: result[0]
+      test_query: rows[0]
     };
   } catch (error) {
     console.error('[DB] Database connection test failed:', error);

@@ -85,6 +85,7 @@ interface PostulantInfo {
     dni: string;
     fullName: string;
     email: string;
+    telefono?: string;
   };
   inscription: {
     id: string;
@@ -93,8 +94,18 @@ interface PostulantInfo {
     createdAt: string;
   };
   contest: {
+    id: number;
     title: string;
+    category: string;
     position: string;
+    department: string;
+    contestClass: string;
+    status: string;
+    statusDescription: string;
+    inscriptionStartDate: string;
+    inscriptionEndDate: string;
+    dependency?: string;
+    location?: string;
   };
 }
 
@@ -194,8 +205,7 @@ export default function DocumentValidationPage() {
               p.state === "COMPLETED_WITH_DOCS" || p.state === "PENDING";
 
             console.log(
-              `📝 Postulante ${p.userInfo?.fullName || "N/A"} (${
-                p.userInfo?.dni || "N/A"
+              `📝 Postulante ${p.userInfo?.fullName || "N/A"} (${p.userInfo?.dni || "N/A"
               }): estado=${p.state}, necesitaValidación=${needsValidation}`
             );
 
@@ -283,9 +293,8 @@ export default function DocumentValidationPage() {
       console.error("Error fetching validation data:", error);
       toast({
         title: "Error",
-        description: `No se pudieron cargar los documentos: ${
-          error instanceof Error ? error.message : "Error desconocido"
-        }`,
+        description: `No se pudieron cargar los documentos: ${error instanceof Error ? error.message : "Error desconocido"
+          }`,
         variant: "destructive",
       });
     } finally {
@@ -484,21 +493,21 @@ export default function DocumentValidationPage() {
   // Helper function to navigate to next postulant - UPDATED WITH FRESH BACKEND QUERY
   const navigateToNextPostulant = async () => {
     console.log("🚀 navigateToNextPostulant called - usando consulta fresca");
-    
+
     try {
       // Obtener lista fresca directamente del backend (igual lógica que el modal)
       console.log("🔄 Obteniendo lista fresca de postulantes...");
       const response = await fetch(apiUrl("backend/inscriptions?size=1000"));
-      
+
       if (!response.ok) {
         throw new Error(`HTTP ${response.status} al obtener postulantes`);
       }
-      
+
       const result = await response.json();
       if (!result.success || !result.data || !result.data.content) {
         throw new Error("No se pudieron obtener postulantes del backend");
       }
-      
+
       // Filtrar postulantes que necesiten validación (igual que fetchAllPostulantsList)
       const needsValidation = result.data.content.filter((p: any) => {
         return (
@@ -507,9 +516,9 @@ export default function DocumentValidationPage() {
           (p.state === "COMPLETED_WITH_DOCS" || p.state === "PENDING")
         );
       });
-      
+
       console.log(`📊 Postulantes que necesitan validación: ${needsValidation.length}`);
-      
+
       if (needsValidation.length === 0) {
         console.log("❌ No hay postulantes pendientes de validación");
         toast({
@@ -519,7 +528,7 @@ export default function DocumentValidationPage() {
         setTimeout(() => router.push(routeUrl("postulations")), 2000);
         return;
       }
-      
+
       // Ordenar y extraer DNIs (igual lógica que el modal)
       const sortedDnis = needsValidation
         .sort((a: any, b: any) =>
@@ -528,14 +537,14 @@ export default function DocumentValidationPage() {
             .localeCompare(b.userInfo.fullName.toLowerCase(), "es")
         )
         .map((p: any) => p.userInfo.dni);
-      
+
       console.log("📝 Lista fresca ordenada:", sortedDnis.slice(0, 3), "...");
       console.log("🔍 DNI actual:", dni);
-      
+
       // Encontrar el índice del postulante actual
       const currentIndex = sortedDnis.indexOf(dni);
       console.log("📍 Índice actual:", currentIndex);
-      
+
       if (currentIndex === -1) {
         // Postulante actual no está en la lista (ya procesado)
         console.log("🔍 Postulante actual no está en lista, navegando al primero disponible");
@@ -555,7 +564,7 @@ export default function DocumentValidationPage() {
         // Postulante actual está en la lista, ir al siguiente
         const nextIndex = currentIndex + 1;
         console.log(`⏭️ Siguiente índice: ${nextIndex}/${sortedDnis.length}`);
-        
+
         if (nextIndex < sortedDnis.length) {
           const nextPostulant = sortedDnis[nextIndex];
           console.log(`✅ Navegando al siguiente postulante: ${nextPostulant}`);
@@ -1106,13 +1115,13 @@ export default function DocumentValidationPage() {
     const updatedDocuments = documents.map((doc) =>
       doc.id === currentDocument.id
         ? {
-            ...doc,
-            validationStatus: "PENDING" as const,
-            validatedAt: undefined,
-            validatedBy: undefined,
-            comments: undefined,
-            rejectionReason: undefined,
-          }
+          ...doc,
+          validationStatus: "PENDING" as const,
+          validatedAt: undefined,
+          validatedBy: undefined,
+          comments: undefined,
+          rejectionReason: undefined,
+        }
         : doc
     );
 
@@ -1212,44 +1221,44 @@ export default function DocumentValidationPage() {
                     postulant.inscription.state === "APPROVED"
                       ? "default"
                       : postulant.inscription.state === "REJECTED"
-                      ? "destructive"
-                      : postulant.inscription.state === "PENDING"
-                      ? "secondary"
-                      : "outline"
+                        ? "destructive"
+                        : postulant.inscription.state === "PENDING"
+                          ? "secondary"
+                          : "outline"
                   }
                 >
                   {postulant.inscription.state}
                 </Badge>
                 {(postulant.inscription.state === "APPROVED" ||
                   postulant.inscription.state === "REJECTED") && (
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="outline" size="sm" className="gap-1">
-                        <RefreshCw className="w-4 h-4" />
-                        Revertir a Pendiente
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>
-                          ¿Revertir Estado de Postulación?
-                        </AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Esta acción revertirá el estado de la postulación de "
-                          {postulant.inscription.state}" a "PENDING", permitiendo
-                          una nueva evaluación administrativa. Esta acción se
-                          registrará en el historial.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction onClick={revertPostulationState}>
-                          Confirmar Reversión
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                )}
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="outline" size="sm" className="gap-1">
+                          <RefreshCw className="w-4 h-4" />
+                          Revertir a Pendiente
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>
+                            ¿Revertir Estado de Postulación?
+                          </AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Esta acción revertirá el estado de la postulación de "
+                            {postulant.inscription.state}" a "PENDING", permitiendo
+                            una nueva evaluación administrativa. Esta acción se
+                            registrará en el historial.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction onClick={revertPostulationState}>
+                            Confirmar Reversión
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
               </div>
             </div>
           </div>
@@ -1273,9 +1282,8 @@ export default function DocumentValidationPage() {
       <div className="flex-1 flex overflow-hidden">
         {/* Left Panel - Document List (Collapsible) */}
         <div
-          className={`bg-card border-r border-border overflow-y-auto transition-all duration-300 ${
-            isSidebarCollapsed ? "w-16" : "w-80"
-          }`}
+          className={`bg-card border-r border-border overflow-y-auto transition-all duration-300 ${isSidebarCollapsed ? "w-16" : "w-80"
+            }`}
         >
           <div className="flex items-center justify-between p-3 border-b border-border">
             {!isSidebarCollapsed && (
@@ -1319,11 +1327,10 @@ export default function DocumentValidationPage() {
                 <button
                   key={doc.id}
                   onClick={() => setCurrentDocument(doc)}
-                  className={`w-full p-2 rounded transition-colors ${
-                    doc.id === currentDocument?.id
+                  className={`w-full p-2 rounded transition-colors ${doc.id === currentDocument?.id
                       ? "bg-primary text-primary-foreground"
                       : "hover:bg-muted"
-                  }`}
+                    }`}
                   title={doc.originalName || doc.fileName}
                 >
                   {doc.validationStatus === "APPROVED" ? (
@@ -1341,9 +1348,8 @@ export default function DocumentValidationPage() {
 
         {/* Center Panel - Document Viewer */}
         <div
-          className={`bg-muted flex-1 transition-all duration-300 ${
-            isFullscreen ? "fixed inset-0 z-50" : ""
-          }`}
+          className={`bg-muted flex-1 transition-all duration-300 ${isFullscreen ? "fixed inset-0 z-50" : ""
+            }`}
         >
           <DocumentViewer
             document={currentDocument}
@@ -1582,11 +1588,10 @@ function DocumentListItem({
   return (
     <div
       onClick={onClick}
-      className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-md ${
-        isActive
+      className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-md ${isActive
           ? "ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20"
           : statusColor
-      }`}
+        }`}
     >
       <div className="flex items-start gap-3">
         <div className="flex-shrink-0 mt-0.5">{statusIcon}</div>
@@ -1825,59 +1830,59 @@ function ValidationPanel({
       {(document.validatedBy ||
         document.comments ||
         document.rejectionReason) && (
-        <div className="p-6 border-b border-border">
-          <h3 className="font-semibold text-card-foreground mb-4 flex items-center gap-2">
-            <Calendar className="w-5 h-5" />
-            Validación Anterior
-          </h3>
+          <div className="p-6 border-b border-border">
+            <h3 className="font-semibold text-card-foreground mb-4 flex items-center gap-2">
+              <Calendar className="w-5 h-5" />
+              Validación Anterior
+            </h3>
 
-          <div className="space-y-3">
-            {document.validatedBy && (
-              <div>
-                <div className="text-sm font-medium text-muted-foreground">
-                  Validado por:
+            <div className="space-y-3">
+              {document.validatedBy && (
+                <div>
+                  <div className="text-sm font-medium text-muted-foreground">
+                    Validado por:
+                  </div>
+                  <div className="text-sm text-card-foreground">
+                    {document.validatedBy}
+                  </div>
                 </div>
-                <div className="text-sm text-card-foreground">
-                  {document.validatedBy}
-                </div>
-              </div>
-            )}
+              )}
 
-            {document.validatedAt && (
-              <div>
-                <div className="text-sm font-medium text-muted-foreground">
-                  Fecha:
+              {document.validatedAt && (
+                <div>
+                  <div className="text-sm font-medium text-muted-foreground">
+                    Fecha:
+                  </div>
+                  <div className="text-sm text-card-foreground">
+                    {new Date(document.validatedAt).toLocaleString("es-ES")}
+                  </div>
                 </div>
-                <div className="text-sm text-card-foreground">
-                  {new Date(document.validatedAt).toLocaleString("es-ES")}
-                </div>
-              </div>
-            )}
+              )}
 
-            {document.rejectionReason && (
-              <div>
-                <div className="text-sm font-medium text-muted-foreground">
-                  Motivo de rechazo:
+              {document.rejectionReason && (
+                <div>
+                  <div className="text-sm font-medium text-muted-foreground">
+                    Motivo de rechazo:
+                  </div>
+                  <div className="text-sm text-red-700 dark:text-red-400">
+                    {document.rejectionReason}
+                  </div>
                 </div>
-                <div className="text-sm text-red-700 dark:text-red-400">
-                  {document.rejectionReason}
-                </div>
-              </div>
-            )}
+              )}
 
-            {document.comments && (
-              <div>
-                <div className="text-sm font-medium text-muted-foreground">
-                  Comentarios:
+              {document.comments && (
+                <div>
+                  <div className="text-sm font-medium text-muted-foreground">
+                    Comentarios:
+                  </div>
+                  <div className="text-sm text-card-foreground">
+                    {document.comments}
+                  </div>
                 </div>
-                <div className="text-sm text-card-foreground">
-                  {document.comments}
-                </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
       {/* Validation Actions */}
       <div className="flex-1 p-6">
@@ -1998,11 +2003,10 @@ function ValidationPanel({
 
             <div className="text-center py-6">
               <div
-                className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg mb-4 ${
-                  document.validationStatus === "APPROVED"
+                className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg mb-4 ${document.validationStatus === "APPROVED"
                     ? "bg-emerald-100 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400"
                     : "bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400"
-                }`}
+                  }`}
               >
                 {document.validationStatus === "APPROVED" ? (
                   <CheckCircle className="w-5 h-5" />

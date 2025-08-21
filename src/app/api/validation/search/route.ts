@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
         users: usersResponse.error,
         inscriptions: inscriptionsResponse.error
       });
-      
+
       // Return empty results with fallback message
       return NextResponse.json({
         success: true,
@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
 
     // Get eligible inscriptions - estados que requieren validación
     const validationStates = ['COMPLETED_WITH_DOCS', 'PENDING', 'APPROVED', 'REJECTED'];
-    const eligibleInscriptions = inscriptionsData.filter((inscription: any) => 
+    const eligibleInscriptions = inscriptionsData.filter((inscription: any) =>
       validationStates.includes(inscription.status || inscription.state)
     );
 
@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
 
     // Filter eligible users and perform manual search
     const searchTermLower = query.toLowerCase();
-    const filteredUsers = usersData.filter((user: any) => 
+    const filteredUsers = usersData.filter((user: any) =>
       eligibleUserIds.has(user.id) && (
         user.dni?.toLowerCase().includes(searchTermLower) ||
         user.fullName?.toLowerCase().includes(searchTermLower) ||
@@ -65,20 +65,12 @@ export async function GET(request: NextRequest) {
     );
 
     // Combine with inscription data and format results
-    const results = filteredUsers.slice(0, limit).map((user: any) => {
+    const results = await Promise.all(filteredUsers.slice(0, limit).map(async (user: any) => {
       const inscription = eligibleInscriptions.find((ins: any) => ins.userId === user.id);
-      
-      // Map contest info
-      const contestInfo = {
-        title: inscription?.contest?.title || 'Concurso Multifuero MPD',
-        position: inscription?.contest?.position || 'Magistrado/a'
-      };
 
-      // Map circunscripcion from contest or inscription
+      // Map circunscripcion from inscription
       let circunscripcion = 'NO_ESPECIFICADA';
-      if (inscription?.contest?.circunscripcion) {
-        circunscripcion = inscription.contest.circunscripcion;
-      } else if (inscription?.centroDeVida) {
+      if (inscription?.centroDeVida) {
         // Try to map centroDeVida to circunscripcion
         const centro = inscription.centroDeVida.toLowerCase();
         if (centro.includes('primera')) circunscripcion = 'PRIMERA_CIRCUNSCRIPCION';
@@ -95,6 +87,12 @@ export async function GET(request: NextRequest) {
       else if (inscriptionState === 'REJECTED') validationStatus = 'REJECTED';
       else if (inscriptionState === 'IN_REVIEW') validationStatus = 'IN_REVIEW';
 
+      // Map contest info from contestInfo or defaults
+      const contestInfo = {
+        title: inscription?.contestInfo?.title || 'Concurso Multifuero MPD',
+        position: inscription?.contestInfo?.position || 'Magistrado/a'
+      };
+
       return {
         dni: user.dni,
         fullName: user.fullName || `${user.firstName || ''} ${user.lastName || ''}`.trim(),
@@ -103,7 +101,7 @@ export async function GET(request: NextRequest) {
         validationStatus,
         contestInfo
       };
-    });
+    }));
 
     console.log(`✅ Search found ${results.length} results for query: "${query}"`);
 
@@ -117,7 +115,7 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error('Search API error:', error);
-    
+
     // Return empty results with error message
     return NextResponse.json({
       success: true,

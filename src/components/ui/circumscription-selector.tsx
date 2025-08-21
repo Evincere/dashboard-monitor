@@ -22,10 +22,10 @@ import { Checkbox } from '@/components/ui/checkbox';
 
 // Estructura de circunscripciones MPD
 const CIRCUMSCRIPTION_STRUCTURE = {
-  'PRIMERA': { 
-    label: 'Primera Circunscripción', 
+  'PRIMERA': {
+    label: 'Primera Circunscripción',
     value: 'PRIMERA CIRCUNSCRIPCIÓN',
-    subdivisions: [] 
+    subdivisions: []
   },
   'SEGUNDA': {
     label: 'Segunda Circunscripción',
@@ -36,15 +36,15 @@ const CIRCUMSCRIPTION_STRUCTURE = {
       { id: 'malargue', label: 'Malargüe', value: 'SEGUNDA CIRCUNSCRIPCIÓN - Malargüe' }
     ]
   },
-  'TERCERA': { 
-    label: 'Tercera Circunscripción', 
+  'TERCERA': {
+    label: 'Tercera Circunscripción',
     value: 'TERCERA CIRCUNSCRIPCIÓN',
-    subdivisions: [] 
+    subdivisions: []
   },
-  'CUARTA': { 
-    label: 'Cuarta Circunscripción', 
+  'CUARTA': {
+    label: 'Cuarta Circunscripción',
     value: 'CUARTA CIRCUNSCRIPCIÓN',
-    subdivisions: [] 
+    subdivisions: []
   }
 };
 
@@ -76,7 +76,7 @@ export function CircunscriptionSelector({
     const newValue = isSelected(circumscriptionValue)
       ? value.filter(v => v !== circumscriptionValue)
       : [...value, circumscriptionValue];
-    
+
     onChange(newValue);
   };
 
@@ -84,12 +84,12 @@ export function CircunscriptionSelector({
   const handleMainCircunscriptionToggle = (key: string) => {
     const circumscription = CIRCUMSCRIPTION_STRUCTURE[key as keyof typeof CIRCUMSCRIPTION_STRUCTURE];
     const mainValue = circumscription.value;
-    
+
     if (key === 'SEGUNDA') {
       // Para Segunda Circunscripción, manejamos las subdivisiones
       const subdivisionValues = circumscription.subdivisions.map(sub => sub.value);
       const allSelected = isSelected(mainValue) && subdivisionValues.every(v => isSelected(v));
-      
+
       if (allSelected) {
         // Deseleccionar todo
         const newValue = value.filter(v => v !== mainValue && !subdivisionValues.includes(v));
@@ -106,15 +106,15 @@ export function CircunscriptionSelector({
   };
 
   // Función para obtener el estado de checkbox de la circunscripción principal
-  const getMainCheckboxState = (key: string) => {
+  const getMainCheckboxState = (key: string): 'checked' | 'unchecked' | 'indeterminate' => {
     const circumscription = CIRCUMSCRIPTION_STRUCTURE[key as keyof typeof CIRCUMSCRIPTION_STRUCTURE];
     const mainValue = circumscription.value;
-    
+
     if (key === 'SEGUNDA') {
       const subdivisionValues = circumscription.subdivisions.map(sub => sub.value);
       const mainSelected = isSelected(mainValue);
       const subdivisionSelected = subdivisionValues.filter(v => isSelected(v));
-      
+
       if (mainSelected && subdivisionSelected.length === subdivisionValues.length) {
         return 'checked';
       } else if (mainSelected || subdivisionSelected.length > 0) {
@@ -153,7 +153,7 @@ export function CircunscriptionSelector({
   const filteredCircunscriptions = Object.entries(CIRCUMSCRIPTION_STRUCTURE).filter(([key, circumscription]) => {
     const searchLower = searchValue.toLowerCase();
     return circumscription.label.toLowerCase().includes(searchLower) ||
-           circumscription.subdivisions.some(sub => sub.label.toLowerCase().includes(searchLower));
+      circumscription.subdivisions.some(sub => sub.label.toLowerCase().includes(searchLower));
   });
 
   return (
@@ -193,12 +193,7 @@ export function CircunscriptionSelector({
                     >
                       <Checkbox
                         checked={getMainCheckboxState(key) === 'checked'}
-                        ref={(el) => {
-                          if (el) {
-                            el.indeterminate = getMainCheckboxState(key) === 'indeterminate';
-                          }
-                        }}
-                        className="shrink-0"
+                        className="shrink-0 data-[state=indeterminate]:bg-primary"
                       />
                       <div className="flex-1">
                         <div className="font-medium">{circumscription.label}</div>
@@ -231,7 +226,7 @@ export function CircunscriptionSelector({
               </CommandGroup>
             </CommandList>
           </Command>
-          
+
           {/* Footer con opciones rápidas */}
           {value.length > 0 && (
             <div className="border-t p-2">
@@ -248,7 +243,7 @@ export function CircunscriptionSelector({
                   Limpiar
                 </Button>
               </div>
-              
+
               {/* Mostrar badges de selecciones */}
               {value.length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-2">
@@ -267,7 +262,7 @@ export function CircunscriptionSelector({
                         }
                       }
                     }
-                    
+
                     return (
                       <Badge
                         key={selected}

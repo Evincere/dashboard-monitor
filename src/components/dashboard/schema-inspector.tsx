@@ -204,7 +204,7 @@ export function SchemaInspector() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
           <div>
             <p className="text-sm font-medium">Rows</p>
-            <p className="text-2xl font-bold">{table.tableRows?.toLocaleString() || 'N/A'}</p>
+            <p className="text-2xl font-bold">{table.rowCount?.toLocaleString() || 'N/A'}</p>
           </div>
           <div>
             <p className="text-sm font-medium">Columns</p>
@@ -212,21 +212,21 @@ export function SchemaInspector() {
           </div>
           <div>
             <p className="text-sm font-medium">Data Size</p>
-            <p className="text-2xl font-bold">{formatBytes(table.dataLength)}</p>
+            <p className="text-2xl font-bold">{formatBytes(table.dataLength ?? null)}</p>
           </div>
           <div>
             <p className="text-sm font-medium">Index Size</p>
-            <p className="text-2xl font-bold">{formatBytes(table.indexLength)}</p>
+            <p className="text-2xl font-bold">{formatBytes(table.indexLength ?? null)}</p>
           </div>
         </div>
-        
+
         <Tabs defaultValue="columns" className="w-full">
           <TabsList>
             <TabsTrigger value="columns">Columns</TabsTrigger>
             <TabsTrigger value="indexes">Indexes</TabsTrigger>
             <TabsTrigger value="relations">Relations</TabsTrigger>
           </TabsList>
-          
+
           <TabsContent value="columns">
             <ScrollArea className="h-64">
               <div className="space-y-2">
@@ -235,8 +235,8 @@ export function SchemaInspector() {
                     <div>
                       <span className="font-medium">{column.name}</span>
                       <Badge variant="secondary" className="ml-2">{column.type}</Badge>
-                      {column.isAutoIncrement && <Badge variant="outline" className="ml-1">AUTO_INCREMENT</Badge>}
-                      {!column.isNullable && <Badge variant="outline" className="ml-1">NOT NULL</Badge>}
+                      {column.isPrimary && <Badge variant="outline" className="ml-1">PRIMARY</Badge>}
+                      {!column.nullable && <Badge variant="outline" className="ml-1">NOT NULL</Badge>}
                     </div>
                     <div className="text-sm text-muted-foreground">
                       {column.defaultValue && `Default: ${column.defaultValue}`}
@@ -246,17 +246,16 @@ export function SchemaInspector() {
               </div>
             </ScrollArea>
           </TabsContent>
-          
+
           <TabsContent value="indexes">
             <ScrollArea className="h-64">
               <div className="space-y-2">
-                {schema?.indexes.filter(idx => idx.tableName === table.name).map((index) => (
-                  <div key={index.indexName} className="flex items-center justify-between p-2 border rounded">
+                {schema?.indexes.filter(idx => idx.table === table.name).map((index) => (
+                  <div key={index.name} className="flex items-center justify-between p-2 border rounded">
                     <div>
-                      <span className="font-medium">{index.indexName}</span>
-                      {index.isPrimary && <Badge variant="default" className="ml-2">PRIMARY</Badge>}
-                      {index.isUnique && !index.isPrimary && <Badge variant="outline" className="ml-2">UNIQUE</Badge>}
-                      <Badge variant="secondary" className="ml-2">{index.indexType}</Badge>
+                      <span className="font-medium">{index.name}</span>
+                      {index.isUnique && <Badge variant="outline" className="ml-2">UNIQUE</Badge>}
+                      <Badge variant="secondary" className="ml-2">{index.type}</Badge>
                     </div>
                     <div className="text-sm text-muted-foreground">
                       {index.columns.join(', ')}
@@ -266,21 +265,21 @@ export function SchemaInspector() {
               </div>
             </ScrollArea>
           </TabsContent>
-          
+
           <TabsContent value="relations">
             <ScrollArea className="h-64">
               <div className="space-y-2">
                 {schema?.foreignKeys.filter(fk => fk.fromTable === table.name || fk.toTable === table.name).map((fk) => (
-                  <div key={fk.constraintName} className="flex items-center justify-between p-2 border rounded">
+                  <div key={fk.name} className="flex items-center justify-between p-2 border rounded">
                     <div>
-                      <span className="font-medium">{fk.constraintName}</span>
+                      <span className="font-medium">{fk.name}</span>
                       <div className="text-sm text-muted-foreground">
-                        {fk.fromTable}.{fk.fromColumn} → {fk.toTable}.{fk.toColumn}
+                        {fk.fromTable}.{fk.fromColumns.join(', ')} → {fk.toTable}.{fk.toColumns.join(', ')}
                       </div>
                     </div>
                     <div className="text-sm">
-                      <Badge variant="outline">ON UPDATE {fk.updateRule}</Badge>
-                      <Badge variant="outline" className="ml-1">ON DELETE {fk.deleteRule}</Badge>
+                      <Badge variant="outline">ON UPDATE {fk.onUpdate || 'RESTRICT'}</Badge>
+                      <Badge variant="outline" className="ml-1">ON DELETE {fk.onDelete || 'RESTRICT'}</Badge>
                     </div>
                   </div>
                 ))}
@@ -399,7 +398,7 @@ export function SchemaInspector() {
               <div>
                 <p className="text-sm font-medium">Hit Rate</p>
                 <p className="text-2xl font-bold text-blue-600">
-                  {cacheInfo.statistics.totalHits + cacheInfo.statistics.totalMisses > 0 
+                  {cacheInfo.statistics.totalHits + cacheInfo.statistics.totalMisses > 0
                     ? Math.round((cacheInfo.statistics.totalHits / (cacheInfo.statistics.totalHits + cacheInfo.statistics.totalMisses)) * 100)
                     : 0}%
                 </p>
@@ -452,8 +451,8 @@ export function SchemaInspector() {
                     {validation.issues.slice(0, 5).map((issue, index) => (
                       <div key={index} className="flex items-start gap-2 p-2 border rounded">
                         <Badge variant={
-                          issue.type === 'error' ? 'destructive' : 
-                          issue.type === 'warning' ? 'secondary' : 'outline'
+                          issue.type === 'error' ? 'destructive' :
+                            issue.type === 'warning' ? 'secondary' : 'outline'
                         }>
                           {issue.type}
                         </Badge>
@@ -537,11 +536,9 @@ export function SchemaInspector() {
       {/* Schema Details */}
       {schema && (
         <Tabs defaultValue="tables" className="w-full">
-          <TabsList>
-            <TabsTrigger value="tables">Tables ({schema.tables.length})</TabsTrigger>
-            <TabsTrigger value="views">Views ({schema.views.length})</TabsTrigger>
-            <TabsTrigger value="routines">Routines ({schema.routines.length})</TabsTrigger>
-            <TabsTrigger value="relationships">Relationships</TabsTrigger>
+          <TabsList className="w-full">
+            <TabsTrigger value="tables" className="flex-1">Tables ({schema.tables.length})</TabsTrigger>
+            <TabsTrigger value="relationships" className="flex-1">Relationships ({schema.foreignKeys.length})</TabsTrigger>
           </TabsList>
 
           <TabsContent value="tables">
@@ -550,98 +547,26 @@ export function SchemaInspector() {
             </div>
           </TabsContent>
 
-          <TabsContent value="views">
-            <div className="space-y-4">
-              {schema.views.map((view) => (
-                <Card key={view.name}>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Eye className="h-4 w-4" />
-                      {view.name}
-                    </CardTitle>
-                    <div className="flex gap-2">
-                      <Badge variant={view.isUpdatable ? "default" : "secondary"}>
-                        {view.isUpdatable ? "Updatable" : "Read-only"}
-                      </Badge>
-                      <Badge variant="outline">{view.securityType}</Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <ScrollArea className="h-32">
-                      <pre className="text-sm bg-muted p-2 rounded">
-                        {view.definition}
-                      </pre>
-                    </ScrollArea>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </TabsContent>
-
-          <TabsContent value="routines">
-            <div className="space-y-4">
-              {schema.routines.map((routine) => (
-                <Card key={routine.name}>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Settings className="h-4 w-4" />
-                      {routine.name}
-                    </CardTitle>
-                    <div className="flex gap-2">
-                      <Badge variant={routine.type === 'FUNCTION' ? "default" : "secondary"}>
-                        {routine.type}
-                      </Badge>
-                      {routine.dataType && <Badge variant="outline">{routine.dataType}</Badge>}
-                      <Badge variant={routine.isDeterministic ? "default" : "secondary"}>
-                        {routine.isDeterministic ? "Deterministic" : "Non-deterministic"}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-2 gap-4 mb-4">
-                      <div>
-                        <p className="text-sm font-medium">Created</p>
-                        <p className="text-sm">{new Date(routine.created).toLocaleString()}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium">Modified</p>
-                        <p className="text-sm">{new Date(routine.modified).toLocaleString()}</p>
-                      </div>
-                    </div>
-                    {routine.comment && (
-                      <p className="text-sm text-muted-foreground mb-2">{routine.comment}</p>
-                    )}
-                    <ScrollArea className="h-32">
-                      <pre className="text-sm bg-muted p-2 rounded">
-                        {routine.definition}
-                      </pre>
-                    </ScrollArea>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </TabsContent>
-
           <TabsContent value="relationships">
             <div className="space-y-4">
               {schema.foreignKeys.map((fk) => (
-                <Card key={fk.constraintName}>
+                <Card key={fk.name}>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <Link className="h-4 w-4" />
-                      {fk.constraintName}
+                      {fk.name}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="font-medium">
-                          {fk.fromTable}.{fk.fromColumn} → {fk.toTable}.{fk.toColumn}
+                          {fk.fromTable}.{fk.fromColumns.join(', ')} → {fk.toTable}.{fk.toColumns.join(', ')}
                         </p>
                       </div>
                       <div className="flex gap-2">
-                        <Badge variant="outline">UPDATE {fk.updateRule}</Badge>
-                        <Badge variant="outline">DELETE {fk.deleteRule}</Badge>
+                        <Badge variant="outline">UPDATE {fk.onUpdate || 'RESTRICT'}</Badge>
+                        <Badge variant="outline">DELETE {fk.onDelete || 'RESTRICT'}</Badge>
                       </div>
                     </div>
                   </CardContent>

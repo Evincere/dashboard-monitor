@@ -2,7 +2,25 @@
 import { z } from 'zod';
 import { NextRequest } from 'next/server';
 
-// Esquemas de validación reutilizables
+// Tipos y constantes
+type ContestStatus =
+  | 'ACTIVE' | 'ARCHIVED' | 'CANCELLED' | 'CLOSED' | 'DRAFT' | 'FINISHED'
+  | 'IN_EVALUATION' | 'PAUSED' | 'RESULTS_PUBLISHED' | 'SCHEDULED'
+  | 'DOCUMENTATION_VALIDATION' | 'APPLICATION_VALIDATION';
+
+type ContestPosition =
+  | 'Defensor/a Civil' | 'Defensor/a Civil Adjunto/a'
+  | 'Defensor/a Penal' | 'Defensor/a Penal Adjunto/a'
+  | 'Defensor/a Penal Juvenil' | 'Defensor/a Penal Juvenil Adjunto/a'
+  | 'Asesor/a de Incapaces' | 'Asesor/a de Incapaces Adjunto/a'
+  | 'Codefensor/a de Familia' | 'Codefensor/a de Familia Adjunto/a'
+  | 'Secretario/a Legal y Técnico/a' | 'Secretario/a General'
+  | 'Jefe/a Administrativo/Contable' | 'Personal de Recursos Humanos'
+  | 'Responsable de Informática' | 'Personal de Servicios'
+  | 'Chófer' | 'Especialista en Desarrollo Tecnológico'
+  | 'Auditor/a de Control de Gestión';
+
+// Esquemas de validación base
 const dateSchema = z.string().datetime().transform((str) => new Date(str));
 const optionalDateSchema = z.string().datetime().transform((str) => new Date(str)).optional().nullable();
 
@@ -12,33 +30,36 @@ const fileValidationSchema = z.object({
   size: z.number().max(10 * 1024 * 1024, "El archivo no puede superar los 10MB"),
   type: z.enum([
     'application/pdf',
-    'application/msword', 
+    'application/msword',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-  ], { errorMap: () => ({ message: "Solo se permiten archivos PDF y Word" }) })
+  ], {
+    errorMap: () => ({
+      message: "Solo se permiten archivos PDF y Word"
+    })
+  })
 });
 
-// Esquema de validación para crear concurso (servidor)
-export const serverCreateContestSchema = z.object({
+// Esquema base para concursos
+const baseContestSchema = z.object({
   title: z.string()
     .min(5, "El título debe tener al menos 5 caracteres")
     .max(200, "El título no puede exceder 200 caracteres")
-    .refine((title) => title.trim().length > 0, "El título no puede estar vacío")
-    .refine((title) => !/[<>"'&]/.test(title), "El título contiene caracteres no permitidos"),
-    
+    .transform((s) => s.trim())
+    .refine((s) => s.length > 0, "El título no puede estar vacío")
+    .refine((s) => !/[<>\"'&]/.test(s), "El título contiene caracteres no permitidos"),
+
   category: z.enum([
     'FUNCIONARIOS Y PERSONAL JERÁRQUICO',
     'MAGISTRADOS',
     'EMPLEADOS'
   ]).optional(),
-  
+
   class_: z.enum([
     '01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13'
   ]).optional(),
-  
-  department: z.string()
-    .max(255, "El departamento no puede exceder 255 caracteres")
-    .optional(),
-    
+
+  department: z.string().max(255).optional(),
+
   position: z.enum([
     'Defensor/a Civil',
     'Defensor/a Civil Adjunto/a',
@@ -60,77 +81,105 @@ export const serverCreateContestSchema = z.object({
     'Especialista en Desarrollo Tecnológico',
     'Auditor/a de Control de Gestión'
   ]).optional(),
-  
-  functions: z.string()
-    .max(2000, "La descripción de funciones no puede exceder 2000 caracteres")
-    .optional(),
-    
+
+  functions: z.string().max(2000, "La descripción de funciones no puede exceder 2000 caracteres").optional(),
+  requirements: z.string().optional(),
+
   status: z.enum([
     'ACTIVE', 'ARCHIVED', 'CANCELLED', 'CLOSED', 'DRAFT', 'FINISHED',
     'IN_EVALUATION', 'PAUSED', 'RESULTS_PUBLISHED', 'SCHEDULED',
     'DOCUMENTATION_VALIDATION', 'APPLICATION_VALIDATION'
-  ]),
-  
-  start_date: optionalDateSchema,
-  end_date: optionalDateSchema,
-  
-  inscription_start_date: z.date({
-    required_error: "La fecha de inicio de inscripciones es obligatoria",
-    invalid_type_error: "La fecha de inicio debe ser válida"
-  }),
-  
-  inscription_end_date: z.date({
-    required_error: "La fecha de fin de inscripciones es obligatoria",
-    invalid_type_error: "La fecha de fin debe ser válida"
-  }),
-  
-  bases_url: z.string()
-    .url("La URL de las bases debe ser válida")
-    .optional()
-    .or(z.literal("")),
-    
-  description_url: z.string()
-    .url("La URL de descripción debe ser válida")
-    .optional()
-    .or(z.literal(""))
-    
-}).refine((data) => {
-  // Validar que inscription_end_date > inscription_start_date
-  return data.inscription_end_date > data.inscription_start_date;
-}, {
-  message: "La fecha de fin de inscripciones debe ser posterior al inicio",
-  path: ["inscription_end_date"]
-}).refine((data) => {
-  // Validar que end_date > start_date si ambas están definidas
-  if (data.start_date && data.end_date) {
-    return data.end_date > data.start_date;
-  }
-  return true;
-}, {
-  message: "La fecha de fin del concurso debe ser posterior al inicio",
-  path: ["end_date"]
-}).refine((data) => {
-  // Validar que el concurso inicia después del fin de inscripciones
-  if (data.start_date) {
-    return data.start_date >= data.inscription_end_date;
-  }
-  return true;
-}, {
-  message: "El concurso debe iniciar después del fin de inscripciones",
-  path: ["start_date"]
-}).refine((data) => {
-  // Validar que las fechas de inscripción no sean muy en el pasado
-  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  return data.inscription_start_date >= oneDayAgo;
-}, {
-  message: "La fecha de inicio de inscripciones no puede ser anterior a ayer",
-  path: ["inscription_start_date"]
+  ]).default('DRAFT'),
+
+  start_date: dateSchema,
+  end_date: dateSchema,
+  inscription_start_date: dateSchema,
+  inscription_end_date: dateSchema,
+  bases_url: z.string().url("La URL de las bases debe ser válida").optional().or(z.literal("")),
+  description_url: z.string().url("La URL de descripción debe ser válida").optional().or(z.literal(""))
 });
 
-// Esquema para actualizar concurso (más flexible)
-export const serverUpdateContestSchema = serverCreateContestSchema.partial().extend({
-  id: z.number().positive("El ID del concurso es requerido")
+// Definir refinamientos para validación de fechas
+const dateValidationSchema = baseContestSchema.superRefine((data, ctx) => {
+  // Validar que inscription_end_date > inscription_start_date
+  if (data.inscription_end_date && data.inscription_start_date) {
+    if (data.inscription_end_date <= data.inscription_start_date) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "La fecha de fin de inscripciones debe ser posterior al inicio",
+        path: ["inscription_end_date"]
+      });
+    }
+  }
+
+  // Validar que end_date > start_date
+  if (data.end_date && data.start_date) {
+    if (data.end_date <= data.start_date) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "La fecha de fin del concurso debe ser posterior al inicio",
+        path: ["end_date"]
+      });
+    }
+  }
+
+  // Validar que el concurso inicia después del fin de inscripciones
+  if (data.start_date && data.inscription_end_date) {
+    if (data.start_date < data.inscription_end_date) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "El concurso debe iniciar después del fin de inscripciones",
+        path: ["start_date"]
+      });
+    }
+  }
+
+  // Validar que las fechas de inscripción no sean muy en el pasado
+  if (data.inscription_start_date) {
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    if (data.inscription_start_date < oneDayAgo) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "La fecha de inicio de inscripciones no puede ser anterior a ayer",
+        path: ["inscription_start_date"]
+      });
+    }
+  }
 });
+
+// Exportar esquemas
+export const serverCreateContestSchema = dateValidationSchema;
+
+// Esquema para actualización (todos los campos opcionales excepto id)
+const updateContestShape = {
+  ...baseContestSchema.shape,
+  id: z.number().positive("El ID del concurso es requerido")
+};
+
+export const serverUpdateContestSchema = z.object(updateContestShape)
+  .partial()
+  .required({ id: true })
+  .superRefine((data, ctx) => {
+    if (data.inscription_end_date && data.inscription_start_date) {
+      if (data.inscription_end_date <= data.inscription_start_date) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "La fecha de fin de inscripciones debe ser posterior al inicio",
+          path: ["inscription_end_date"]
+        });
+      }
+    }
+
+    if (data.end_date && data.start_date) {
+      if (data.end_date <= data.start_date) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "La fecha de fin del concurso debe ser posterior al inicio",
+          path: ["end_date"]
+        });
+      }
+    }
+  });
 
 // Esquema para parámetros de consulta
 export const queryParamsSchema = z.object({
@@ -170,7 +219,7 @@ export function validateContestData(data: any, isUpdate: boolean = false): {
   try {
     const schema = isUpdate ? serverUpdateContestSchema : serverCreateContestSchema;
     const validatedData = schema.parse(data);
-    
+
     return {
       success: true,
       data: validatedData,
@@ -179,7 +228,7 @@ export function validateContestData(data: any, isUpdate: boolean = false): {
   } catch (error) {
     if (error instanceof z.ZodError) {
       const errors: Record<string, string[]> = {};
-      
+
       error.errors.forEach((err) => {
         const path = err.path.join('.');
         if (!errors[path]) {
@@ -187,13 +236,13 @@ export function validateContestData(data: any, isUpdate: boolean = false): {
         }
         errors[path].push(err.message);
       });
-      
+
       return {
         success: false,
         errors
       };
     }
-    
+
     return {
       success: false,
       errors: {
@@ -211,7 +260,7 @@ export function validateQueryParams(searchParams: URLSearchParams): {
   try {
     const params = Object.fromEntries(searchParams.entries());
     const validatedParams = queryParamsSchema.parse(params);
-    
+
     return {
       success: true,
       data: validatedParams,
@@ -220,7 +269,7 @@ export function validateQueryParams(searchParams: URLSearchParams): {
   } catch (error) {
     if (error instanceof z.ZodError) {
       const errors: Record<string, string[]> = {};
-      
+
       error.errors.forEach((err) => {
         const path = err.path.join('.');
         if (!errors[path]) {
@@ -228,13 +277,13 @@ export function validateQueryParams(searchParams: URLSearchParams): {
         }
         errors[path].push(err.message);
       });
-      
+
       return {
         success: false,
         errors
       };
     }
-    
+
     return {
       success: false,
       errors: {
@@ -263,11 +312,11 @@ export function validateBusinessRules(contestData: any): {
     const diffDays = Math.ceil(
       (contestData.inscription_end_date.getTime() - contestData.inscription_start_date.getTime()) / (1000 * 60 * 60 * 24)
     );
-    
+
     if (diffDays < 7) {
       warnings.push("El período de inscripciones es muy corto (menos de 7 días)");
     }
-    
+
     if (diffDays > 60) {
       warnings.push("El período de inscripciones es muy largo (más de 60 días)");
     }
@@ -297,20 +346,20 @@ export function validateBusinessRules(contestData: any): {
 // Función para sanitizar datos de entrada
 export function sanitizeContestData(data: any): any {
   const sanitized = { ...data };
-  
+
   // Limpiar strings
   if (sanitized.title) {
     sanitized.title = sanitized.title.trim();
   }
-  
+
   if (sanitized.functions) {
     sanitized.functions = sanitized.functions.trim();
   }
-  
+
   if (sanitized.department) {
     sanitized.department = sanitized.department.trim();
   }
-  
+
   // Convertir fechas si son strings
   ['start_date', 'end_date', 'inscription_start_date', 'inscription_end_date'].forEach(field => {
     if (sanitized[field] && typeof sanitized[field] === 'string') {
@@ -321,7 +370,7 @@ export function sanitizeContestData(data: any): any {
       }
     }
   });
-  
+
   return sanitized;
 }
 
@@ -334,11 +383,11 @@ export async function validateRequest(
     const body = await request.json();
     const sanitized = sanitizeContestData(body);
     const result = schema.safeParse(sanitized);
-    
+
     if (result.success) {
       // Validar reglas de negocio
       const businessValidation = validateBusinessRules(result.data);
-      
+
       return {
         success: true,
         data: {
@@ -348,7 +397,7 @@ export async function validateRequest(
       };
     } else {
       const errors: Record<string, string[]> = {};
-      
+
       result.error.errors.forEach((err) => {
         const path = err.path.join('.');
         if (!errors[path]) {
@@ -356,7 +405,7 @@ export async function validateRequest(
         }
         errors[path].push(err.message);
       });
-      
+
       return {
         success: false,
         errors
@@ -371,3 +420,5 @@ export async function validateRequest(
     };
   }
 }
+
+//

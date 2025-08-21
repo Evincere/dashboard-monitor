@@ -24,15 +24,27 @@ interface PostulantInfo {
     dni: string;
     fullName: string;
     email: string;
+    telefono?: string;
   };
   inscription: {
+    id: string;
     state: string;
     centroDeVida: string;
     createdAt: string;
   };
   contest: {
+    id: number;
     title: string;
+    category: string;
     position: string;
+    department: string;
+    contestClass: string;
+    status: string;
+    statusDescription: string;
+    inscriptionStartDate: string;
+    inscriptionEndDate: string;
+    dependency?: string;
+    location?: string;
   };
 }
 
@@ -53,7 +65,7 @@ interface ValidationState {
   stats: ValidationStats | null;
   loading: boolean;
   submitting: boolean;
-  
+
   // Actions
   setDocuments: (documents: Document[]) => void;
   setCurrentDocument: (document: Document | null) => void;
@@ -61,19 +73,19 @@ interface ValidationState {
   setStats: (stats: ValidationStats) => void;
   setLoading: (loading: boolean) => void;
   setSubmitting: (submitting: boolean) => void;
-  
+
   // Document operations
   approveDocument: (documentId: string, comments?: string) => Promise<void>;
   rejectDocument: (documentId: string, reason: string) => Promise<void>;
   goToNextPending: () => void;
   goToPreviousPending: () => void;
-  
+
   // Utility functions
   getPendingDocuments: () => Document[];
   getApprovedDocuments: () => Document[];
   getRejectedDocuments: () => Document[];
   updateStats: () => void;
-  
+
   // Reset
   reset: () => void;
 }
@@ -92,7 +104,34 @@ export const useValidationStore = create<ValidationState>()(
       // Basic setters
       setDocuments: (documents) => set({ documents }),
       setCurrentDocument: (document) => set({ currentDocument: document }),
-      setPostulant: (postulant) => set({ postulant }),
+      setPostulant: (postulant: PostulantInfo) => {
+        // Ensure all required fields are present with default values if needed
+        const enhancedPostulant: PostulantInfo = {
+          user: {
+            ...postulant.user,
+            telefono: postulant.user.telefono || undefined,
+          },
+          inscription: {
+            ...postulant.inscription,
+            id: postulant.inscription.id || '', // Add default if missing
+          },
+          contest: {
+            id: postulant.contest.id || 0, // Add default if missing
+            title: postulant.contest.title || '',
+            category: postulant.contest.category || '',
+            position: postulant.contest.position || '',
+            department: postulant.contest.department || '',
+            contestClass: postulant.contest.contestClass || '',
+            status: postulant.contest.status || '',
+            statusDescription: postulant.contest.statusDescription || '',
+            inscriptionStartDate: postulant.contest.inscriptionStartDate || '',
+            inscriptionEndDate: postulant.contest.inscriptionEndDate || '',
+            dependency: postulant.contest.dependency,
+            location: postulant.contest.location,
+          },
+        };
+        set({ postulant: enhancedPostulant });
+      },
       setStats: (stats) => set({ stats }),
       setLoading: (loading) => set({ loading }),
       setSubmitting: (submitting) => set({ submitting }),
@@ -101,7 +140,7 @@ export const useValidationStore = create<ValidationState>()(
       approveDocument: async (documentId: string, comments?: string) => {
         const { documents, updateStats } = get();
         set({ submitting: true });
-        
+
         try {
           const response = await fetch(apiUrl('documents/approve'), {
             method: 'POST',
@@ -120,22 +159,22 @@ export const useValidationStore = create<ValidationState>()(
           // Update local state
           const updatedDocuments = documents.map(doc =>
             doc.id === documentId
-              ? { 
-                  ...doc, 
-                  validationStatus: 'APPROVED' as const,
-                  comments: comments?.trim() || undefined,
-                  validatedAt: new Date().toISOString(),
-                  validatedBy: 'admin'
-                }
+              ? {
+                ...doc,
+                validationStatus: 'APPROVED' as const,
+                comments: comments?.trim() || undefined,
+                validatedAt: new Date().toISOString(),
+                validatedBy: 'admin'
+              }
               : doc
           );
 
           set({ documents: updatedDocuments });
           updateStats();
-          
+
           // Auto-advance to next pending
           get().goToNextPending();
-          
+
           return Promise.resolve();
         } catch (error) {
           console.error('Error approving document:', error);
@@ -148,7 +187,7 @@ export const useValidationStore = create<ValidationState>()(
       rejectDocument: async (documentId: string, reason: string) => {
         const { documents, updateStats } = get();
         set({ submitting: true });
-        
+
         try {
           const response = await fetch(apiUrl('documents/reject'), {
             method: 'POST',
@@ -167,22 +206,22 @@ export const useValidationStore = create<ValidationState>()(
           // Update local state
           const updatedDocuments = documents.map(doc =>
             doc.id === documentId
-              ? { 
-                  ...doc, 
-                  validationStatus: 'REJECTED' as const,
-                  rejectionReason: reason,
-                  validatedAt: new Date().toISOString(),
-                  validatedBy: 'admin'
-                }
+              ? {
+                ...doc,
+                validationStatus: 'REJECTED' as const,
+                rejectionReason: reason,
+                validatedAt: new Date().toISOString(),
+                validatedBy: 'admin'
+              }
               : doc
           );
 
           set({ documents: updatedDocuments });
           updateStats();
-          
+
           // Auto-advance to next pending
           get().goToNextPending();
-          
+
           return Promise.resolve();
         } catch (error) {
           console.error('Error rejecting document:', error);
@@ -194,7 +233,7 @@ export const useValidationStore = create<ValidationState>()(
 
       goToNextPending: () => {
         const { documents, currentDocument } = get();
-        
+
         if (!currentDocument) {
           const firstPending = documents.find(doc => doc.validationStatus === 'PENDING');
           if (firstPending) {
@@ -202,11 +241,11 @@ export const useValidationStore = create<ValidationState>()(
           }
           return;
         }
-        
+
         const currentIndex = documents.findIndex(doc => doc.id === currentDocument.id);
         const remainingDocs = documents.slice(currentIndex + 1);
         const nextPending = remainingDocs.find(doc => doc.validationStatus === 'PENDING');
-        
+
         if (nextPending) {
           set({ currentDocument: nextPending });
         } else {
@@ -220,13 +259,13 @@ export const useValidationStore = create<ValidationState>()(
 
       goToPreviousPending: () => {
         const { documents, currentDocument } = get();
-        
+
         if (!currentDocument) return;
-        
+
         const currentIndex = documents.findIndex(doc => doc.id === currentDocument.id);
         const previousDocs = documents.slice(0, currentIndex).reverse();
         const previousPending = previousDocs.find(doc => doc.validationStatus === 'PENDING');
-        
+
         if (previousPending) {
           set({ currentDocument: previousPending });
         }
@@ -250,7 +289,7 @@ export const useValidationStore = create<ValidationState>()(
 
       updateStats: () => {
         const { documents } = get();
-        
+
         const total = documents.length;
         const pending = documents.filter(doc => doc.validationStatus === 'PENDING').length;
         const approved = documents.filter(doc => doc.validationStatus === 'APPROVED').length;

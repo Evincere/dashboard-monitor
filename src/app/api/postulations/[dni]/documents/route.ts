@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import backendClient from '@/lib/backend-client';
+
 import { mapDocumentStatus } from '@/lib/document-status-utils';
 import fs from 'fs';
 import path from 'path';
@@ -30,7 +31,7 @@ interface PostulantInfo {
   user: {
     dni: string;
     fullName: string;
-    email: string;
+    email: string | undefined;
   };
   inscription: {
     id: string;
@@ -69,33 +70,35 @@ interface DocumentsPageData {
 }
 
 // Configuration for file storage based on MPD system architecture
-// Environment-aware path configuration for dev/prod compatibility
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const IS_PRODUCTION = NODE_ENV === 'production';
 
-// Primary document storage path - should be configured via environment variables
-const PRIMARY_DOCS_PATH = process.env.DOCUMENTS_PATH;
-
-// Backend-aligned configuration (matches Spring Boot StorageConfig)
+// Storage configuration
+const STORAGE_BASE_PATH = process.env.STORAGE_BASE_PATH || '/var/lib/mpd';
 const STORAGE_BASE_DIR = process.env.APP_STORAGE_BASE_DIR || (IS_PRODUCTION ? '/app/storage' : './storage');
 const DOCUMENTS_DIR = process.env.APP_STORAGE_DOCUMENTS_DIR || 'documents';
 
-// Development-specific paths
-const LOCAL_DOCS_PATH = process.env.LOCAL_DOCUMENTS_PATH || 'B:\\concursos_situacion_post_gracia\\descarga_administracion_20250814_191745\\documentos';
-
-// Backend storage path (for development when running both frontend and backend)
-const BACKEND_STORAGE_PATH = process.env.DOCUMENT_STORAGE_PATH || "/var/lib/docker/volumes/mpd_concursos_storage_data_prod/_data/documents";
+// Development and production paths
+const PRIMARY_DOCS_PATH = process.env.DOCUMENTS_PATH;
+const LOCAL_DOCS_PATH = process.env.LOCAL_DOCUMENTS_PATH || (IS_PRODUCTION
+  ? '/opt/mpd/documents'
+  : 'B:\\concursos_situacion_post_gracia\\descarga_administracion_20250814_191745\\documentos'
+);
+const BACKEND_STORAGE_PATH = process.env.DOCUMENT_STORAGE_PATH || (IS_PRODUCTION
+  ? "/var/lib/docker/volumes/mpd_concursos_storage_data_prod/_data/documents"
+  : "/var/lib/mpd/documents"
+);
 
 // Production-ready path resolution
 const getDocumentBasePaths = (): string[] => {
   const paths: string[] = [];
-  
+
   // 1. Primary path from environment (highest priority)
   if (PRIMARY_DOCS_PATH) {
     paths.push(PRIMARY_DOCS_PATH);
     console.log(`📁 Using primary documents path: ${PRIMARY_DOCS_PATH}`);
   }
-  
+
   // 2. Production paths
   if (IS_PRODUCTION) {
     paths.push(
@@ -114,24 +117,24 @@ const getDocumentBasePaths = (): string[] => {
       path.join(STORAGE_BASE_PATH, DOCUMENTS_DIR)
     );
   }
-  
+
   // 4. Additional fallbacks for both environments
   paths.push(
     path.join('C:', 'app', 'storage', 'documents'),
     '/tmp/mpd-documents'
   );
-  
+
   // Remove duplicates and log final paths
   const uniquePaths = [...new Set(paths)];
   console.log(`📁 Document base paths (${NODE_ENV}):`, uniquePaths);
-  
+
   return uniquePaths;
 };
 
 // Tipos de documentos obligatorios - usando nombres reales del sistema
 const REQUIRED_DOCUMENT_TYPES = [
   'DNI (Frontal)',
-  'DNI (Dorso)', 
+  'DNI (Dorso)',
   'Título Universitario y Certificado Analítico',
   'Certificado de Antecedentes Penales',
   'Certificado Sin Sanciones Disciplinarias',
@@ -151,22 +154,22 @@ async function getFileSize(filePath: string, documentId?: string): Promise<numbe
     console.warn(`📏 getFileSize: filePath is empty`);
     return 0;
   }
-  
+
   try {
     console.log(`📏 getFileSize: Processing filePath: "${filePath}" with documentId: "${documentId}"`);
-    
+
     // Extract DNI from filePath (e.g., "35515608/filename.pdf" -> "35515608")
     const pathParts = filePath.split('/');
     const dni = pathParts[0];
     const fileName = pathParts[pathParts.length - 1];
-    
+
     console.log(`📏 getFileSize: Extracted DNI: "${dni}", fileName: "${fileName}"`);
-    
+
     // Get environment-aware document base paths
     const possibleBasePaths = getDocumentBasePaths();
-    
+
     console.log(`📏 getFileSize: Environment = ${NODE_ENV}, Checking ${possibleBasePaths.length} possible base paths`);
-    
+
     // First, try exact path matching
     for (const basePath of possibleBasePaths) {
       const exactPath = path.join(basePath, filePath);
@@ -182,24 +185,24 @@ async function getFileSize(filePath: string, documentId?: string): Promise<numbe
         continue;
       }
     }
-    
+
     // If exact match fails and we have a documentId, try fuzzy matching
     if (documentId && dni) {
       console.log(`📏 getFileSize: Exact match failed, trying fuzzy matching with documentId: ${documentId}`);
-      
+
       for (const basePath of possibleBasePaths) {
         const userDir = path.join(basePath, dni);
         try {
           const files = await fs.promises.readdir(userDir);
           console.log(`📏 getFileSize: Found ${files.length} files in "${userDir}"`);
-          
+
           // Look for files that start with the documentId
           const matchingFile = files.find(file => file.startsWith(documentId));
-          
+
           if (matchingFile) {
             const fullPath = path.join(userDir, matchingFile);
             console.log(`📏 getFileSize: Found fuzzy match: "${matchingFile}"`);
-            
+
             const stats = await fs.promises.stat(fullPath);
             if (stats.isFile()) {
               console.log(`✅ getFileSize: File found (fuzzy match)! Size: ${stats.size} bytes at "${fullPath}"`);
@@ -212,7 +215,7 @@ async function getFileSize(filePath: string, documentId?: string): Promise<numbe
         }
       }
     }
-    
+
     // If no file found, return 0
     console.warn(`📏 getFileSize: Could not find file in any path for: ${filePath}`);
     return 0;
@@ -229,7 +232,7 @@ async function getFileSize(filePath: string, documentId?: string): Promise<numbe
  */
 async function calculateFileSizes(documents: Document[]): Promise<Document[]> {
   console.log(`🔧 calculateFileSizes: Processing ${documents.length} documents`);
-  
+
   const sizePromises = documents.map(async (doc, index) => {
     console.log(`🔧 calculateFileSizes: Processing document ${index + 1}/${documents.length}: ID=${doc.id}, filePath="${doc.filePath}"`);
     const calculatedFileSize = await getFileSize(doc.filePath, doc.id);
@@ -239,7 +242,7 @@ async function calculateFileSizes(documents: Document[]): Promise<Document[]> {
       fileSize: calculatedFileSize > 0 ? calculatedFileSize : doc.fileSize
     };
   });
-  
+
   const results = await Promise.all(sizePromises);
   console.log(`🔧 calculateFileSizes: Completed processing all documents`);
   return results;
@@ -264,7 +267,7 @@ function getContestStatusDescription(status: string): string {
     'IN_EVALUATION': 'En Evaluación',
     'RESULTS_PUBLISHED': 'Resultados Publicados'
   };
-  
+
   return statusMap[status] || status;
 }
 
@@ -272,7 +275,7 @@ function getContestStatusDescription(status: string): string {
 async function getContestDetails(contestId: number): Promise<any> {
   try {
     console.log(`🏆 Getting contest details for ID: ${contestId}`);
-    
+
     // Usar endpoint local en lugar del backend externo
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
     const response = await fetch(`${baseUrl}/api/contests/${contestId}`, {
@@ -280,15 +283,15 @@ async function getContestDetails(contestId: number): Promise<any> {
         'Accept': 'application/json',
       }
     });
-    
+
     if (!response.ok) {
       console.warn(`❌ Contest API returned ${response.status} for contest ${contestId}`);
       return null;
     }
-    
+
     const apiResponse = await response.json();
     const contestData = apiResponse.data;
-    
+
     console.log(`✅ Retrieved contest data:`, {
       id: contestData.id,
       title: contestData.title,
@@ -298,7 +301,7 @@ async function getContestDetails(contestId: number): Promise<any> {
       inscriptionStartDate: contestData.inscriptionStartDate,
       inscriptionEndDate: contestData.inscriptionEndDate
     });
-    
+
     return contestData;
   } catch (error) {
     console.error(`❌ Error fetching contest ${contestId}:`, error);
@@ -316,18 +319,18 @@ function calculateValidationStatus(documents: Document[]): {
   }
 
   const requiredDocs = documents.filter(doc => doc.isRequired);
-  
+
   if (requiredDocs.length === 0) {
     // Si no hay documentos obligatorios, basarse en todos los documentos
     const approved = documents.filter(doc => doc.validationStatus === 'APPROVED').length;
     const rejected = documents.filter(doc => doc.validationStatus === 'REJECTED').length;
-    
+
     if (rejected > 0) return { status: 'REJECTED', completionPercentage: 0 };
     if (approved === documents.length) return { status: 'COMPLETED', completionPercentage: 100 };
     if (approved > 0) {
-      return { 
-        status: 'PARTIAL', 
-        completionPercentage: Math.round((approved / documents.length) * 100) 
+      return {
+        status: 'PARTIAL',
+        completionPercentage: Math.round((approved / documents.length) * 100)
       };
     }
     return { status: 'PENDING', completionPercentage: 0 };
@@ -366,7 +369,7 @@ export async function GET(
 
     // Buscar usuario por DNI - obtener todos los usuarios como en la API de gestión
     const usersResponse = await backendClient.getUsers({ size: 1000 });
-    
+
     if (!usersResponse.success || !usersResponse.data?.content?.length) {
       return NextResponse.json({
         success: false,
@@ -376,7 +379,7 @@ export async function GET(
     }
 
     // Buscar el usuario exacto por DNI en la lista completa
-    const user = usersResponse.data.content.find((u: any) => 
+    const user = usersResponse.data.content.find((u: any) =>
       (u.dni === dni) || (u.username === dni)
     );
 
@@ -391,9 +394,9 @@ export async function GET(
     console.log(`👤 Found user: ${user.fullName || user.name} (ID: ${user.id})`);
 
     // Obtener inscripción del usuario
-    const inscriptionsResponse = await backendClient.getInscriptions({ 
-      userId: user.id, 
-      size: 10 
+    const inscriptionsResponse = await backendClient.getInscriptions({
+      userId: user.id,
+      size: 10
     });
 
     let inscription = null;
@@ -422,14 +425,14 @@ export async function GET(
     // Función para determinar el tipo de documento basado en el nombre del archivo
     const getDocumentTypeFromName = (fileName: string): string => {
       if (!fileName) return 'UNKNOWN';
-      
+
       // Remover la extensión del archivo
       const nameWithoutExtension = fileName.replace(/\.[^/.]+$/, "");
-      
+
       // Mapear nombres comunes a tipos de documento
       const nameMapping: { [key: string]: string } = {
         'DNI (Frontal)': 'DNI (Frontal)',
-        'DNI (Dorso)': 'DNI (Dorso)', 
+        'DNI (Dorso)': 'DNI (Dorso)',
         'Título Universitario y Certificado Analítico': 'Título Universitario y Certificado Analítico',
         'Certificado de Antecedentes Penales': 'Certificado de Antecedentes Penales',
         'Certificado Sin Sanciones Disciplinarias': 'Certificado Sin Sanciones Disciplinarias',
@@ -438,34 +441,34 @@ export async function GET(
         'Certificado Ley Micaela': 'Certificado Ley Micaela',
         'Documento Adicional': 'Documento Adicional'
       };
-      
+
       // Buscar coincidencia exacta
       if (nameMapping[nameWithoutExtension]) {
         return nameMapping[nameWithoutExtension];
       }
-      
+
       // Buscar coincidencia parcial (contiene)
       for (const [key, value] of Object.entries(nameMapping)) {
-        if (nameWithoutExtension.toLowerCase().includes(key.toLowerCase()) || 
-            key.toLowerCase().includes(nameWithoutExtension.toLowerCase())) {
+        if (nameWithoutExtension.toLowerCase().includes(key.toLowerCase()) ||
+          key.toLowerCase().includes(nameWithoutExtension.toLowerCase())) {
           return value;
         }
       }
-      
+
       // Si no se encuentra coincidencia, usar el nombre del archivo como tipo
       return nameWithoutExtension || 'UNKNOWN';
     };
-    
+
     // Mapear documentos al formato requerido
     const documents: Document[] = backendDocuments.map((doc: any) => {
       const fileName = doc.fileName || doc.nombreArchivo;
       const originalName = doc.originalName || doc.nombreOriginal || fileName;
       const documentTypeFromBackend = doc.documentTypeId || doc.tipoDocumentoId || doc.documentType;
-      
+
       // Construct filePath using DNI and filename since backend doesn't provide it
       const userDni = user.dni || user.username;
       const filePath = doc.filePath || doc.rutaArchivo || (userDni && fileName ? `${userDni}/${fileName}` : undefined);
-      
+
       // Debug: Mostrar todos los campos relacionados con archivos
       console.log(`📄 DOC DEBUG - Processing document:`, {
         id: doc.id,
@@ -475,15 +478,15 @@ export async function GET(
         fileSize: doc.fileSize || doc.tamaño,
         documentType: documentTypeFromBackend
       });
-      
+
       // Usar el tipo del backend si está disponible, sino inferir del nombre
-      const documentType = documentTypeFromBackend && documentTypeFromBackend !== 'UNKNOWN' 
-        ? documentTypeFromBackend 
+      const documentType = documentTypeFromBackend && documentTypeFromBackend !== 'UNKNOWN'
+        ? documentTypeFromBackend
         : getDocumentTypeFromName(originalName || fileName);
-      
+
       const isDocumentRequired = isRequiredDocument(documentType);
       console.log(`📄 Document: ${documentType} - Required: ${isDocumentRequired}`);
-      
+
       return {
         id: doc.id,
         fileName: fileName,
@@ -512,7 +515,7 @@ export async function GET(
     documentsWithSizes.forEach((doc, index) => {
       console.log(`  ${index + 1}. "${doc.documentType}" (${doc.originalName || doc.fileName}) - Required: ${doc.isRequired}`);
     });
-    
+
     const requiredDocs = documentsWithSizes.filter(doc => doc.isRequired);
     console.log(`📊 DEBUG - Required documents found: ${requiredDocs.length} of ${REQUIRED_DOCUMENT_TYPES.length}`);
     console.log(`📊 DEBUG - Required document types:`, REQUIRED_DOCUMENT_TYPES);
@@ -550,21 +553,31 @@ export async function GET(
     });
 
     // Crear información del postulante con datos completos del concurso
+    // Crear una función auxiliar para obtener el nombre completo
+    const getFullName = (user: any): string => {
+      if (user.fullName) return user.fullName;
+      const firstName = user.firstName || '';
+      const lastName = user.lastName || '';
+      const composedName = `${firstName} ${lastName}`.trim();
+      return composedName || user.name || 'Usuario sin nombre';
+    };
+
+    // Usar los datos del backend y manejar posibles valores undefined
     const postulantInfo: PostulantInfo = {
       user: {
-        dni: user.dni || user.username,
-        fullName: user.fullName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.name,
-        email: user.email
+        dni: user.dni || user.username || 'Sin DNI',
+        fullName: getFullName(user),
+        email: user.email // Ya está marcado como opcional en la interfaz
       },
       inscription: {
         id: inscription?.id || 'unknown',
-        state: inscription?.state || inscription?.status || 'ACTIVE',
-        centroDeVida: inscription?.centroDeVida || 'No especificada',
-        createdAt: inscription?.createdAt || inscription?.inscriptionDate || new Date().toISOString()
+        state: (inscription as any)?.state || (inscription as any)?.status || 'ACTIVE', // Type assertion para evitar error
+        centroDeVida: (inscription as any)?.centroDeVida || 'No especificada',
+        createdAt: inscription?.createdAt?.toString() || new Date().toISOString()
       },
       contest: {
         id: contestDetails?.id || inscription?.contestId || 1,
-        title: contestDetails?.title || inscription?.contest?.title || 'Concurso Multifuero MPD',
+        title: contestDetails?.title || 'Concurso Multifuero MPD',
         category: contestDetails?.category || 'FUNCIONARIOS Y PERSONAL JERÁRQUICO',
         position: contestDetails?.position || 'Co-Defensor/Co-Asesor Multifuero',
         department: contestDetails?.department || contestDetails?.dependency || 'MULTIFUERO',
@@ -587,7 +600,7 @@ export async function GET(
 
     // Log final de stats para debug del modal
     const allRequiredValidated = requiredDocs.length > 0 && requiredDocs.every(doc => doc.validationStatus !== "PENDING");
-    
+
     console.log(`📊 MODAL DEBUG - Stats:`, {
       totalDocs: documents.length,
       requiredDocs: requiredDocs.length,
@@ -598,7 +611,7 @@ export async function GET(
         isRequired: doc.isRequired
       }))
     });
-    
+
     console.log(`✅ Returning ${documents.length} documents with ${stats.completionPercentage}% completion`);
 
     return NextResponse.json({
@@ -609,7 +622,7 @@ export async function GET(
 
   } catch (error) {
     console.error('❌ Postulant documents API error:', error);
-    
+
     return NextResponse.json({
       success: false,
       error: 'Failed to fetch postulant documents',

@@ -150,7 +150,7 @@ export async function GET(request: NextRequest) {
           doc.user?.name || '',
           doc.user?.email || '',
           doc.documentType || '',
-          doc.fileName || doc.originalName || doc.name || ''
+          doc.originalName || doc.name || ''
         ].join(' ').toLowerCase();
 
         return searchableFields.includes(searchTerm);

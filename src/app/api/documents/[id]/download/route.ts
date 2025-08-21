@@ -16,7 +16,7 @@ export async function GET(
 
     // First, get all users to find which user owns this document
     const usersResponse = await backendClient.getUsers({ size: 1000 });
-    
+
     if (!usersResponse.success || !usersResponse.data?.content?.length) {
       return NextResponse.json(
         { error: 'Failed to fetch users from backend' },
@@ -34,7 +34,7 @@ export async function GET(
           usuarioId: user.id,
           size: 100
         });
-        
+
         if (userDocumentsResponse.success && userDocumentsResponse.data?.content) {
           const foundDoc = userDocumentsResponse.data.content.find((doc: any) => doc.id === id);
           if (foundDoc) {
@@ -45,11 +45,12 @@ export async function GET(
           }
         }
       } catch (error) {
-        console.warn(`⚠️ [DOCUMENT_DOWNLOAD] Error checking documents for user ${user.id} (${user.fullName || user.name}):`, error.message || error);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.warn(`⚠️ [DOCUMENT_DOWNLOAD] Error checking documents for user ${user.id} (${user.fullName || user.name}):`, errorMessage);
         continue;
       }
     }
-    
+
     if (!document) {
       console.error(`❌ [DOCUMENT_DOWNLOAD] Document with ID ${id} not found across all users`);
       console.error(`🔍 [DOCUMENT_DOWNLOAD] Search completed across ${usersResponse.data?.content?.length || 0} users`);
@@ -78,7 +79,7 @@ export async function GET(
     console.log(`   - Original Name: ${originalName}`);
     console.log(`   - File Path: ${filePath}`);
     console.log(`   - MIME Type: ${mimeType}`);
-    
+
     // Try to read the file from various possible locations
     const possiblePaths = [
       // Local development path with real documents
@@ -91,7 +92,7 @@ export async function GET(
       // Direct path if already absolute
       filePath
     ];
-    
+
     console.log(`📁 [DOCUMENT_DOWNLOAD] Attempting file access from paths:`);
     possiblePaths.forEach((path, index) => {
       console.log(`   ${index + 1}. ${path}`);
@@ -128,7 +129,7 @@ export async function GET(
       console.error(`   - DOCUMENT_STORAGE_PATH: ${process.env.DOCUMENT_STORAGE_PATH || 'Not set'}`);
       console.error(`   - Current working directory: ${process.cwd()}`);
       console.error(`⏰ [DOCUMENT_DOWNLOAD] Error timestamp: ${new Date().toISOString()}`);
-      
+
       return NextResponse.json({
         error: 'Document file not found',
         message: 'The document exists in the database but the file could not be accessed',
@@ -147,8 +148,11 @@ export async function GET(
     headers.set('Content-Type', mimeType);
     headers.set('Content-Length', fileBuffer.length.toString());
     headers.set('Content-Disposition', `attachment; filename="${originalName}"`);
-    
-    return new NextResponse(fileBuffer, {
+
+    // Convert Buffer to Uint8Array for NextResponse
+    const uint8Array = new Uint8Array(fileBuffer);
+
+    return new NextResponse(uint8Array, {
       status: 200,
       headers
     });

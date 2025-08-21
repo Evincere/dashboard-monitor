@@ -20,7 +20,13 @@ const unifiedQuerySchema = z.object({
   question: z.string().min(1, 'La pregunta no puede estar vacía.'),
 });
 
-export async function handleNaturalQuery(prevState: any, formData: FormData) {
+export type NaturalQueryState = {
+  sqlQuery: string | null;
+  answer: string | null;
+  error: string | undefined;
+};
+
+export async function handleNaturalQuery(_: NaturalQueryState, formData: FormData): Promise<NaturalQueryState> {
   try {
     const validatedFields = naturalQuerySchema.safeParse({
       question: formData.get('question'),
@@ -33,10 +39,10 @@ export async function handleNaturalQuery(prevState: any, formData: FormData) {
         answer: null,
       };
     }
-    
+
     const result = await translateNaturalQuery({ question: validatedFields.data.question });
     return {
-      error: null,
+      error: undefined,
       sqlQuery: result.sqlQuery,
       answer: result.answer,
     };
@@ -64,11 +70,11 @@ export async function handleAiQuery(prevState: any, formData: FormData) {
         processingTime: null,
       };
     }
-    
+
     const result = await answerComplexQueries({
       question: validatedFields.data.question,
     });
-    
+
     const processingTimeInSeconds = (parseInt(result.processingTime, 10) / 1000).toFixed(2);
 
     return {
@@ -105,11 +111,11 @@ export async function handleUnifiedQuery(prevState: any, formData: FormData) {
         queryQuality: null,
       };
     }
-    
-    const result = await intelligentQueryRouter({ 
-      question: validatedFields.data.question 
+
+    const result = await intelligentQueryRouter({
+      question: validatedFields.data.question
     });
-    
+
     const processingTimeInSeconds = (parseInt(result.processingTime, 10) / 1000).toFixed(2);
 
     return {
@@ -134,23 +140,35 @@ export async function handleUnifiedQuery(prevState: any, formData: FormData) {
   }
 }
 
-export async function handleGenerateSuggestions(prevState: any, formData: FormData) {
-    try {
-        const schema = await getDbSchema();
-        const schemaString = JSON.stringify(schema, null, 2);
-        
-        const result = await generateQuerySuggestions({ databaseSchema: schemaString });
+export type ActionState =
+  | { suggestions: string[]; error: null }
+  | { suggestions: null; error: string }
+  | { suggestions: null; error: null; loading?: boolean };
 
-        return {
-            suggestions: result.suggestions,
-            error: null,
-        };
+export async function handleGenerateSuggestions(formData: FormData): Promise<ActionState> {
+  try {
+    const schema = await getDbSchema();
+    const schemaString = JSON.stringify(schema, null, 2);
 
-    } catch (error) {
-        console.error('Error generating suggestions:', error);
-        return {
-            suggestions: null,
-            error: 'No se pudieron generar sugerencias en este momento.',
-        };
+    const result = await generateQuerySuggestions({ databaseSchema: schemaString });
+
+    if (!result?.suggestions?.length) {
+      return {
+        suggestions: null,
+        error: 'No se generaron sugerencias.',
+      };
     }
+
+    return {
+      suggestions: result.suggestions,
+      error: null,
+    };
+
+  } catch (error) {
+    console.error('Error generating suggestions:', error);
+    return {
+      suggestions: null,
+      error: error instanceof Error ? error.message : 'No se pudieron generar sugerencias en este momento.',
+    };
+  }
 }

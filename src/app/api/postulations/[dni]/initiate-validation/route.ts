@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { InscriptionStateChange } from '@/types/backend';
 import backendClient from '@/lib/backend-client';
 
 export async function PATCH(
