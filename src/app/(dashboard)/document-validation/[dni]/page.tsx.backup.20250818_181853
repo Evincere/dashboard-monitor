@@ -1,10 +1,11 @@
-import { apiUrl } from "@/lib/utils";
 'use client';
 
+import { apiUrl } from '@/lib/utils';
 import { useState, useEffect, Suspense } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { 
+import {
   ArrowLeft,
+  ArrowRight,
   User,
   FileText,
   CheckCircle,
@@ -125,7 +126,7 @@ function PostulantExpedienteContent() {
   const [loading, setLoading] = useState(true);
   const [selectedDocument, setSelectedDocument] = useState<string | null>(null);
   const [validationComments, setValidationComments] = useState('');
-  const [documentComments, setDocumentComments] = useState<{ [id: string]: string }>({});
+  const [documentComments, setDocumentComments] = useState<{ [id: string]: { status: string; comments: string } }>({}); // Updated type to match ValidationDecision interface
   const [submitting, setSubmitting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [allPostulantsDNI, setAllPostulantsDNI] = useState<string[]>([]);
@@ -134,24 +135,24 @@ function PostulantExpedienteContent() {
   const fetchPostulantData = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/validation/postulant/${dni}`);
+      const response = await fetch(apiUrl(`validation/postulant/${dni}`));
       if (!response.ok) throw new Error('Failed to fetch postulant data');
 
       const data = await response.json();
       setPostulant(data.postulant);
-      
+
       // Update postulants list for navigation if available
       if (data.navigation?.postulantsList) {
         setAllPostulantsDNI(data.navigation.postulantsList);
       }
-      
+
       // Initialize document comments
-      const initialComments: { [id: string]: string } = {};
+      const initialComments: { [id: string]: { status: string; comments: string } } = {};
       data.postulant.documents.forEach((doc: any) => {
         initialComments[doc.id] = doc.comments || '';
       });
       setDocumentComments(initialComments);
-      
+
       // Select first document by default
       if (data.postulant.documents.length > 0) {
         setSelectedDocument(data.postulant.documents[0].id);
@@ -171,9 +172,9 @@ function PostulantExpedienteContent() {
   useEffect(() => {
     if (dni) {
       fetchPostulantData();
-      
+
       // Fetch navigation data (list of all postulants for keyboard navigation)
-      fetch(apiUrl('validation/postulants?getAllDNIs=true')
+      fetch(apiUrl('validation/postulants?getAllDNIs=true'))
         .then(res => res.json())
         .then(data => {
           if (data.allDNIs) {
@@ -215,9 +216,9 @@ function PostulantExpedienteContent() {
   const handleValidationDecision = async (decision: ValidationDecision) => {
     setSubmitting(true);
     try {
-      const endpoint = decision.action === 'approve' 
-        ? '/api/validation/approve' 
-        : '/api/validation/reject';
+      const endpoint = decision.action === 'approve'
+        ? apiUrl('validation/approve')
+        : apiUrl('validation/reject');
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -291,7 +292,7 @@ function PostulantExpedienteContent() {
             <Skeleton className="h-4 w-48" />
           </div>
         </div>
-        
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 flex-1">
           <div className="lg:col-span-1 space-y-6">
             <Card>
@@ -307,7 +308,7 @@ function PostulantExpedienteContent() {
               </CardContent>
             </Card>
           </div>
-          
+
           <div className="lg:col-span-2">
             <Card className="h-full">
               <CardHeader>
@@ -343,73 +344,73 @@ function PostulantExpedienteContent() {
     <div className="flex flex-col h-full p-4 md:p-8">
       {/* Header */}
       <header className="space-y-4 mb-8">
-        <BreadcrumbNavigation 
-          items={ValidationBreadcrumbs.postulant(postulant.user.fullName)} 
+        <BreadcrumbNavigation
+          items={ValidationBreadcrumbs.postulant(postulant.user.fullName)}
           showIndex
           currentIndex={allPostulantsDNI.findIndex(d => d === dni)}
           totalCount={allPostulantsDNI.length}
         />
         <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="outline" size="icon" onClick={() => router.back()}>
-            <ArrowLeft className="w-4 h-4" />
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold font-headline flex items-center gap-2">
-              <ShieldCheck className="w-8 h-8 text-primary" />
-              {postulant.user.fullName}
-            </h1>
-            <p className="text-muted-foreground">
-              DNI: {postulant.user.dni} • Validación de Expediente
-            </p>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          <Badge 
-            variant={getStatusBadgeVariant(postulant.validationStatus)}
-            className="flex items-center gap-1"
-          >
-            {getStatusIcon(postulant.validationStatus)}
-            {postulant.validationStatus === 'IN_REVIEW' ? 'En Revisión' : 
-             postulant.validationStatus === 'PENDING' ? 'Pendiente' :
-             postulant.validationStatus}
-          </Badge>
-          
-          {/* Navigation Controls */}
-          <div className="flex items-center gap-1">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={navigateToPrevious}
-              disabled={!canGoPrevious()}
-              title="Anterior postulante (P o Shift+←)"
-            >
+          <div className="flex items-center gap-4">
+            <Button variant="outline" size="icon" onClick={() => router.back()}>
               <ArrowLeft className="w-4 h-4" />
             </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={navigateToNext}
-              disabled={!canGoNext()}
-              title="Siguiente postulante (N o Shift+→)"
+            <div>
+              <h1 className="text-3xl font-bold font-headline flex items-center gap-2">
+                <ShieldCheck className="w-8 h-8 text-primary" />
+                {postulant.user.fullName}
+              </h1>
+              <p className="text-muted-foreground">
+                DNI: {postulant.user.dni} • Validación de Expediente
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Badge
+              variant={getStatusBadgeVariant(postulant.validationStatus)}
+              className="flex items-center gap-1"
             >
-              <ArrowRight className="w-4 h-4" />
+              {getStatusIcon(postulant.validationStatus)}
+              {postulant.validationStatus === 'IN_REVIEW' ? 'En Revisión' :
+                postulant.validationStatus === 'PENDING' ? 'Pendiente' :
+                  postulant.validationStatus}
+            </Badge>
+
+            {/* Navigation Controls */}
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={navigateToPrevious}
+                disabled={!canGoPrevious()}
+                title="Anterior postulante (P o Shift+←)"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={navigateToNext}
+                disabled={!canGoNext()}
+                title="Siguiente postulante (N o Shift+→)"
+              >
+                <ArrowRight className="w-4 h-4" />
+              </Button>
+            </div>
+
+            <KeyboardShortcutsHelp />
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={fetchPostulantData}
+              disabled={refreshing}
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+              Actualizar
             </Button>
           </div>
-          
-          <KeyboardShortcutsHelp />
-          
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={fetchPostulantData}
-            disabled={refreshing}
-          >
-            <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-            Actualizar
-          </Button>
-        </div>
         </div>
       </header>
 
@@ -430,26 +431,26 @@ function PostulantExpedienteContent() {
                 <Mail className="w-4 h-4 text-muted-foreground" />
                 <span>{postulant.user.email}</span>
               </div>
-              
+
               {postulant.user.telefono && (
                 <div className="flex items-center gap-2 text-sm">
                   <Phone className="w-4 h-4 text-muted-foreground" />
                   <span>{postulant.user.telefono}</span>
                 </div>
               )}
-              
+
               {postulant.user.direccion && (
                 <div className="flex items-center gap-2 text-sm">
                   <MapPin className="w-4 h-4 text-muted-foreground" />
                   <span className="text-wrap">{postulant.user.direccion}</span>
                 </div>
               )}
-              
+
               <div className="flex items-center gap-2 text-sm">
                 <Building className="w-4 h-4 text-muted-foreground" />
                 <span>{postulant.inscription.centroDeVida}</span>
               </div>
-              
+
               <div className="flex items-center gap-2 text-sm">
                 <Calendar className="w-4 h-4 text-muted-foreground" />
                 <span>Inscrito: {formatDate(postulant.inscription.inscriptionDate)}</span>
@@ -491,9 +492,8 @@ function PostulantExpedienteContent() {
               {postulant.documents.map((doc) => (
                 <div
                   key={doc.id}
-                  className={`p-3 border rounded-lg cursor-pointer transition-colors hover:bg-muted/50 ${
-                    selectedDocument === doc.id ? 'border-primary bg-primary/10' : 'border-border'
-                  }`}
+                  className={`p-3 border rounded-lg cursor-pointer transition-colors hover:bg-muted/50 ${selectedDocument === doc.id ? 'border-primary bg-primary/10' : 'border-border'
+                    }`}
                   onClick={() => setSelectedDocument(doc.id)}
                 >
                   <div className="flex items-center justify-between">
@@ -501,7 +501,7 @@ function PostulantExpedienteContent() {
                       <p className="font-medium truncate">{doc.fileName}</p>
                       <p className="text-xs text-muted-foreground">{doc.fileType}</p>
                     </div>
-                    <Badge 
+                    <Badge
                       variant={getStatusBadgeVariant(doc.status)}
                       className="text-xs"
                     >
@@ -549,8 +549,8 @@ function PostulantExpedienteContent() {
               <div className="flex flex-col gap-2">
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button 
-                      className="w-full" 
+                    <Button
+                      className="w-full"
                       disabled={submitting || postulant.validationStatus !== 'PENDING'}
                       title="Aprobar postulante (A)"
                     >
@@ -568,7 +568,7 @@ function PostulantExpedienteContent() {
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                      <AlertDialogAction 
+                      <AlertDialogAction
                         onClick={() => handleValidationDecision({
                           action: 'approve',
                           comments: validationComments,
@@ -583,9 +583,9 @@ function PostulantExpedienteContent() {
 
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button 
-                      variant="destructive" 
-                      className="w-full" 
+                    <Button
+                      variant="destructive"
+                      className="w-full"
                       disabled={submitting || postulant.validationStatus !== 'PENDING'}
                       title="Rechazar postulante (R)"
                     >
@@ -603,8 +603,8 @@ function PostulantExpedienteContent() {
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                      <AlertDialogAction 
-                        variant="destructive"
+                      <AlertDialogAction
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                         onClick={() => handleValidationDecision({
                           action: 'reject',
                           comments: validationComments,
@@ -651,8 +651,9 @@ function PostulantExpedienteContent() {
             <CardContent className="flex-1 flex flex-col min-h-0">
               {selectedDoc ? (
                 <div className="flex-1 min-h-0">
-                  <PDFViewer 
-                    documentId={selectedDoc.id}
+                  <PDFViewer
+                    pdfUrl={`/api/documents/${selectedDoc.id}/view`}
+                    dni={dni}
                     fileName={selectedDoc.fileName}
                     className="h-full"
                   />
@@ -673,10 +674,13 @@ function PostulantExpedienteContent() {
                     <EnhancedComments
                       label="Comentarios del documento"
                       placeholder="Agregue comentarios específicos para este documento..."
-                      value={documentComments[selectedDoc.id] || ''}
+                      value={documentComments[selectedDoc.id]?.comments || ''}
                       onChange={(value) => setDocumentComments(prev => ({
                         ...prev,
-                        [selectedDoc.id]: value
+                        [selectedDoc.id]: {
+                          status: prev[selectedDoc.id]?.status || 'PENDING',
+                          comments: value
+                        }
                       }))}
                       documentId={selectedDoc.id}
                       disabled={submitting}

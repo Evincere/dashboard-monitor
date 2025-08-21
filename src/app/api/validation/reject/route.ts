@@ -20,7 +20,7 @@ interface RejectionRequest {
 export async function POST(request: NextRequest) {
   try {
     const body: RejectionRequest = await request.json();
-    
+
     const { userId, dni, documentIds, rejectAll, reason, comments, validatedBy } = body;
 
     // Validar que tengamos el identificador del usuario
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
     // Si tenemos DNI pero no userId, buscar el usuario
     if (!targetUserId && dni) {
       const postulantResponse = await backendClient.getPostulantByDni(dni);
-      
+
       if (!postulantResponse.success || !postulantResponse.data?.user) {
         return NextResponse.json({
           success: false,
@@ -56,16 +56,16 @@ export async function POST(request: NextRequest) {
           timestamp: new Date().toISOString()
         }, { status: 404 });
       }
-      
+
       targetUserId = postulantResponse.data.user.id;
     }
 
     // Obtener documentos del usuario
-    const documentsResponse = await backendClient.getDocuments({ 
+    const documentsResponse = await backendClient.getDocuments({
       usuarioId: targetUserId,
       size: 100
     });
-    
+
     if (!documentsResponse.success) {
       console.error('Error fetching user documents:', documentsResponse.error);
       return NextResponse.json({
@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
     }
 
     const userDocuments = documentsResponse.data?.content || [];
-    
+
     if (userDocuments.length === 0) {
       return NextResponse.json({
         success: false,
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
 
     // Determinar qué documentos rechazar
     let documentsToReject: string[] = [];
-    
+
     if (rejectAll) {
       // Rechazar todos los documentos pendientes
       documentsToReject = userDocuments
@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
         .map(doc => doc.id);
     } else if (documentIds && documentIds.length > 0) {
       // Rechazar solo los documentos especificados
-      documentsToReject = documentIds.filter(id => 
+      documentsToReject = documentIds.filter(id =>
         userDocuments.some(doc => doc.id === id)
       );
     } else {
@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
     for (const documentId of documentsToReject) {
       try {
         const rejectionResponse = await backendClient.rejectDocument(documentId, fullReason);
-        
+
         if (rejectionResponse.success) {
           successCount++;
           rejectionResults.push({
@@ -156,7 +156,11 @@ export async function POST(request: NextRequest) {
     console.log(`❌ Rejection completed: ${successCount} successful, ${errorCount} errors`);
 
     // Obtener estado actualizado del postulante
-    const updatedPostulantResponse = await backendClient.getPostulantByDni(dni || targetUserId);
+    if (!targetUserId) {
+      throw new Error('Target user ID is required but was not found');
+    }
+
+    const updatedPostulantResponse = await backendClient.getPostulantByDni(targetUserId);
     const updatedPostulant = updatedPostulantResponse.data;
 
     return NextResponse.json({
@@ -175,7 +179,7 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Rejection API error:', error);
-    
+
     return NextResponse.json({
       success: false,
       error: 'Failed to process rejection',

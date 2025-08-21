@@ -4,7 +4,7 @@
 			"path": "."
 		},
 		{
-			"path": "../concursos-mpd"
+			"path": "../../../root/concursos/mpd_concursos"
 		}
 	],
 	"settings": {

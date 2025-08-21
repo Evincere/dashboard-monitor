@@ -16,18 +16,18 @@ import {
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 
 const chartData = [
-    { contest: 'Juez de Cámara', inscriptions: 124 },
-    { contest: 'Fiscal Auxiliar', inscriptions: 87 },
-    { contest: 'Defensor Oficial', inscriptions: 156 },
-    { contest: 'Secretario', inscriptions: 45 },
-    { contest: 'Asistente Legal', inscriptions: 210 },
+  { contest: 'Juez de Cámara', inscriptions: 124 },
+  { contest: 'Fiscal Auxiliar', inscriptions: 87 },
+  { contest: 'Defensor Oficial', inscriptions: 156 },
+  { contest: 'Secretario', inscriptions: 45 },
+  { contest: 'Asistente Legal', inscriptions: 210 },
 ];
 
 const chartConfig = {
-    inscriptions: {
-        label: 'Inscripciones',
-        color: 'hsl(var(--accent))',
-    },
+  inscriptions: {
+    label: 'Inscripciones',
+    color: 'hsl(var(--accent))',
+  },
 };
 
 export function InscriptionsChart() {
@@ -40,13 +40,13 @@ export function InscriptionsChart() {
       <CardContent>
         <ChartContainer config={chartConfig} className="h-[250px] w-full">
           <BarChart accessibilityLayer data={chartData}>
-             <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-border/50" />
+            <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-border/50" />
             <XAxis
               dataKey="contest"
               tickLine={false}
               tickMargin={10}
               axisLine={false}
-              tickFormatter={(value) => value.split(" ").map(w => w[0]).join('')}
+              tickFormatter={(value) => value.split(" ").map((w: string) => w[0]).join('')}
             />
             <YAxis />
             <ChartTooltip

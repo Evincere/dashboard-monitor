@@ -2,9 +2,9 @@
 
 import { apiUrl, routeUrl, fullRouteUrl } from "@/lib/utils";
 import { useState, useEffect } from 'react';
-import { 
+import {
   Users,
-  Search, 
+  Search,
   Filter,
   RefreshCw,
   CheckCircle,
@@ -45,6 +45,7 @@ interface Postulation {
     id: string;
     state: string;
     centroDeVida: string;
+    selectedCircunscripciones: string[];
     createdAt: string;
   };
   contest: {
@@ -80,7 +81,7 @@ export default function PostulationsManagementPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [validationFilter, setValidationFilter] = useState('ALL');
-  const [priorityFilter, setPriorityFilter] = useState('ALL');
+  const [circunscripcionFilter, setCircunscripcionFilter] = useState('ALL');
   const [sortBy, setSortBy] = useState('PRIORITY');
   const { toast } = useToast();
 
@@ -97,7 +98,7 @@ export default function PostulationsManagementPage() {
         headers: { 'Content-Type': 'application/json' },
         signal: AbortSignal.timeout(45000) // 30 seconds
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
@@ -117,33 +118,33 @@ export default function PostulationsManagementPage() {
     } else {
       setIsLoadingMore(true);
     }
-    
+
     try {
       const params = new URLSearchParams({
         page: page.toString(),
         pageSize: pageSize.toString()
       });
-      
+
       const response = await fetch(apiUrl(`postulations/management?${params}`), {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
         signal: AbortSignal.timeout(60000) // 60 seconds for document processing
       });
-      
+
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`Failed to fetch postulations: ${response.status} ${response.statusText} - ${errorText}`);
       }
-      
+
       const data = await response.json();
-      
+
       if (!data.success) {
         throw new Error(`API returned error: ${data.error || 'Unknown error'}`);
       }
-      
+
       const newPostulations = data.postulations || [];
       console.log("🔄 Received postulations:", newPostulations.length, "first:", newPostulations[0]);
-      
+
       if (append) {
         // Append to existing data (infinite scroll)
         setPostulations(prev => [...prev, ...newPostulations]);
@@ -151,22 +152,23 @@ export default function PostulationsManagementPage() {
         // Replace data (new search/filter)
         setPostulations(newPostulations);
       }
-      
+
       setStats(data.stats || null);
       setCurrentPage(page);
-      
+
       if (data.pagination) {
         setTotalPages(data.pagination.totalPages);
       }
-      
+
       // Apply filters to ALL loaded postulations
       const allPostulations = append ? [...postulations, ...newPostulations] : newPostulations;
-      applyFilters(allPostulations, statusFilter, validationFilter, priorityFilter, searchTerm, sortBy);
-      
+      applyFilters(allPostulations, statusFilter, validationFilter, circunscripcionFilter, searchTerm, sortBy);
+
     } catch (error) {
       console.error('Error fetching postulations:', error);
-      
-      if (error.name !== 'AbortError') {
+
+      // Verificamos que el error sea una instancia de Error
+      if (error instanceof Error && error.name !== 'AbortError') {
         toast({
           title: 'Error',
           description: `No se pudieron cargar las postulaciones: ${error.message}`,
@@ -191,7 +193,7 @@ export default function PostulationsManagementPage() {
     data: Postulation[],
     status: string,
     validation: string,
-    priority: string,
+    circunscripcion: string,
     search: string,
     sort: string
   ) => {
@@ -207,15 +209,30 @@ export default function PostulationsManagementPage() {
       filtered = filtered.filter(post => post.validationStatus === validation);
     }
 
-    // Filter by priority
-    if (priority !== 'ALL') {
-      filtered = filtered.filter(post => post.priority === priority);
+    // Filter by circunscripcion
+    if (circunscripcion !== 'ALL') {
+      filtered = filtered.filter(post => {
+        const selectedCirc = post.inscription.selectedCircunscripciones || [];
+        if (circunscripcion === "PRIMERA_CIRCUNSCRIPCION") {
+          return selectedCirc.some(circ => circ.toLowerCase().includes("primera"));
+        }
+        if (circunscripcion === "SEGUNDA_CIRCUNSCRIPCION") {
+          return selectedCirc.some(circ => circ.toLowerCase().includes("segunda"));
+        }
+        if (circunscripcion === "TERCERA_CIRCUNSCRIPCION") {
+          return selectedCirc.some(circ => circ.toLowerCase().includes("tercera"));
+        }
+        if (circunscripcion === "CUARTA_CIRCUNSCRIPCION") {
+          return selectedCirc.some(circ => circ.toLowerCase().includes("cuarta"));
+        }
+        return true;
+      });
     }
 
     // Search filter
     if (search.trim()) {
       const searchLower = search.toLowerCase();
-      filtered = filtered.filter(post => 
+      filtered = filtered.filter(post =>
         post.user.dni.toLowerCase().includes(searchLower) ||
         post.user.fullName.toLowerCase().includes(searchLower) ||
         post.user.email.toLowerCase().includes(searchLower)
@@ -248,13 +265,20 @@ export default function PostulationsManagementPage() {
     console.log('🚀 Iniciando carga de postulaciones...');
     // Cargar estadísticas primero
     fetchStats();
-    
+
     // Cargar TODAS las postulaciones directamente
     setTimeout(() => {
       console.log('📡 Cargando todas las postulaciones...');
       fetchPostulations(0, false);
     }, 1000);
   }, []);
+
+  // Apply filters whenever filter values change
+  useEffect(() => {
+    if (postulations.length > 0) {
+      applyFilters(postulations, statusFilter, validationFilter, circunscripcionFilter, searchTerm, sortBy);
+    }
+  }, [postulations, statusFilter, validationFilter, circunscripcionFilter, searchTerm, sortBy]);
 
   const getValidationStatusIcon = (status: string) => {
     switch (status) {
@@ -323,8 +347,8 @@ export default function PostulationsManagementPage() {
               Administre y valide las postulaciones al concurso de manera organizada
             </p>
           </div>
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             onClick={() => {
               // Reset pagination and filters
               setCurrentPage(1);
@@ -438,8 +462,9 @@ export default function PostulationsManagementPage() {
               <SelectContent>
                 <SelectItem value="ALL">Todos los estados</SelectItem>
                 <SelectItem value="COMPLETED_WITH_DOCS">Con documentos completos</SelectItem>
-                <SelectItem value="ACTIVE">Activas</SelectItem>
-                <SelectItem value="COMPLETED_PENDING_DOCS">Pendientes de documentos</SelectItem>
+                <SelectItem value="ACTIVE">Fuera del concurso (No completadas)</SelectItem>
+                <SelectItem value="APPROVED">Aprobadas</SelectItem>
+                <SelectItem value="COMPLETED_PENDING_DOCS">Fuera del concurso (Sin documentos)</SelectItem>
               </SelectContent>
             </Select>
 
@@ -456,15 +481,16 @@ export default function PostulationsManagementPage() {
               </SelectContent>
             </Select>
 
-            <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+            <Select value={circunscripcionFilter} onValueChange={setCircunscripcionFilter}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ALL">Todas las prioridades</SelectItem>
-                <SelectItem value="HIGH">Alta prioridad</SelectItem>
-                <SelectItem value="MEDIUM">Prioridad media</SelectItem>
-                <SelectItem value="LOW">Prioridad baja</SelectItem>
+                <SelectItem value="ALL">Todas las circunscripciones</SelectItem>
+                <SelectItem value="PRIMERA_CIRCUNSCRIPCION">Primera Circunscripción</SelectItem>
+                <SelectItem value="SEGUNDA_CIRCUNSCRIPCION">Segunda Circunscripción</SelectItem>
+                <SelectItem value="TERCERA_CIRCUNSCRIPCION">Tercera Circunscripción</SelectItem>
+                <SelectItem value="CUARTA_CIRCUNSCRIPCION">Cuarta Circunscripción</SelectItem>
               </SelectContent>
             </Select>
 
@@ -492,7 +518,7 @@ export default function PostulationsManagementPage() {
               Postulaciones ({filteredPostulations.length})
             </span>
           </div>
-          
+
           {filteredPostulations.length > 0 && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <div className="flex items-center gap-1">
@@ -532,13 +558,13 @@ export default function PostulationsManagementPage() {
                 <PostulationCard
                   key={postulation.id}
                   postulation={postulation}
-                onClick={() => {
-                  // Navigate directly to document validation (bypassing the intermediate documents view)
-                  window.location.href = fullRouteUrl(`postulations/${postulation.user.dni}/documents/validation`);
-                }}
+                  onClick={() => {
+                    // Navigate directly to document validation (bypassing the intermediate documents view)
+                    window.location.href = fullRouteUrl(`postulations/${postulation.user.dni}/documents/validation`);
+                  }}
                 />
               ))}
-              
+
               {/* Load More Button */}
               {currentPage < totalPages && (
                 <div className="text-center py-6">
@@ -564,7 +590,7 @@ export default function PostulationsManagementPage() {
                   </Button>
                 </div>
               )}
-              
+
               {/* Información de paginación */}
               {postulations.length > 0 && (
                 <div className="text-center py-4 text-sm text-muted-foreground">

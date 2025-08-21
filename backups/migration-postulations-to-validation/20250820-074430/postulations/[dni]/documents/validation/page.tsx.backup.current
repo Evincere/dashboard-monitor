@@ -1,0 +1,692 @@
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { useValidationStore } from "@/stores/validationStore";
+import { useToast } from "@/hooks/use-toast";
+import { authFetch, apiUrl } from '@/lib/auth-fetch';
+import { ensureAuthenticated } from '@/lib/auto-auth';
+
+// UI Components
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+// Icons
+import {
+  ArrowLeft,
+  CheckCircle,
+  XCircle,
+  Clock,
+  AlertTriangle,
+  FileText,
+  User,
+  Loader2,
+} from "lucide-react";
+
+// Types
+interface Document {
+  id: string;
+  fileName?: string;
+  originalName?: string;
+  filePath?: string;
+  fileSize?: number;
+  documentType: string;
+  validationStatus: "PENDING" | "APPROVED" | "REJECTED";
+  isRequired: boolean;
+  uploadDate: string;
+  validatedAt?: string;
+  validatedBy?: string;
+  comments?: string;
+  rejectionReason?: string;
+}
+
+interface PostulantInfo {
+  user: {
+    dni: string;
+    fullName: string;
+    email: string;
+  };
+  inscription: {
+    id: string;
+    state: string;
+    centroDeVida: string;
+    createdAt: string;
+  };
+  contest: {
+    title: string;
+    position: string;
+  };
+}
+
+const REJECTION_REASONS = [
+  "Documento ilegible o de mala calidad",
+  "Documento incompleto",
+  "Documento no corresponde al tipo requerido",
+  "Información inconsistente con otros documentos",
+  "Documento vencido o no vigente",
+  "Falta información requerida",
+  "Formato de archivo no válido",
+  "Documento no pertenece al postulante",
+  "Otro (especificar en comentarios)",
+];
+
+export default function DocumentValidationPage() {
+  const params = useParams();
+  const router = useRouter();
+  const { toast } = useToast();
+  const dni = params.dni as string;
+  
+  console.log("🚀 VALIDATION COMPONENT - Starting for DNI:", dni);
+
+  // Zustand store
+  const {
+    documents,
+    currentDocument,
+    postulant,
+    stats,
+    loading,
+    submitting,
+    setDocuments,
+    setCurrentDocument,
+    setPostulant,
+    setStats,
+    setLoading,
+    setSubmitting,
+    approveDocument,
+    rejectDocument,
+    reset,
+  } = useValidationStore();
+
+  console.log("📊 Store state:", { 
+    documentsCount: documents.length, 
+    loading, 
+    postulantName: postulant?.user?.fullName,
+    statsTotal: stats?.total || 0
+  });
+
+  // Local state for UI
+  const [comments, setComments] = useState("");
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [showRejectionForm, setShowRejectionForm] = useState(false);
+
+  // Fetch validation data from real API
+  const fetchValidationData = async () => {
+    console.log('🔄 fetchValidationData starting for DNI:', dni);
+    setLoading(true);
+    
+    try {
+      // Ensure authentication
+      console.log('🔐 Checking authentication...');
+      const isAuth = await ensureAuthenticated();
+      if (!isAuth) {
+        console.error("❌ Authentication failed");
+        throw new Error("Authentication failed");
+      }
+      
+      console.log('✅ Authentication successful, calling API...');
+      const response = await authFetch(apiUrl(`postulations/${dni}/documents`));
+      
+      console.log('📡 API Response:', {
+        status: response.status,
+        ok: response.ok,
+        statusText: response.statusText
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error(`No se encontró postulante con DNI: ${dni}`);
+        }
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      console.log('📋 API Result:', result);
+
+      if (!result.success) {
+        throw new Error(result.error || "API returned success: false");
+      }
+
+      // Transform backend data to frontend format
+      const transformedDocuments = (result.data?.documents || []).map((doc: any) => ({
+        id: doc.id,
+        fileName: doc.fileName || doc.nombreArchivo,
+        originalName: doc.originalName || doc.nombreArchivo,
+        filePath: doc.filePath,
+        fileSize: doc.fileSize || 0,
+        documentType: doc.documentType || doc.tipoDocumento?.code || 'UNKNOWN',
+        validationStatus: doc.validationStatus || doc.estado || 'PENDING',
+        isRequired: doc.isRequired !== undefined ? doc.isRequired : (doc.tipoDocumento?.requerido || false),
+        uploadDate: doc.uploadDate || doc.fechaCarga,
+        validatedAt: doc.validatedAt || doc.fechaValidacion,
+        validatedBy: doc.validatedBy || doc.validadoPor,
+        comments: doc.comments || doc.comentarios || '',
+        rejectionReason: doc.rejectionReason || doc.motivoRechazo,
+      }));
+
+      // Transform postulant data
+      const transformedPostulant = {
+        user: {
+          dni: result.data?.postulant?.dni || result.data?.postulant?.userInfo?.dni || dni,
+          fullName: result.data?.postulant?.fullName || result.data?.postulant?.userInfo?.fullName || 'Usuario sin nombre',
+          email: result.data?.postulant?.email || result.data?.postulant?.userInfo?.email || '',
+        },
+        inscription: {
+          id: result.data?.postulant?.id || result.data?.inscription?.id || '',
+          state: result.data?.postulant?.state || result.data?.inscription?.state || 'PENDING',
+          centroDeVida: result.data?.postulant?.centroDeVida || result.data?.inscription?.centroDeVida || '',
+          createdAt: result.data?.postulant?.inscriptionDate || result.data?.inscription?.createdAt || '',
+        },
+        contest: {
+          title: result.data?.postulant?.contestInfo?.title || result.data?.inscription?.contestInfo?.title || 'Concurso sin título',
+          position: result.data?.postulant?.contestInfo?.position || result.data?.inscription?.contestInfo?.position || '',
+        }
+      };
+
+      // Update store
+      setDocuments(transformedDocuments);
+      setPostulant(transformedPostulant);
+      
+      // Generate stats from documents
+      const docs = transformedDocuments || [];
+      const generatedStats = {
+        total: docs.length,
+        pending: docs.filter(d => d.validationStatus === 'PENDING').length,
+        approved: docs.filter(d => d.validationStatus === 'APPROVED').length,
+        rejected: docs.filter(d => d.validationStatus === 'REJECTED').length,
+        required: docs.filter(d => d.isRequired).length,
+        completionPercentage: docs.length > 0 ? Math.round((docs.filter(d => d.validationStatus !== 'PENDING').length / docs.length) * 100) : 0
+      };
+      
+      console.log('📊 Generated stats:', generatedStats);
+      setStats(generatedStats);
+
+      // Set first pending document as current
+      const firstPending = docs.find(doc => doc.validationStatus === "PENDING");
+      if (firstPending) {
+        setCurrentDocument(firstPending);
+        console.log('📄 Set current document:', firstPending.originalName || firstPending.fileName);
+      } else if (docs.length > 0) {
+        setCurrentDocument(docs[0]);
+        console.log('📄 Set first document as current:', docs[0].originalName || docs[0].fileName);
+      }
+
+      toast({
+        title: "Datos cargados",
+        description: `Documentos de ${transformedPostulant.user.fullName} cargados exitosamente`,
+        variant: "default",
+      });
+
+    } catch (error) {
+      console.error("❌ Error fetching validation data:", error);
+      toast({
+        title: "Error",
+        description: `No se pudieron cargar los documentos: ${
+          error instanceof Error ? error.message : "Error desconocido"
+        }`,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    console.log("🔄 useEffect triggered with DNI:", dni);
+    if (dni) {
+      fetchValidationData();
+    }
+
+    return () => {
+      console.log('🧹 Component cleanup');
+      reset();
+    };
+  }, [dni]);
+
+  // Handle document approval using real API
+  const handleApprove = async () => {
+    if (!currentDocument) return;
+
+    setSubmitting(true);
+    try {
+      console.log('✅ Approving document:', currentDocument.id);
+      
+      const response = await authFetch(apiUrl('validation/approve'), {
+        method: 'POST',
+        body: JSON.stringify({
+          documentIds: [currentDocument.id],
+          comments: comments.trim() || undefined,
+          validatedBy: 'admin', // TODO: Get from current user
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Approval failed');
+      }
+
+      // Refresh data
+      await fetchValidationData();
+      
+      toast({
+        title: "Documento Aprobado",
+        description: "El documento ha sido aprobado exitosamente",
+        variant: "default",
+      });
+      
+      setComments("");
+      
+      // Move to next pending document
+      const pendingDocs = documents.filter(d => d.validationStatus === 'PENDING');
+      const nextPending = pendingDocs.find(d => d.id !== currentDocument.id);
+      if (nextPending) {
+        setCurrentDocument(nextPending);
+      }
+      
+    } catch (error) {
+      console.error("Error approving document:", error);
+      toast({
+        title: "Error",
+        description: `No se pudo aprobar el documento: ${
+          error instanceof Error ? error.message : "Error desconocido"
+        }`,
+        variant: "destructive",
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Handle document rejection using real API
+  const handleReject = async () => {
+    if (!currentDocument || !rejectionReason.trim()) return;
+
+    setSubmitting(true);
+    try {
+      console.log('❌ Rejecting document:', currentDocument.id, 'Reason:', rejectionReason);
+      
+      const response = await authFetch(apiUrl('validation/reject'), {
+        method: 'POST',
+        body: JSON.stringify({
+          documentIds: [currentDocument.id],
+          reason: rejectionReason,
+          comments: comments.trim() || undefined,
+          validatedBy: 'admin', // TODO: Get from current user
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Rejection failed');
+      }
+
+      // Refresh data
+      await fetchValidationData();
+      
+      toast({
+        title: "Documento Rechazado",
+        description: "El documento ha sido rechazado",
+        variant: "destructive",
+      });
+
+      setComments("");
+      setRejectionReason("");
+      setShowRejectionForm(false);
+      
+      // Move to next pending document
+      const pendingDocs = documents.filter(d => d.validationStatus === 'PENDING');
+      const nextPending = pendingDocs.find(d => d.id !== currentDocument.id);
+      if (nextPending) {
+        setCurrentDocument(nextPending);
+      }
+      
+    } catch (error) {
+      console.error("Error rejecting document:", error);
+      toast({
+        title: "Error",
+        description: `No se pudo rechazar el documento: ${
+          error instanceof Error ? error.message : "Error desconocido"
+        }`,
+        variant: "destructive",
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Handle next document navigation
+  const goToNext = () => {
+    const currentIndex = documents.findIndex(doc => doc.id === currentDocument?.id);
+    const nextDocument = documents[currentIndex + 1];
+    if (nextDocument) {
+      setCurrentDocument(nextDocument);
+    }
+  };
+
+  // Handle previous document navigation  
+  const goToPrevious = () => {
+    const currentIndex = documents.findIndex(doc => doc.id === currentDocument?.id);
+    const prevDocument = documents[currentIndex - 1];
+    if (prevDocument) {
+      setCurrentDocument(prevDocument);
+    }
+  };
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center space-y-4">
+          <Loader2 className="w-12 h-12 animate-spin mx-auto text-primary" />
+          <h2 className="text-xl font-semibold">Cargando documentos...</h2>
+          <p className="text-muted-foreground">Obteniendo datos del postulante {dni}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (!postulant || !postulant.inscription || !stats) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background">
+        <AlertTriangle className="w-16 h-16 text-slate-400 mb-4" />
+        <h2 className="text-2xl font-bold mb-2">Postulante no encontrado</h2>
+        <p className="text-slate-600 mb-4">
+          No se pudo encontrar información para el DNI: {dni}
+        </p>
+        <Button onClick={() => router.back()}>
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Volver
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <div className="border-b bg-card px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Button variant="outline" size="icon" onClick={() => router.back()}>
+              <ArrowLeft className="w-4 h-4" />
+            </Button>
+            <div>
+              <h1 className="text-2xl font-bold">Validación de Documentos</h1>
+              <div className="flex items-center gap-2">
+                <p className="text-muted-foreground">
+                  {postulant.user.fullName} • DNI: {postulant.user.dni}
+                </p>
+                <Badge variant={
+                  postulant.inscription.state === 'APPROVED' ? 'default' :
+                  postulant.inscription.state === 'REJECTED' ? 'destructive' :
+                  postulant.inscription.state === 'PENDING' ? 'secondary' :
+                  'outline'
+                }>
+                  {postulant.inscription.state}
+                </Badge>
+              </div>
+            </div>
+          </div>
+          
+          <div className="text-right">
+            <div className="text-sm text-muted-foreground">
+              Progreso: {stats.approved + stats.rejected}/{stats.total} documentos
+            </div>
+            <div className="w-32">
+              <Progress value={stats.completionPercentage} className="h-2" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 p-6">
+        {/* Document List */}
+        <div className="lg:col-span-1 space-y-4">
+          <h3 className="text-lg font-semibold">Documentos ({documents.length})</h3>
+          <div className="space-y-2">
+            {documents.map((doc) => (
+              <div
+                key={doc.id}
+                onClick={() => setCurrentDocument(doc)}
+                className={`p-3 border rounded-lg cursor-pointer transition-colors hover:bg-muted/50 ${
+                  currentDocument?.id === doc.id ? 'border-primary bg-primary/10' : 'border-border'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{doc.originalName || doc.fileName}</p>
+                    <p className="text-sm text-muted-foreground">{doc.documentType}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {doc.isRequired && (
+                      <AlertTriangle className="w-4 h-4 text-amber-500" title="Obligatorio" />
+                    )}
+                    {doc.validationStatus === "APPROVED" ? (
+                      <CheckCircle className="w-4 h-4 text-green-500" />
+                    ) : doc.validationStatus === "REJECTED" ? (
+                      <XCircle className="w-4 h-4 text-red-500" />
+                    ) : (
+                      <Clock className="w-4 h-4 text-blue-500" />
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Document Viewer */}
+        <div className="lg:col-span-1">
+          {currentDocument ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold">Visor de Documento</h3>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={goToPrevious} 
+                    disabled={documents.findIndex(d => d.id === currentDocument.id) === 0}
+                  >
+                    ←
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={goToNext} 
+                    disabled={documents.findIndex(d => d.id === currentDocument.id) === documents.length - 1}
+                  >
+                    →
+                  </Button>
+                </div>
+              </div>
+              
+              <div className="border rounded-lg p-4 bg-card">
+                <div className="text-center space-y-4">
+                  <FileText className="w-16 h-16 text-muted-foreground mx-auto" />
+                  <div>
+                    <p className="font-medium">{currentDocument.originalName || currentDocument.fileName}</p>
+                    <p className="text-sm text-muted-foreground">{currentDocument.documentType}</p>
+                    {currentDocument.fileSize && (
+                      <p className="text-xs text-muted-foreground">
+                        {(currentDocument.fileSize / 1024 / 1024).toFixed(1)} MB
+                      </p>
+                    )}
+                  </div>
+                  <Button>
+                    Ver Documento
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center h-64 border rounded-lg bg-muted">
+              <p className="text-muted-foreground">Selecciona un documento para visualizar</p>
+            </div>
+          )}
+        </div>
+
+        {/* Validation Panel */}
+        <div className="lg:col-span-1">
+          {currentDocument ? (
+            <div className="space-y-6">
+              <h3 className="text-lg font-semibold">Panel de Validación</h3>
+              
+              {currentDocument.validationStatus === "PENDING" ? (
+                <div className="space-y-4">
+                  {!showRejectionForm ? (
+                    <>
+                      <div>
+                        <label className="text-sm font-medium mb-2 block">
+                          Comentarios (opcional):
+                        </label>
+                        <Textarea
+                          placeholder="Agregue comentarios sobre el documento..."
+                          value={comments}
+                          onChange={(e) => setComments(e.target.value)}
+                          rows={3}
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-2">
+                        <Button
+                          onClick={handleApprove}
+                          disabled={submitting}
+                          className="bg-green-600 hover:bg-green-700"
+                        >
+                          <CheckCircle className="w-4 h-4 mr-2" />
+                          {submitting ? "Aprobando..." : "Aprobar Documento"}
+                        </Button>
+
+                        <Button
+                          onClick={() => setShowRejectionForm(true)}
+                          disabled={submitting}
+                          variant="destructive"
+                        >
+                          <XCircle className="w-4 h-4 mr-2" />
+                          Rechazar Documento
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="text-sm font-medium mb-2 block">
+                          Motivo del rechazo:
+                        </label>
+                        <Select value={rejectionReason} onValueChange={setRejectionReason}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar motivo..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {REJECTION_REASONS.map((reason) => (
+                              <SelectItem key={reason} value={reason}>
+                                {reason}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div>
+                        <label className="text-sm font-medium mb-2 block">
+                          Comentarios adicionales:
+                        </label>
+                        <Textarea
+                          placeholder="Detalles específicos sobre el rechazo..."
+                          value={comments}
+                          onChange={(e) => setComments(e.target.value)}
+                          rows={3}
+                        />
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={() => {
+                            setShowRejectionForm(false);
+                            setRejectionReason("");
+                            setComments("");
+                          }}
+                          variant="outline"
+                          className="flex-1"
+                        >
+                          Cancelar
+                        </Button>
+                        <Button
+                          onClick={handleReject}
+                          disabled={!rejectionReason.trim() || submitting}
+                          variant="destructive"
+                          className="flex-1"
+                        >
+                          {submitting ? "Rechazando..." : "Confirmar Rechazo"}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center space-y-4">
+                  <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg ${
+                    currentDocument.validationStatus === "APPROVED"
+                      ? "bg-green-100 text-green-700"
+                      : "bg-red-100 text-red-700"
+                  }`}>
+                    {currentDocument.validationStatus === "APPROVED" ? (
+                      <CheckCircle className="w-5 h-5" />
+                    ) : (
+                      <XCircle className="w-5 h-5" />
+                    )}
+                    <span className="font-medium">
+                      {currentDocument.validationStatus === "APPROVED"
+                        ? "Documento Aprobado"
+                        : "Documento Rechazado"}
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Este documento ya ha sido validado
+                  </p>
+                  {currentDocument.comments && (
+                    <div className="text-left">
+                      <p className="text-sm font-medium">Comentarios:</p>
+                      <p className="text-sm text-muted-foreground">{currentDocument.comments}</p>
+                    </div>
+                  )}
+                  {currentDocument.rejectionReason && (
+                    <div className="text-left">
+                      <p className="text-sm font-medium">Motivo de rechazo:</p>
+                      <p className="text-sm text-red-600">{currentDocument.rejectionReason}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center justify-center h-64 border rounded-lg bg-muted">
+              <p className="text-muted-foreground">Selecciona un documento para validar</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

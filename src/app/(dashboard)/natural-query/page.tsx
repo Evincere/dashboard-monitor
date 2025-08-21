@@ -9,10 +9,12 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
-const initialState = {
+import type { NaturalQueryState } from '@/lib/actions';
+
+const initialState: NaturalQueryState = {
   sqlQuery: null,
   answer: null,
-  error: null,
+  error: undefined,
 };
 
 function SubmitButton() {
@@ -48,15 +50,15 @@ export default function NaturalQueryPage() {
         />
         <SubmitButton />
       </form>
-      
+
       <div className="flex-grow grid gap-8 md:grid-cols-2">
         {state.error && (
-            <div className="md:col-span-2">
-                <Alert variant="destructive">
-                <AlertTitle>Error</AlertTitle>
-                <AlertDescription>{state.error}</AlertDescription>
-                </Alert>
-            </div>
+          <div className="md:col-span-2">
+            <Alert variant="destructive">
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>{state.error}</AlertDescription>
+            </Alert>
+          </div>
         )}
 
         {state.sqlQuery && (

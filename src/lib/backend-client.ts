@@ -13,7 +13,7 @@ interface BackendConfig {
   loginPassword: string;
 }
 
-interface ApiResponse<T = any> {
+export interface ApiResponse<T = any> {
   success: boolean;
   data?: T;
   message?: string;
@@ -52,6 +52,7 @@ export interface BackendDocument {
   contentType: string;
   fileSize: number;
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'PROCESSING' | 'ERROR';
+  estado?: 'PENDING' | 'APPROVED' | 'REJECTED' | 'PROCESSING' | 'ERROR';
   uploadDate: string;
   validatedAt?: string;
   validatedBy?: string;
@@ -59,6 +60,10 @@ export interface BackendDocument {
   comments?: string;
   userId: string;
   documentTypeId: string;
+  tipoDocumento?: {
+    code: string;
+    name: string;
+  };
 }
 
 export interface BackendInscription {
@@ -72,6 +77,18 @@ export interface BackendInscription {
   documentosCompletos: boolean;
   createdAt: string;
   updatedAt: string;
+  inscriptionDate?: string;
+  selectedCircunscripciones?: string[];
+  userInfo?: {
+    dni: string;
+    fullName: string;
+    email: string;
+  };
+  contestInfo?: {
+    title: string;
+    position: string;
+  };
+  state?: string; // alias for status for backward compatibility
 }
 
 export interface DocumentStatistics {
@@ -130,7 +147,7 @@ class BackendClient {
 
     try {
       console.log('🔐 Iniciando autenticación con backend Spring Boot...');
-      
+
       const loginResponse = await fetch(`${this.config.apiUrl}/auth/login`, {
         method: 'POST',
         headers: {
@@ -154,16 +171,16 @@ class BackendClient {
       }
 
       const loginData: LoginResponse = await loginResponse.json();
-      
+
       if (loginData.token) {
         this.authToken = loginData.token;
         // Token expira en 24 horas según la configuración del backend
         this.tokenExpiry = Date.now() + (24 * 60 * 60 * 1000);
-        
+
         console.log('✅ Autenticación exitosa con backend Spring Boot');
         console.log(`🎫 Token obtenido para usuario: ${loginData.username}`);
         console.log(`🔑 Autoridades: ${loginData.authorities.map(a => a.authority).join(', ')}`);
-        
+
         return this.authToken;
       }
 
@@ -210,10 +227,10 @@ class BackendClient {
     }
 
     const url = `${this.config.apiUrl}${endpoint}`;
-    
+
     // Obtener token válido
     const token = await this.getValidToken();
-    
+
     if (!token) {
       return {
         success: false,
@@ -230,7 +247,7 @@ class BackendClient {
 
     try {
       console.log(`📡 Backend request: ${options.method || 'GET'} ${url}`);
-      
+
       const response = await fetch(url, {
         ...options,
         headers
@@ -252,14 +269,14 @@ class BackendClient {
           statusText: response.statusText,
           responseData
         });
-        
+
         // Si es 401, limpiar token para forzar re-autenticación en próxima llamada
         if (response.status === 401) {
           console.log('🔄 Token inválido, limpiando para re-autenticación...');
           this.authToken = null;
           this.tokenExpiry = 0;
         }
-        
+
         return {
           success: false,
           error: responseData.message || responseData.error || `HTTP ${response.status}`,
@@ -315,7 +332,7 @@ class BackendClient {
     direction?: string;
   }): Promise<ApiResponse<PagedResponse<BackendDocument>>> {
     const searchParams = new URLSearchParams();
-    
+
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
         if (value !== undefined && value !== null && value !== '') {
@@ -326,7 +343,7 @@ class BackendClient {
 
     const query = searchParams.toString();
     const endpoint = `/admin/documentos${query ? `?${query}` : ''}`;
-    
+
     return this.request<PagedResponse<BackendDocument>>(endpoint);
   }
 
@@ -343,7 +360,7 @@ class BackendClient {
     direction?: string;
   }): Promise<ApiResponse<PagedResponse<BackendUser>>> {
     const searchParams = new URLSearchParams();
-    
+
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
         if (value !== undefined && value !== null && value !== '') {
@@ -354,7 +371,7 @@ class BackendClient {
 
     const query = searchParams.toString();
     const endpoint = `/users${query ? `?${query}` : ''}`;
-    
+
     return this.request<PagedResponse<BackendUser>>(endpoint);
   }
 
@@ -369,10 +386,10 @@ class BackendClient {
     size?: number;
   }): Promise<ApiResponse<PagedResponse<BackendInscription>>> {
     const searchParams = new URLSearchParams();
-    
+
     // Establecer tamaño por defecto grande para obtener todas las inscripciones
     const defaultSize = 1000;
-    
+
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
         if (value !== undefined && value !== null && value !== '') {
@@ -382,7 +399,7 @@ class BackendClient {
         }
       });
     }
-    
+
     // Si no se especifica size, usar el valor por defecto
     if (!params?.size && !searchParams.has('size')) {
       searchParams.append('size', defaultSize.toString());
@@ -390,7 +407,7 @@ class BackendClient {
 
     const query = searchParams.toString();
     const endpoint = `/admin/inscriptions${query ? `?${query}` : ''}`;
-    
+
     return this.request<PagedResponse<BackendInscription>>(endpoint);
   }
 
@@ -423,7 +440,7 @@ class BackendClient {
   }
 
   async rejectDocument(
-    documentId: string, 
+    documentId: string,
     motivo: string
   ): Promise<ApiResponse<BackendDocument>> {
     return this.request<BackendDocument>(`/admin/documentos/${documentId}/rechazar`, {
@@ -432,28 +449,12 @@ class BackendClient {
     });
   }
 
-  async revertDocument(documentId: string): Promise<ApiResponse<BackendDocument>> {
-    return this.request<BackendDocument>(`/admin/documentos/${documentId}/revertir`, {
-      method: 'PATCH'
-    });
-  }
-
   /**
-   * Cambia el estado de una inscripción
+   * Elimina un documento del sistema
    */
-  async changeInscriptionState(
-    inscriptionId: string,
-    newState: string,
-    note?: string
-  ): Promise<ApiResponse<any>> {
-    console.log(`🔄 Changing inscription ${inscriptionId} to state ${newState}`);
-    
-    return this.request(`/admin/inscriptions/${inscriptionId}/state`, {
-      method: "PATCH",
-      body: JSON.stringify({
-        newState,
-        note: note || `Estado cambiado a ${newState} desde frontend`
-      })
+  async deleteDocument(documentId: string): Promise<ApiResponse<{ message: string }>> {
+    return this.request<{ message: string }>(`/admin/documentos/${documentId}`, {
+      method: 'DELETE'
     });
   }
 
@@ -477,7 +478,7 @@ class BackendClient {
     documents: BackendDocument[];
   }>> {
     const userResponse = await this.getUsers({ size: 1000 });
-    
+
     if (!userResponse.success || !userResponse.data?.content.length) {
       return {
         success: false,
@@ -485,17 +486,17 @@ class BackendClient {
       };
     }
 
-    const user = userResponse.data.content.find((u: any) => 
+    const user = userResponse.data.content.find((u: any) =>
       (u.dni === dni) || (u.username === dni)
     );
-    
+
     if (!user) {
       return {
         success: false,
         error: 'Usuario no encontrado con DNI exacto'
       };
     }
-    
+
     const [inscriptionResponse, documentsResponse] = await Promise.all([
       this.getInscriptions({ userId: user.id }),
       this.getDocuments({ usuarioId: user.id })
@@ -505,7 +506,9 @@ class BackendClient {
       success: true,
       data: {
         user,
-        inscription: inscriptionResponse.data?.content[0] || null,
+        inscription: inscriptionResponse.data?.content && inscriptionResponse.data.content.length > 0
+          ? inscriptionResponse.data.content[0]
+          : {} as BackendInscription,
         documents: documentsResponse.data?.content || []
       }
     };

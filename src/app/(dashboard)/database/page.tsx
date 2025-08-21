@@ -50,9 +50,12 @@ interface DatabaseStats {
 }
 
 
-const initialState = {
+import type { ActionState } from '@/lib/actions';
+
+const initialState: ActionState = {
   suggestions: null,
   error: null,
+  loading: false,
 };
 
 function SubmitButton() {
@@ -67,7 +70,10 @@ function SubmitButton() {
 
 
 export default function DatabasePage() {
-  const [state, formAction] = useActionState(handleGenerateSuggestions, initialState);
+  const [state, formAction] = useActionState(
+    async (_: ActionState, formData: FormData) => handleGenerateSuggestions(formData),
+    initialState
+  );
   const [dbStats, setDbStats] = useState<DatabaseStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -79,7 +85,7 @@ export default function DatabasePage() {
       setError(null);
       const response = await fetch(apiUrl('database/stats'));
       const data = await response.json();
-      
+
       if (data.success) {
         setDbStats(data.data);
       } else {
@@ -96,7 +102,7 @@ export default function DatabasePage() {
   useEffect(() => {
     fetchDatabaseStats();
   }, []);
-  
+
   return (
     <div className="flex flex-col h-full p-4 md:p-8">
       <header className="mb-8">
@@ -113,9 +119,9 @@ export default function DatabasePage() {
         <Card className="bg-card/60 backdrop-blur-sm border-white/10 shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="font-headline">Conexión a MySQL</CardTitle>
-            <Button 
-              variant="outline" 
-              size="icon" 
+            <Button
+              variant="outline"
+              size="icon"
               onClick={fetchDatabaseStats}
               disabled={loading}
               title="Actualizar estadísticas"
@@ -169,212 +175,212 @@ export default function DatabasePage() {
         </Card>
 
         <div className="grid md:grid-cols-2 gap-8">
-            <Card className="bg-card/60 backdrop-blur-sm border-white/10 shadow-lg">
-                <CardHeader>
-                    <CardTitle className="font-headline">Estadísticas de Tablas</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    {loading ? (
-                      <div className="space-y-2">
-                        {[...Array(5)].map((_, i) => (
-                          <div key={i} className="flex justify-between items-center">
-                            <Skeleton className="h-4 w-24" />
-                            <Skeleton className="h-4 w-16" />
-                          </div>
+          <Card className="bg-card/60 backdrop-blur-sm border-white/10 shadow-lg">
+            <CardHeader>
+              <CardTitle className="font-headline">Estadísticas de Tablas</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="space-y-2">
+                  {[...Array(5)].map((_, i) => (
+                    <div key={i} className="flex justify-between items-center">
+                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="h-4 w-16" />
+                    </div>
+                  ))}
+                </div>
+              ) : error ? (
+                <Alert variant="destructive">
+                  <AlertTitle>Error</AlertTitle>
+                  <AlertDescription>No se pudieron cargar las estadísticas de tablas.</AlertDescription>
+                </Alert>
+              ) : dbStats ? (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="min-w-[200px]">Nombre de la Tabla</TableHead>
+                        <TableHead className="min-w-[100px] text-right">Filas</TableHead>
+                        <TableHead className="min-w-[150px] text-xs text-muted-foreground">Nombre Técnico</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {dbStats.tables.slice(0, 10).map((stat) => (
+                        <TableRow key={stat.table}>
+                          <TableCell className="font-medium">
+                            {getTableDisplayName(stat.table)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono">
+                            {Number(stat.rows).toLocaleString()}
+                          </TableCell>
+                          <TableCell className="font-mono text-xs text-muted-foreground">
+                            {stat.table}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+
+          <Card className="bg-card/60 backdrop-blur-sm border-white/10 shadow-lg flex flex-col">
+            <CardHeader>
+              <CardTitle className="font-headline flex items-center gap-2">
+                <HelpCircle />
+                Sugerencias de Consultas IA
+              </CardTitle>
+              <CardDescription>
+                Utiliza IA para generar consultas útiles basadas en el esquema de tu base de datos.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex-grow flex flex-col justify-center items-center gap-4">
+              {state.error && (
+                <Alert variant="destructive">
+                  <AlertTitle>Error</AlertTitle>
+                  <AlertDescription>{state.error}</AlertDescription>
+                </Alert>
+              )}
+              {state.suggestions && (
+                <div className="flex flex-wrap gap-2 justify-center">
+                  {(state.suggestions as string[]).map((suggestion, index) => (
+                    <Badge key={index} variant="secondary" className="text-sm cursor-pointer hover:bg-accent/80">
+                      {suggestion}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+              {!state.suggestions && (
+                <p className="text-muted-foreground text-center">Haz clic en el botón para generar sugerencias.</p>
+              )}
+            </CardContent>
+            <form action={formAction} className="p-6 pt-0">
+              <SubmitButton />
+            </form>
+          </Card>
+
+          <Card className="bg-card/60 backdrop-blur-sm border-white/10 shadow-lg">
+            <CardHeader>
+              <CardTitle className="font-headline flex items-center gap-2">
+                <FileArchive />
+                Gestión de Backups
+              </CardTitle>
+              <CardDescription>
+                Crea y gestiona las copias de seguridad de la base de datos.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {loading ? (
+                <>
+                  <div className="flex items-center justify-between p-4 bg-background/50 rounded-lg">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Último backup</p>
+                      <Skeleton className="h-4 w-40 mt-1" />
+                    </div>
+                    <Link href="/backups">
+                      <Button variant="outline">Ir a Backups</Button>
+                    </Link>
+                  </div>
+                  <div>
+                    <h4 className="mb-2 text-sm font-medium text-muted-foreground">Backups Recientes</h4>
+                    <div className="space-y-2">
+                      {[...Array(3)].map((_, i) => (
+                        <div key={i} className="flex justify-between items-center">
+                          <Skeleton className="h-4 w-20" />
+                          <Skeleton className="h-4 w-16" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              ) : dbStats ? (
+                <>
+                  <div className="flex items-center justify-between p-4 bg-background/50 rounded-lg">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Último backup</p>
+                      <p className="font-mono text-foreground">{dbStats.backups.lastBackup}</p>
+                    </div>
+                    <Link href="/backups">
+                      <Button variant="outline">Ir a Backups</Button>
+                    </Link>
+                  </div>
+                  <div>
+                    <h4 className="mb-2 text-sm font-medium text-muted-foreground">Backups Recientes</h4>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Fecha</TableHead>
+                          <TableHead className="text-right">Tamaño</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {dbStats.backups.recentBackups.map((backup) => (
+                          <TableRow key={backup.date}>
+                            <TableCell className="font-mono">{backup.date}</TableCell>
+                            <TableCell className="text-right font-mono">{backup.size}</TableCell>
+                          </TableRow>
                         ))}
-                      </div>
-                    ) : error ? (
-                      <Alert variant="destructive">
-                        <AlertTitle>Error</AlertTitle>
-                        <AlertDescription>No se pudieron cargar las estadísticas de tablas.</AlertDescription>
-                      </Alert>
-                    ) : dbStats ? (
-                      <div className="overflow-x-auto">
-                        <Table>
-                          <TableHeader>
-                              <TableRow>
-                              <TableHead className="min-w-[200px]">Nombre de la Tabla</TableHead>
-                              <TableHead className="min-w-[100px] text-right">Filas</TableHead>
-                              <TableHead className="min-w-[150px] text-xs text-muted-foreground">Nombre Técnico</TableHead>
-                              </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                              {dbStats.tables.slice(0, 10).map((stat) => (
-                              <TableRow key={stat.table}>
-                                  <TableCell className="font-medium">
-                                    {getTableDisplayName(stat.table)}
-                                  </TableCell>
-                                  <TableCell className="text-right font-mono">
-                                    {Number(stat.rows).toLocaleString()}
-                                  </TableCell>
-                                  <TableCell className="font-mono text-xs text-muted-foreground">
-                                    {stat.table}
-                                  </TableCell>
-                              </TableRow>
-                              ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    ) : null}
-                </CardContent>
-            </Card>
+                      </TableBody>
+                    </Table>
+                  </div>
+                </>
+              ) : null}
+            </CardContent>
+          </Card>
 
-            <Card className="bg-card/60 backdrop-blur-sm border-white/10 shadow-lg flex flex-col">
-                <CardHeader>
-                    <CardTitle className="font-headline flex items-center gap-2">
-                        <HelpCircle />
-                        Sugerencias de Consultas IA
-                    </CardTitle>
-                    <CardDescription>
-                        Utiliza IA para generar consultas útiles basadas en el esquema de tu base de datos.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="flex-grow flex flex-col justify-center items-center gap-4">
-                    {state.error && (
-                         <Alert variant="destructive">
-                            <AlertTitle>Error</AlertTitle>
-                            <AlertDescription>{state.error}</AlertDescription>
-                        </Alert>
-                    )}
-                    {state.suggestions && (
-                        <div className="flex flex-wrap gap-2 justify-center">
-                            {(state.suggestions as string[]).map((suggestion, index) => (
-                                <Badge key={index} variant="secondary" className="text-sm cursor-pointer hover:bg-accent/80">
-                                    {suggestion}
-                                </Badge>
-                            ))}
-                        </div>
-                    )}
-                    {!state.suggestions && (
-                        <p className="text-muted-foreground text-center">Haz clic en el botón para generar sugerencias.</p>
-                    )}
-                </CardContent>
-                 <form action={formAction} className="p-6 pt-0">
-                    <SubmitButton />
-                </form>
-            </Card>
-
-             <Card className="bg-card/60 backdrop-blur-sm border-white/10 shadow-lg">
-                <CardHeader>
-                    <CardTitle className="font-headline flex items-center gap-2">
-                        <FileArchive />
-                        Gestión de Backups
-                    </CardTitle>
-                    <CardDescription>
-                        Crea y gestiona las copias de seguridad de la base de datos.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    {loading ? (
-                      <>
-                        <div className="flex items-center justify-between p-4 bg-background/50 rounded-lg">
-                          <div>
-                            <p className="text-sm text-muted-foreground">Último backup</p>
-                            <Skeleton className="h-4 w-40 mt-1" />
-                          </div>
-                          <Link href="/backups">
-                            <Button variant="outline">Ir a Backups</Button>
-                          </Link>
-                        </div>
-                        <div>
-                          <h4 className="mb-2 text-sm font-medium text-muted-foreground">Backups Recientes</h4>
-                          <div className="space-y-2">
-                            {[...Array(3)].map((_, i) => (
-                              <div key={i} className="flex justify-between items-center">
-                                <Skeleton className="h-4 w-20" />
-                                <Skeleton className="h-4 w-16" />
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </>
-                    ) : dbStats ? (
-                      <>
-                        <div className="flex items-center justify-between p-4 bg-background/50 rounded-lg">
-                            <div>
-                                <p className="text-sm text-muted-foreground">Último backup</p>
-                                <p className="font-mono text-foreground">{dbStats.backups.lastBackup}</p>
-                            </div>
-                            <Link href="/backups">
-                              <Button variant="outline">Ir a Backups</Button>
-                            </Link>
-                        </div>
-                         <div>
-                            <h4 className="mb-2 text-sm font-medium text-muted-foreground">Backups Recientes</h4>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Fecha</TableHead>
-                                        <TableHead className="text-right">Tamaño</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {dbStats.backups.recentBackups.map((backup) => (
-                                    <TableRow key={backup.date}>
-                                        <TableCell className="font-mono">{backup.date}</TableCell>
-                                        <TableCell className="text-right font-mono">{backup.size}</TableCell>
-                                    </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </div>
-                      </>
-                    ) : null}
-                </CardContent>
-            </Card>
-
-             <Card className="bg-card/60 backdrop-blur-sm border-white/10 shadow-lg">
-                <CardHeader>
-                    <CardTitle className="font-headline flex items-center gap-2">
-                        <FolderArchive />
-                        Gestión de Documentación
-                    </CardTitle>
-                    <CardDescription>
-                        Administra los documentos subidos por los usuarios en los concursos.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    {loading ? (
-                      <>
-                        <div className="grid grid-cols-2 gap-4 text-center">
-                            <div className="p-4 bg-background/50 rounded-lg">
-                                <p className="text-sm text-muted-foreground">Total de Documentos</p>
-                                <Skeleton className="h-8 w-24 mx-auto mt-2" />
-                            </div>
-                            <div className="p-4 bg-background/50 rounded-lg">
-                                <p className="text-sm text-muted-foreground">Espacio Utilizado</p>
-                                <Skeleton className="h-8 w-20 mx-auto mt-2" />
-                            </div>
-                        </div>
-                        <Separator className="my-4 bg-border/50" />
-                        <div className="flex justify-center">
-                            <Link href={routeUrl("documents")}>
-                               <Button>Gestionar Documentos</Button>
-                            </Link>
-                        </div>
-                      </>
-                    ) : dbStats ? (
-                      <>
-                        <div className="grid grid-cols-2 gap-4 text-center">
-                            <div className="p-4 bg-background/50 rounded-lg">
-                                <p className="text-sm text-muted-foreground">Total de Documentos</p>
-                                <p className="text-2xl font-bold font-headline">{dbStats.documents.totalDocs}</p>
-                            </div>
-                            <div className="p-4 bg-background/50 rounded-lg">
-                                <p className="text-sm text-muted-foreground">Espacio Utilizado</p>
-                                <p className="text-2xl font-bold font-headline">{dbStats.documents.totalSize}</p>
-                            </div>
-                        </div>
-                         <Separator className="my-4 bg-border/50" />
-                        <div className="flex justify-center">
-                            <Link href={routeUrl("documents")}>
-                               <Button>Gestionar Documentos</Button>
-                            </Link>
-                        </div>
-                      </>
-                    ) : null}
-                </CardContent>
-            </Card>
+          <Card className="bg-card/60 backdrop-blur-sm border-white/10 shadow-lg">
+            <CardHeader>
+              <CardTitle className="font-headline flex items-center gap-2">
+                <FolderArchive />
+                Gestión de Documentación
+              </CardTitle>
+              <CardDescription>
+                Administra los documentos subidos por los usuarios en los concursos.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {loading ? (
+                <>
+                  <div className="grid grid-cols-2 gap-4 text-center">
+                    <div className="p-4 bg-background/50 rounded-lg">
+                      <p className="text-sm text-muted-foreground">Total de Documentos</p>
+                      <Skeleton className="h-8 w-24 mx-auto mt-2" />
+                    </div>
+                    <div className="p-4 bg-background/50 rounded-lg">
+                      <p className="text-sm text-muted-foreground">Espacio Utilizado</p>
+                      <Skeleton className="h-8 w-20 mx-auto mt-2" />
+                    </div>
+                  </div>
+                  <Separator className="my-4 bg-border/50" />
+                  <div className="flex justify-center">
+                    <Link href={routeUrl("documents")}>
+                      <Button>Gestionar Documentos</Button>
+                    </Link>
+                  </div>
+                </>
+              ) : dbStats ? (
+                <>
+                  <div className="grid grid-cols-2 gap-4 text-center">
+                    <div className="p-4 bg-background/50 rounded-lg">
+                      <p className="text-sm text-muted-foreground">Total de Documentos</p>
+                      <p className="text-2xl font-bold font-headline">{dbStats.documents.totalDocs}</p>
+                    </div>
+                    <div className="p-4 bg-background/50 rounded-lg">
+                      <p className="text-sm text-muted-foreground">Espacio Utilizado</p>
+                      <p className="text-2xl font-bold font-headline">{dbStats.documents.totalSize}</p>
+                    </div>
+                  </div>
+                  <Separator className="my-4 bg-border/50" />
+                  <div className="flex justify-center">
+                    <Link href={routeUrl("documents")}>
+                      <Button>Gestionar Documentos</Button>
+                    </Link>
+                  </div>
+                </>
+              ) : null}
+            </CardContent>
+          </Card>
 
         </div>
       </div>

@@ -66,7 +66,7 @@ export function getTableDisplayName(technicalName: string): string {
 /**
  * Categoriza las tablas por tipo
  */
-export const TABLE_CATEGORIES = {
+export const TABLE_CATEGORIES: Record<string, string[]> = {
   'Principales': ['documents', 'inscriptions', 'users', 'contests'],
   'Auditoría': ['document_audit', 'audit_logs', 'validation_history'],
   'Sistema': ['user_roles', 'user_entity', 'sessions', 'permissions'],
@@ -76,7 +76,7 @@ export const TABLE_CATEGORIES = {
     'inscriptions_backup_accepted_terms_20250812', 
     'documents_backup_response_day_20250813'
   ],
-} as const;
+};
 
 /**
  * Obtiene la categoría de una tabla
@@ -85,7 +85,7 @@ export const TABLE_CATEGORIES = {
  */
 export function getTableCategory(tableName: string): string {
   for (const [category, tables] of Object.entries(TABLE_CATEGORIES)) {
-    if (tables.includes(tableName as any)) {
+    if (tables.includes(tableName)) {
       return category;
     }
   }

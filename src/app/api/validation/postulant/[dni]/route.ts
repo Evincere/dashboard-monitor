@@ -7,6 +7,16 @@ import backendClient from '@/lib/backend-client';
  * Combina datos de usuario, inscripción, documentos y historial de validación
  */
 
+interface BackendUser {
+  id: string;
+  name?: string;
+  username: string;
+  email?: string;
+  status?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 interface PostulantExpediente {
   user: {
     id: string;
@@ -95,7 +105,16 @@ export async function GET(
       }, { status: 404 });
     }
 
-    const { user, inscription, documents } = postulantResponse.data;
+    const data = postulantResponse.data;
+    if (!data) {
+      return NextResponse.json({
+        success: false,
+        error: 'No data found for postulant',
+        timestamp: new Date().toISOString()
+      }, { status: 404 });
+    }
+
+    const { user, inscription, documents } = data;
 
     if (!user || !inscription) {
       return NextResponse.json({
@@ -106,14 +125,30 @@ export async function GET(
     }
 
     // Calcular estadísticas de documentos
+    interface BackendDocument {
+      id: string;
+      status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'PROCESSING' | 'ERROR';
+      validatedAt?: string;
+      validatedBy?: string;
+      comments?: string;
+      fileName: string;
+      filePath: string;
+      contentType: string;
+      fileSize: number;
+      documentTypeId: string;
+    }
+
     const documentStats = {
       total: documents.length,
-      pending: documents.filter(d => d.status === 'PENDING').length,
-      approved: documents.filter(d => d.status === 'APPROVED').length,
-      rejected: documents.filter(d => d.status === 'REJECTED').length,
-      processing: documents.filter(d => d.status === 'PROCESSING').length,
-      error: documents.filter(d => d.status === 'ERROR').length,
-      list: documents
+      pending: documents.filter((d: BackendDocument) => d.status === 'PENDING').length,
+      approved: documents.filter((d: BackendDocument) => d.status === 'APPROVED').length,
+      rejected: documents.filter((d: BackendDocument) => d.status === 'REJECTED').length,
+      processing: documents.filter((d: BackendDocument) => d.status === 'PROCESSING').length,
+      error: documents.filter((d: BackendDocument) => d.status === 'ERROR').length,
+      list: documents.map((doc: BackendDocument) => ({
+        ...doc,
+        uploadDate: doc.validatedAt || new Date().toISOString()
+      }))
     };
 
     // Determinar estado actual de validación
@@ -170,13 +205,13 @@ export async function GET(
     const expediente: PostulantExpediente = {
       user: {
         id: user.id,
-        name: user.name,
+        name: user.name || 'Sin nombre',
         username: user.username,
-        email: user.email,
+        email: user.email || 'Sin email',
         dni: user.username, // Asumiendo que username es el DNI
-        status: user.status,
-        createdAt: user.createdAt,
-        updatedAt: user.updatedAt
+        status: user.status || 'UNKNOWN',
+        createdAt: user.createdAt || new Date().toISOString(),
+        updatedAt: user.updatedAt || new Date().toISOString()
       },
       inscription: {
         id: inscription.id,

@@ -1,57 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-// ====================================================================
-// MAPEO MEJORADO DE CIRCUNSCRIPCIONES - 2025-08-19
-// ====================================================================
-
-const mapearCircunscripcionReal = (inscription: any): string => {
-  // 1. Usar selectedCircunscripciones si existe y tiene datos
-  if (inscription.selectedCircunscripciones && inscription.selectedCircunscripciones.length > 0) {
-    const primera = inscription.selectedCircunscripciones.find((c: string) => c.toLowerCase().includes('primera'));
-    if (primera) return 'PRIMERA_CIRCUNSCRIPCION';
-    
-    const segunda = inscription.selectedCircunscripciones.find((c: string) => c.toLowerCase().includes('segunda'));
-    if (segunda) return 'SEGUNDA_CIRCUNSCRIPCION';
-    
-    const tercera = inscription.selectedCircunscripciones.find((c: string) => c.toLowerCase().includes('tercera'));
-    if (tercera) return 'TERCERA_CIRCUNSCRIPCION';
-    
-    const cuarta = inscription.selectedCircunscripciones.find((c: string) => c.toLowerCase().includes('cuarta'));
-    if (cuarta) return 'CUARTA_CIRCUNSCRIPCION';
-  }
-  
-  // 2. Fallback: analizar centroDeVida
-  if (inscription.centroDeVida) {
-    const centro = inscription.centroDeVida.toLowerCase();
-    
-    // Segunda circunscripción (San Rafael, Alvear, Malargüe)
-    if (centro.includes('san rafael') || centro.includes('alvear') || centro.includes('malargüe') || centro.includes('malargue')) {
-      return 'SEGUNDA_CIRCUNSCRIPCION';
-    }
-    
-    // Tercera circunscripción (San Martín, Rivadavia, Junín, Santa Rosa)
-    if (centro.includes('san martín') || centro.includes('san martin') || centro.includes('rivadavia') || 
-        centro.includes('junín') || centro.includes('junin') || centro.includes('santa rosa')) {
-      return 'TERCERA_CIRCUNSCRIPCION';
-    }
-    
-    // Cuarta circunscripción (Tunuyán, Tupungato, San Carlos)
-    if (centro.includes('tunuyán') || centro.includes('tunuyan') || centro.includes('tupungato') || centro.includes('san carlos')) {
-      return 'CUARTA_CIRCUNSCRIPCION';
-    }
-    
-    // Primera circunscripción (Capital, Guaymallén, Maipú, Las Heras, Godoy Cruz, Luján)
-    if (centro.includes('ciudad') || centro.includes('mendoza') || centro.includes('capital') || 
-        centro.includes('guaymallén') || centro.includes('guaymallen') || centro.includes('maipú') || centro.includes('maipu') ||
-        centro.includes('las heras') || centro.includes('godoy cruz') || centro.includes('luján') || centro.includes('lujan')) {
-      return 'PRIMERA_CIRCUNSCRIPCION';
-    }
-  }
-  
-  // 3. Default fallback
-  return 'PRIMERA_CIRCUNSCRIPCION';
-};
-
+import backendClient from '@/lib/backend-client';
 
 export async function GET(request: NextRequest) {
   try {
@@ -66,131 +14,118 @@ export async function GET(request: NextRequest) {
       }, { status: 400 });
     }
 
-    console.log('🔍 Quick Search Request:', { query, limit });
+    console.log('🔍 Validation search request:', { query, limit });
 
-    // Login to get token (exactly like test-backend)
-    const loginResponse = await fetch('http://localhost:8080/api/auth/login', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({
-        username: 'admin',
-        password: 'admin123'
-      })
-    });
+    // Search in users using the robust backend client
+    const [usersResponse, inscriptionsResponse] = await Promise.all([
+      backendClient.getUsers({ size: 1000 }),
+      backendClient.getInscriptions({ size: 1000 })
+    ]);
 
-    if (!loginResponse.ok) {
-      throw new Error('Login failed');
+    if (!usersResponse.success || !inscriptionsResponse.success) {
+      console.error('Backend search error:', {
+        users: usersResponse.error,
+        inscriptions: inscriptionsResponse.error
+      });
+
+      // Return empty results with fallback message
+      return NextResponse.json({
+        success: true,
+        results: [],
+        total: 0,
+        limit: limit,
+        query: query,
+        message: 'Búsqueda temporalmente no disponible',
+        fallback: true
+      });
     }
 
-    const loginData = await loginResponse.json();
+    const usersData = usersResponse.data?.content || [];
+    const inscriptionsData = inscriptionsResponse.data?.content || [];
 
-    // Search in users with the query parameter
-    const userParams = new URLSearchParams({
-      query: query.trim(),
-      size: (limit * 3).toString() // Get more results to filter for eligible users
-    });
-
-    const usersResponse = await fetch(`http://localhost:8080/api/users?${userParams}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'Authorization': `Bearer ${loginData.token}`
-      }
-    });
-
-    if (!usersResponse.ok) {
-      const errorText = await usersResponse.text();
-      throw new Error(`Failed to fetch users: ${usersResponse.status} - ${errorText}`);
-    }
-
-    const usersData = await usersResponse.json();
-    
-    // Search in inscriptions for eligible users
-    const inscriptionsResponse = await fetch('http://localhost:8080/api/admin/inscriptions?size=500', {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'Authorization': `Bearer ${loginData.token}`
-      }
-    });
-
-    if (!inscriptionsResponse.ok) {
-      const errorText = await inscriptionsResponse.text();
-      throw new Error(`Failed to fetch inscriptions: ${inscriptionsResponse.status} - ${errorText}`);
-    }
-
-    const inscriptionsData = await inscriptionsResponse.json();
-
-    // Get eligible users (COMPLETED_WITH_DOCS state)
-    const eligibleInscriptions = inscriptionsData.content.filter((inscription: any) => 
-      inscription.state === 'COMPLETED_WITH_DOCS'
+    // Get eligible inscriptions - estados que requieren validación
+    const validationStates = ['COMPLETED_WITH_DOCS', 'PENDING', 'APPROVED', 'REJECTED'];
+    const eligibleInscriptions = inscriptionsData.filter((inscription: any) =>
+      validationStates.includes(inscription.status || inscription.state)
     );
 
     // Create a map of eligible user IDs
     const eligibleUserIds = new Set(eligibleInscriptions.map((ins: any) => ins.userId));
 
-    // Filter search results to only include eligible users
-    const eligibleUsers = usersData.content.filter((user: any) => 
-      eligibleUserIds.has(user.id)
+    // Filter eligible users and perform manual search
+    const searchTermLower = query.toLowerCase();
+    const filteredUsers = usersData.filter((user: any) =>
+      eligibleUserIds.has(user.id) && (
+        user.dni?.toLowerCase().includes(searchTermLower) ||
+        user.fullName?.toLowerCase().includes(searchTermLower) ||
+        user.firstName?.toLowerCase().includes(searchTermLower) ||
+        user.lastName?.toLowerCase().includes(searchTermLower) ||
+        user.email?.toLowerCase().includes(searchTermLower)
+      )
     );
 
-    // Create inscription map for faster lookup
-    const inscriptionsByUser = eligibleInscriptions.reduce((acc: any, ins: any) => {
-      acc[ins.userId] = ins;
-      return acc;
-    }, {});
+    // Combine with inscription data and format results
+    const results = await Promise.all(filteredUsers.slice(0, limit).map(async (user: any) => {
+      const inscription = eligibleInscriptions.find((ins: any) => ins.userId === user.id);
 
-    // Transform and limit results
-    const results = eligibleUsers.slice(0, limit).map((user: any) => {
-      const inscription = inscriptionsByUser[user.id];
-      
-      // Determine circunscripcion usando datos reales del backend
-      const circunscripcion = mapearCircunscripcionReal(inscription);
+      // Map circunscripcion from inscription
+      let circunscripcion = 'NO_ESPECIFICADA';
+      if (inscription?.centroDeVida) {
+        // Try to map centroDeVida to circunscripcion
+        const centro = inscription.centroDeVida.toLowerCase();
+        if (centro.includes('primera')) circunscripcion = 'PRIMERA_CIRCUNSCRIPCION';
+        else if (centro.includes('segunda')) circunscripcion = 'SEGUNDA_CIRCUNSCRIPCION';
+        else if (centro.includes('tercera')) circunscripcion = 'TERCERA_CIRCUNSCRIPCION';
+        else if (centro.includes('cuarta')) circunscripcion = 'CUARTA_CIRCUNSCRIPCION';
+        else circunscripcion = 'PRIMERA_CIRCUNSCRIPCION'; // Default fallback
+      }
 
-      // Map backend state to validation status
+      // Determine validation status
+      const inscriptionState = inscription?.status || inscription?.state;
       let validationStatus = 'PENDING';
-      if (inscription?.state === 'APPROVED') validationStatus = 'APPROVED';
-      else if (inscription?.state === 'REJECTED') validationStatus = 'REJECTED';
-      else if (inscription?.state === 'PENDING') validationStatus = 'IN_REVIEW';
+      if (inscriptionState === 'APPROVED') validationStatus = 'APPROVED';
+      else if (inscriptionState === 'REJECTED') validationStatus = 'REJECTED';
+      else if (inscriptionState === 'IN_REVIEW') validationStatus = 'IN_REVIEW';
+
+      // Map contest info from contestInfo or defaults
+      const contestInfo = {
+        title: inscription?.contestInfo?.title || 'Concurso Multifuero MPD',
+        position: inscription?.contestInfo?.position || 'Magistrado/a'
+      };
 
       return {
-        dni: user.dni || 'N/A',
-        fullName: user.fullName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Sin nombre',
-        email: user.email || 'Sin email',
+        dni: user.dni,
+        fullName: user.fullName || `${user.firstName || ''} ${user.lastName || ''}`.trim(),
+        email: user.email,
         circunscripcion,
         validationStatus,
-        contestInfo: {
-          title: 'Concurso Multifuero MPD',
-          position: 'Magistrado/a'
-        }
+        contestInfo
       };
-    });
+    }));
 
-    console.log('✅ Quick Search Response:', {
-      query,
-      totalEligibleUsers: eligibleUsers.length,
-      resultsReturned: results.length
-    });
+    console.log(`✅ Search found ${results.length} results for query: "${query}"`);
 
     return NextResponse.json({
       success: true,
       results,
-      total: eligibleUsers.length,
+      total: filteredUsers.length,
       limit: limit,
       query: query
     });
 
   } catch (error) {
-    console.error('❌ Search API error:', error);
+    console.error('Search API error:', error);
+
+    // Return empty results with error message
     return NextResponse.json({
-      success: false,
-      error: 'Internal server error',
-      details: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 });
+      success: true,
+      results: [],
+      total: 0,
+      limit: parseInt(new URL(request.url).searchParams.get('limit') || '10'),
+      query: new URL(request.url).searchParams.get('q'),
+      message: 'Error en la búsqueda - intente nuevamente',
+      fallback: true,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
 }
