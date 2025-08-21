@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import backendClient from '@/lib/backend-client';
+import { mapDocumentStatus } from '@/lib/document-status-utils';
 import fs from 'fs';
 import path from 'path';
 
@@ -490,7 +491,7 @@ export async function GET(
         filePath: filePath,
         fileSize: doc.fileSize || doc.tamaño || 0,
         documentType: documentType,
-        validationStatus: (doc.status || doc.estado || 'PENDING') as 'PENDING' | 'APPROVED' | 'REJECTED',
+        validationStatus: mapDocumentStatus(doc), // ✅ USAR FUNCIÓN UNIFICADA
         isRequired: isDocumentRequired,
         uploadDate: doc.uploadDate || doc.fechaSubida || doc.createdAt || new Date().toISOString(),
         validatedAt: doc.validatedAt || doc.fechaValidacion,

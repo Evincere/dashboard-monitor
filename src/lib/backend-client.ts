@@ -52,6 +52,7 @@ export interface BackendDocument {
   contentType: string;
   fileSize: number;
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'PROCESSING' | 'ERROR';
+  estado?: 'PENDING' | 'APPROVED' | 'REJECTED' | 'PROCESSING' | 'ERROR';
   uploadDate: string;
   validatedAt?: string;
   validatedBy?: string;
@@ -432,6 +433,15 @@ class BackendClient {
     });
   }
 
+  /**
+   * Elimina un documento del sistema
+   */
+  async deleteDocument(documentId: string): Promise<ApiResponse<{ message: string }>> {
+    return this.request<{ message: string }>(`/admin/documentos/${documentId}`, {
+      method: 'DELETE'
+    });
+  }
+
   async getPostulationsManagement(): Promise<ApiResponse<{
     success: boolean;
     postulations: any[];
@@ -480,7 +490,9 @@ class BackendClient {
       success: true,
       data: {
         user,
-        inscription: inscriptionResponse.data?.content[0] || null,
+        inscription: inscriptionResponse.data?.content && inscriptionResponse.data.content.length > 0
+          ? inscriptionResponse.data.content[0]
+          : {} as BackendInscription,
         documents: documentsResponse.data?.content || []
       }
     };

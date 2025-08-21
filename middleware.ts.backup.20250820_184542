@@ -31,7 +31,6 @@ const publicRoutes = [
   '/api/auth/refresh',
   '/api/health',
   '/api/test',
-  '/api/documents', // Allow documents listing without auth for now
   '/api/documents/[id]/view',
   '/api/documents/[id]/download'
 ];
@@ -53,7 +52,6 @@ export function middleware(request: NextRequest) {
 
   // Allow public routes
   if (publicRoutes.some(route => pathname.startsWith(route))) {
-    console.log('✅ Public route - allowing access:', pathname);
     return NextResponse.next();
   }
 

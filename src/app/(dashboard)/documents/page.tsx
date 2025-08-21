@@ -1,6 +1,6 @@
 
 'use client';
-import { routeUrl } from '@/lib/utils';
+import { routeUrl, apiUrl } from '@/lib/utils';
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -124,13 +124,26 @@ function DocumentsPageContent() {
   const [documentTypes, setDocumentTypes] = useState<Array<{type: string; count: number}>>([]);
   const [pagination, setPagination] = useState<DocumentsResponse['pagination'] | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [userFilter, setUserFilter] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const { toast } = useToast();
   const searchParams = useSearchParams();
+
+  // Debounce search term to avoid too many API calls
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Estado para el filtro de usuario
+  const [userFilter, setUserFilter] = useState('');
 
   useEffect(() => {
     const userParam = searchParams.get('user');
@@ -138,22 +151,31 @@ function DocumentsPageContent() {
       setUserFilter(userParam);
     }
   }, [searchParams]);
+    useEffect(() => {
+      const userParam = searchParams.get('user');
+      if (userParam) {
+        setUserFilter(userParam);
+      }
+    }, [searchParams]);
 
-  const fetchDocuments = async () => {
+    const fetchDocuments = async () => {
     setLoading(true);
+    setError(null);
     try {
       const params = new URLSearchParams({
         page: currentPage.toString(),
         limit: '20'
       });
 
-      if (searchTerm) params.append('search', searchTerm);
-      if (typeFilter && typeFilter !== 'all') params.append('type', typeFilter);
+      if (debouncedSearchTerm) params.append('search', debouncedSearchTerm);
+      if (typeFilter && typeFilter !== 'all') params.append('documentType', typeFilter);
       if (statusFilter && statusFilter !== 'all') params.append('status', statusFilter);
-      if (userFilter) params.append('user', userFilter);
 
-      const response = await fetch(`/api/documents?${params}`);
-      if (!response.ok) throw new Error('Failed to fetch documents');
+      const response = await fetch(apiUrl(`documents?${params}`));
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+      }
 
       const data: DocumentsResponse = await response.json();
       setDocuments(data.documents);
@@ -162,9 +184,11 @@ function DocumentsPageContent() {
       setPagination(data.pagination);
     } catch (error) {
       console.error('Error fetching documents:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+      setError(errorMessage);
       toast({
         title: 'Error',
-        description: 'No se pudieron cargar los documentos',
+        description: `No se pudieron cargar los documentos: ${errorMessage}`,
         variant: 'destructive',
       });
     } finally {
@@ -174,11 +198,11 @@ function DocumentsPageContent() {
 
   useEffect(() => {
     fetchDocuments();
-  }, [currentPage, searchTerm, typeFilter, statusFilter, userFilter]);
+  }, [currentPage, debouncedSearchTerm, typeFilter, statusFilter]);
 
   const handleDelete = async (id: string, name: string) => {
     try {
-      const response = await fetch(`/api/documents?id=${id}`, {
+      const response = await fetch(apiUrl(`documents?id=${id}`), {
         method: 'DELETE',
       });
 
@@ -203,7 +227,7 @@ function DocumentsPageContent() {
 
   const handleStatusChange = async (id: string, newStatus: 'PENDING' | 'APPROVED' | 'REJECTED') => {
     try {
-      const response = await fetch(`/api/documents?id=${id}`, {
+      const response = await fetch(apiUrl(`documents?id=${id}`), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -233,7 +257,7 @@ function DocumentsPageContent() {
 
   const handleDownload = async (id: string, name: string) => {
     try {
-      const response = await fetch(`/api/documents/download?id=${id}`);
+      const response = await fetch(apiUrl(`documents/download?id=${id}`));
       
       if (response.ok) {
         const blob = await response.blob();
@@ -346,6 +370,39 @@ function DocumentsPageContent() {
     );
   }
 
+  // Show error state if there's an error and no documents
+  if (error && !documents.length) {
+    return (
+      <div className="flex flex-col h-full p-4 md:p-8">
+        <header className="mb-8">
+          <h1 className="text-3xl font-bold font-headline flex items-center gap-2">
+            <FolderKanban className="w-8 h-8 text-primary" />
+            Gestión de Documentos
+          </h1>
+          <p className="text-muted-foreground mt-2">
+            Busque, visualice y administre todos los documentos cargados por los usuarios.
+          </p>
+        </header>
+        
+        <Card className="bg-card/60 backdrop-blur-sm border-white/10 shadow-lg flex-grow">
+          <CardHeader>
+            <CardTitle className="text-destructive">Error al cargar documentos</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-center py-8">
+              <XCircle className="w-16 h-16 text-destructive mx-auto mb-4" />
+              <p className="text-destructive mb-4">{error}</p>
+              <Button onClick={fetchDocuments} disabled={loading}>
+                <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                Reintentar
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full p-4 md:p-8">
       <header className="mb-8">
@@ -371,35 +428,6 @@ function DocumentsPageContent() {
           </div>
         </div>
       </header>
-
-      {/* Information Banner */}
-      <div className="mb-6">
-        <Card className="bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-100 rounded-full">
-                  <Info className="w-5 h-5 text-blue-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900">Nueva Interfaz de Validación</h3>
-                  <p className="text-sm text-gray-600">
-                    Use la nueva interfaz de gestión de postulaciones para validar documentos de forma más eficiente. 
-                    Los postulantes con estado COMPLETED_WITH_DOCS tienen prioridad.
-                  </p>
-                </div>
-              </div>
-              <Link href={routeUrl("postulations")}>
-                <Button variant="outline" className="border-blue-300 text-blue-600 hover:bg-blue-50">
-                  <FileCheck className="w-4 h-4 mr-2" />
-                  Ir a Validación
-                  <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
 
       {/* Statistics Cards */}
       <div className="grid gap-6 md:grid-cols-4 mb-8">
@@ -465,7 +493,7 @@ function DocumentsPageContent() {
       </div>
 
       {/* Filters */}
-      <Card className="bg-card/60 backdrop-blur-sm border-white/10 shadow-lg mb-6">
+      <Card className="bg-card/60 backdrop-blur-sm border-white/10 mb-6">
         <CardHeader>
           <CardTitle className="font-headline flex items-center gap-2">
             <Filter className="w-5 h-5" />
@@ -473,11 +501,25 @@ function DocumentsPageContent() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-5">
+          {error && (
+            <div className="mb-4 p-3 bg-destructive/10 border border-destructive/20 rounded-md">
+              <p className="text-destructive text-sm">
+                <strong>Error:</strong> {error}
+              </p>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setError(null)}
+                className="mt-2"
+              >
+                Cerrar
+              </Button>
+            </div>
+          )}
+          <div className="grid gap-4 md:grid-cols-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                type="search"
                 placeholder="Buscar documentos..."
                 className="pl-10 bg-input/80 border-white/10"
                 value={searchTerm}
@@ -493,7 +535,7 @@ function DocumentsPageContent() {
                 <SelectItem value="all">Todos los tipos</SelectItem>
                 {documentTypes.map((type) => (
                   <SelectItem key={type.type} value={type.type}>
-                    {type.type} ({type.count})
+                    {type.type}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -511,12 +553,6 @@ function DocumentsPageContent() {
               </SelectContent>
             </Select>
 
-            <Input
-              placeholder="Filtrar por usuario..."
-              className="bg-input/80 border-white/10"
-              value={userFilter}
-              onChange={(e) => setUserFilter(e.target.value)}
-            />
 
             <Button 
               variant="outline" 
@@ -525,7 +561,7 @@ function DocumentsPageContent() {
               className="bg-input/80 border-white/10"
             >
               <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-              Actualizar
+              {loading ? 'Cargando...' : 'Actualizar'}
             </Button>
           </div>
         </CardContent>
@@ -558,118 +594,137 @@ function DocumentsPageContent() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {documents.map((doc) => (
-                  <TableRow key={doc.id}>
-                    <TableCell>
-                      <div className="flex flex-col">
-                        <span className="font-medium">{doc.originalName}</span>
-                        {doc.contest && (
-                          <span className="text-xs text-muted-foreground">
-                            Concurso: {doc.contest.title}
-                          </span>
+                {documents.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8">
+                      <div className="flex flex-col items-center gap-2">
+                        <FolderKanban className="w-8 h-8 text-muted-foreground" />
+                        <p className="text-muted-foreground">No se encontraron documentos</p>
+                        {loading ? (
+                          <p className="text-sm text-muted-foreground">Cargando...</p>
+                        ) : (
+                          <Button variant="outline" onClick={fetchDocuments}>
+                            <RefreshCw className="w-4 h-4 mr-2" />
+                            Recargar
+                          </Button>
                         )}
                       </div>
                     </TableCell>
-                    <TableCell>
-                      <div className="flex flex-col">
-                        <Badge variant="secondary">{doc.user.name}</Badge>
-                        <span className="text-xs text-muted-foreground mt-1">
-                          {doc.user.email}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <DocumentTypeBadge 
-                        documentType={doc.documentType} 
-                        variant="compact"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Badge 
-                        variant={getStatusBadgeVariant(doc.validationStatus)}
-                        className="flex items-center gap-1 w-fit"
-                      >
-                        {getStatusIcon(doc.validationStatus)}
-                        {doc.validationStatus}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="font-mono text-sm">
-                      {formatFileSize(doc.fileSize)}
-                    </TableCell>
-                    <TableCell className="font-mono text-sm">
-                      {formatDate(doc.createdAt)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button 
-                          variant="outline" 
-                          size="icon"
-                          onClick={() => handleDownload(doc.id, doc.originalName)}
-                          title="Descargar"
-                        >
-                          <FileDown className="h-4 w-4" />
-                        </Button>
-
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="outline" size="icon" title="Cambiar estado">
-                              {getStatusIcon(doc.validationStatus)}
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent>
-                            <DropdownMenuItem 
-                              onClick={() => handleStatusChange(doc.id, 'APPROVED')}
-                              className="text-green-600"
-                            >
-                              <CheckCircle className="w-4 h-4 mr-2" />
-                              Aprobar
-                            </DropdownMenuItem>
-                            <DropdownMenuItem 
-                              onClick={() => handleStatusChange(doc.id, 'PENDING')}
-                              className="text-yellow-600"
-                            >
-                              <Clock className="w-4 h-4 mr-2" />
-                              Pendiente
-                            </DropdownMenuItem>
-                            <DropdownMenuItem 
-                              onClick={() => handleStatusChange(doc.id, 'REJECTED')}
-                              className="text-red-600"
-                            >
-                              <XCircle className="w-4 h-4 mr-2" />
-                              Rechazar
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="destructive" size="icon" title="Eliminar">
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>¿Eliminar documento?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Esta acción no se puede deshacer. El archivo "{doc.originalName}" 
-                                será eliminado permanentemente del sistema y del almacenamiento.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                              <AlertDialogAction 
-                                onClick={() => handleDelete(doc.id, doc.originalName)}
-                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                              >
-                                Eliminar
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
-                    </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  documents.map((doc) => (
+                    <TableRow key={doc.id}>
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span className="font-medium">{doc.originalName}</span>
+                          {doc.contest && (
+                            <span className="text-xs text-muted-foreground">
+                              Concurso: {doc.contest.title}
+                            </span>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <Badge variant="secondary">{doc.user.name}</Badge>
+                          <span className="text-xs text-muted-foreground mt-1">
+                            {doc.user.email}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <DocumentTypeBadge 
+                          documentType={doc.documentType} 
+                          variant="compact"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Badge 
+                          variant={getStatusBadgeVariant(doc.validationStatus)}
+                          className="flex items-center gap-1 w-fit"
+                        >
+                          {getStatusIcon(doc.validationStatus)}
+                          {doc.validationStatus}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="font-mono text-sm">
+                        {formatFileSize(doc.fileSize)}
+                      </TableCell>
+                      <TableCell className="font-mono text-sm">
+                        {formatDate(doc.createdAt)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button 
+                            variant="outline" 
+                            size="icon"
+                            onClick={() => handleDownload(doc.id, doc.originalName)}
+                            title="Descargar"
+                          >
+                            <FileDown className="h-4 w-4" />
+                          </Button>
+
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="outline" size="icon" title="Cambiar estado">
+                                {getStatusIcon(doc.validationStatus)}
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent>
+                              <DropdownMenuItem 
+                                onClick={() => handleStatusChange(doc.id, 'APPROVED')}
+                                className="text-green-600"
+                              >
+                                <CheckCircle className="w-4 h-4 mr-2" />
+                                Aprobar
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => handleStatusChange(doc.id, 'PENDING')}
+                                className="text-yellow-600"
+                              >
+                                <Clock className="w-4 h-4 mr-2" />
+                                Pendiente
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => handleStatusChange(doc.id, 'REJECTED')}
+                                className="text-red-600"
+                              >
+                                <XCircle className="w-4 h-4 mr-2" />
+                                Rechazar
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="destructive" size="icon" title="Eliminar">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>¿Eliminar documento?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Esta acción no se puede deshacer. El archivo "{doc.originalName}" 
+                                  será eliminado permanentemente del sistema y del almacenamiento.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction 
+                                  onClick={() => handleDelete(doc.id, doc.originalName)}
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                >
+                                  Eliminar
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>

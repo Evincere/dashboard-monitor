@@ -1,0 +1,24 @@
+[TAILING] Tailing last 20 lines for [dashboard-monitor] process (change the value with --lines option)
+/home/semper/dashboard-monitor/logs/err-0.log last 20 lines:
+/home/semper/dashboard-monitor/logs/out-0.log last 20 lines:
+0|dashboar | 2025-08-21T04:51:05:  ✓ Starting...
+0|dashboar | 2025-08-21T04:51:05:  ✓ Ready in 203ms
+0|dashboar | 2025-08-21T05:00:52:    ▲ Next.js 15.3.3
+0|dashboar | 2025-08-21T05:00:52:    - Local:        http://localhost:9002
+0|dashboar | 2025-08-21T05:00:52:    - Network:      http://0.0.0.0:9002
+0|dashboar | 2025-08-21T05:00:52: 
+0|dashboar | 2025-08-21T05:00:52:  ✓ Starting...
+0|dashboar | 2025-08-21T05:00:52:  ✓ Ready in 267ms
+0|dashboar | 2025-08-21T05:25:32:    ▲ Next.js 15.3.3
+0|dashboar | 2025-08-21T05:25:32:    - Local:        http://localhost:9002
+0|dashboar | 2025-08-21T05:25:32:    - Network:      http://0.0.0.0:9002
+0|dashboar | 2025-08-21T05:25:32: 
+0|dashboar | 2025-08-21T05:25:32:  ✓ Starting...
+0|dashboar | 2025-08-21T05:25:32:  ✓ Ready in 206ms
+0|dashboar | 2025-08-21T05:36:09:    ▲ Next.js 15.3.3
+0|dashboar | 2025-08-21T05:36:09:    - Local:        http://localhost:9002
+0|dashboar | 2025-08-21T05:36:09:    - Network:      http://0.0.0.0:9002
+0|dashboar | 2025-08-21T05:36:09: 
+0|dashboar | 2025-08-21T05:36:09:  ✓ Starting...
+0|dashboar | 2025-08-21T05:36:09:  ✓ Ready in 195ms
+

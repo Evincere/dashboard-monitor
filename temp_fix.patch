@@ -1,0 +1,24 @@
+--- a/src/app/api/documents/route.ts
++++ b/src/app/api/documents/route.ts
+@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
+     // Get documents from backend with improved search
+     const backendParams: any = {
+       page: validatedParams.page - 1, // Backend uses 0-based indexing
+-      size: Math.max(validatedParams.limit, 200), // Ensure we get enough results from backend
++      size: 1000, // Get a large number of results from backend for frontend filtering
+     };
+ 
+     // Add search parameters to backend
+@@ -70,13 +70,11 @@ export async function GET(request: NextRequest) {
+       // If it looks like a DNI (only numbers), search by user ID
+       if (/^\d+$/.test(searchTerm)) {
+         backendParams.usuarioId = searchTerm;
+-        backendParams.size = 200; // Get more results for user-specific searches
+         console.log('📋 Searching by DNI/usuarioId:', searchTerm);
+       } else {
+         // Otherwise, search by general term
+         backendParams.busqueda = searchTerm;
+-        backendParams.size = 200; // Get more results when searching
+         console.log('📋 Searching by general term:', searchTerm);
+       }
+     }
