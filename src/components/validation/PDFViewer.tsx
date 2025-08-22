@@ -2,15 +2,15 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
-import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCw, Download, RefreshCw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCw, Download, RefreshCw, AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import { apiUrl } from '@/lib/utils';
 
 // Configurar PDF.js worker
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
 
 /**
- * @fileOverview Componente PDFViewer para visualización de documentos PDF
- * Incluye funcionalidades de zoom, rotación, navegación y descarga con autenticación
+ * @fileOverview Componente PDFViewer mejorado para visualización de documentos PDF
+ * Incluye detección de documentos recuperados automáticamente y placeholders
  */
 
 interface PDFViewerProps {
@@ -39,6 +39,15 @@ interface LoadingState {
   error?: string;
 }
 
+interface DocumentRecoveryInfo {
+  isRecovered: boolean;
+  isPlaceholder: boolean;
+  recoveryType?: 'SIMILARITY_MATCH' | 'PLACEHOLDER';
+  originalDocumentId?: string;
+  recoveredDocumentId?: string;
+  recoveryWarning?: string;
+}
+
 // Función auxiliar para obtener el token de autenticación
 const getAuthToken = (): string | null => {
   if (typeof window === 'undefined') return null;
@@ -61,7 +70,7 @@ const authFetch = async (url: string): Promise<Response> => {
 // Componente BlobViewer para manejar la carga autenticada de PDFs
 const BlobViewer: React.FC<{ 
   documentId: string;
-  onBlobReady: (blobUrl: string) => void;
+  onBlobReady: (blobUrl: string, recoveryInfo: DocumentRecoveryInfo) => void;
   onError: (error: string) => void;
 }> = ({ documentId, onBlobReady, onError }) => {
   useEffect(() => {
@@ -69,13 +78,41 @@ const BlobViewer: React.FC<{
 
     const loadPdfWithAuth = async () => {
       try {
-        const documentUrl = `${apiUrl}/validation/document/${documentId}`;
-        console.log('📄 Loading PDF with authentication from:', documentUrl);
+        const documentUrl = `${apiUrl}/documents/${documentId}/view`;
+        console.log('📄 Loading PDF with enhanced recovery from:', documentUrl);
         
         const response = await authFetch(documentUrl);
         
         if (!response.ok) {
           throw new Error(`Error loading document: ${response.status} ${response.statusText}`);
+        }
+
+        // Analizar headers para detectar recuperación automática
+        const recoveryInfo: DocumentRecoveryInfo = {
+          isRecovered: false,
+          isPlaceholder: false
+        };
+
+        const documentRecovery = response.headers.get('X-Document-Recovery');
+        const documentStatus = response.headers.get('X-Document-Status');
+        const recoveryType = response.headers.get('X-Recovery-Type');
+        const originalDocId = response.headers.get('X-Original-Document-Id');
+        const recoveredDocId = response.headers.get('X-Recovered-Document-Id');
+        const recoveryWarning = response.headers.get('X-Recovery-Warning');
+
+        if (documentRecovery === 'SIMILARITY_MATCH') {
+          recoveryInfo.isRecovered = true;
+          recoveryInfo.recoveryType = 'SIMILARITY_MATCH';
+          recoveryInfo.originalDocumentId = originalDocId || undefined;
+          recoveryInfo.recoveredDocumentId = recoveredDocId || undefined;
+          recoveryInfo.recoveryWarning = recoveryWarning || undefined;
+        }
+
+        if (documentStatus === 'PLACEHOLDER') {
+          recoveryInfo.isPlaceholder = true;
+          recoveryInfo.recoveryType = 'PLACEHOLDER';
+          recoveryInfo.originalDocumentId = originalDocId || undefined;
+          recoveryInfo.recoveredDocumentId = recoveredDocId || undefined;
         }
 
         const blob = await response.blob();
@@ -85,7 +122,9 @@ const BlobViewer: React.FC<{
 
         const blobUrl = URL.createObjectURL(blob);
         console.log('📄 PDF blob created successfully, size:', blob.size, 'bytes');
-        onBlobReady(blobUrl);
+        console.log('🔄 Recovery info:', recoveryInfo);
+        
+        onBlobReady(blobUrl, recoveryInfo);
       } catch (error) {
         console.error('❌ Error loading PDF:', error);
         onError(error instanceof Error ? error.message : 'Unknown error');
@@ -94,6 +133,61 @@ const BlobViewer: React.FC<{
 
     loadPdfWithAuth();
   }, [documentId, onBlobReady, onError]);
+
+  return null;
+};
+
+// Componente para mostrar el banner de estado de recuperación
+const DocumentStatusBanner: React.FC<{ recoveryInfo: DocumentRecoveryInfo }> = ({ recoveryInfo }) => {
+  if (!recoveryInfo.isRecovered && !recoveryInfo.isPlaceholder) {
+    return null;
+  }
+
+  if (recoveryInfo.isPlaceholder) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-3">
+        <div className="flex items-start">
+          <AlertTriangle className="w-5 h-5 text-red-500 mt-0.5 mr-3 flex-shrink-0" />
+          <div className="flex-1">
+            <h4 className="text-sm font-semibold text-red-900">Documento No Encontrado</h4>
+            <p className="text-xs text-red-700 mt-1">
+              El archivo físico de este documento no pudo ser localizado. 
+              Se está mostrando un documento informativo con detalles del problema.
+            </p>
+            <div className="mt-2 text-xs text-red-600">
+              <strong>Acción requerida:</strong> Contactar al usuario para que vuelva a cargar el documento.
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (recoveryInfo.isRecovered && recoveryInfo.recoveryType === 'SIMILARITY_MATCH') {
+    return (
+      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-3">
+        <div className="flex items-start">
+          <Info className="w-5 h-5 text-yellow-600 mt-0.5 mr-3 flex-shrink-0" />
+          <div className="flex-1">
+            <h4 className="text-sm font-semibold text-yellow-900">Documento Recuperado Automáticamente</h4>
+            <p className="text-xs text-yellow-700 mt-1">
+              Este documento fue recuperado automáticamente por similitud de tipo. 
+              Verifique que el contenido corresponde al documento solicitado.
+            </p>
+            {recoveryInfo.originalDocumentId && recoveryInfo.recoveredDocumentId && (
+              <div className="mt-2 text-xs text-yellow-600">
+                <div>ID Original: <code className="bg-yellow-100 px-1 rounded">{recoveryInfo.originalDocumentId}</code></div>
+                <div>ID Recuperado: <code className="bg-yellow-100 px-1 rounded">{recoveryInfo.recoveredDocumentId}</code></div>
+              </div>
+            )}
+            <div className="mt-2 text-xs text-yellow-600">
+              <strong>⚠️ Verificar:</strong> Si el contenido no es correcto, marcar como "Requiere Re-subida"
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return null;
 };
@@ -115,6 +209,10 @@ export default function PDFViewer({
   const [rotation, setRotation] = useState<number>(0);
   const [loadingState, setLoadingState] = useState<LoadingState>({ isLoading: true });
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [recoveryInfo, setRecoveryInfo] = useState<DocumentRecoveryInfo>({ 
+    isRecovered: false, 
+    isPlaceholder: false 
+  });
 
   // Función para manejar la carga exitosa del documento
   const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
@@ -137,6 +235,7 @@ export default function PDFViewer({
     setPageNumber(1);
     setScale(1.0);
     setRotation(0);
+    setRecoveryInfo({ isRecovered: false, isPlaceholder: false });
     
     // Si hay un blob URL anterior, revocarlo
     if (blobUrl) {
@@ -187,7 +286,7 @@ export default function PDFViewer({
       let downloadUrl = pdfUrl;
       
       if (documentId && !pdfUrl) {
-        const response = await authFetch(`${apiUrl}/validation/document/${documentId}`);
+        const response = await authFetch(`${apiUrl}/documents/${documentId}/view`);
         if (!response.ok) throw new Error('Error downloading document');
         
         const blob = await response.blob();
@@ -197,7 +296,16 @@ export default function PDFViewer({
       if (downloadUrl) {
         const link = document.createElement('a');
         link.href = downloadUrl;
-        link.download = fileName || 'document.pdf';
+        
+        // Usar un nombre descriptivo para placeholders
+        let downloadFileName = fileName || 'document.pdf';
+        if (recoveryInfo.isPlaceholder) {
+          downloadFileName = `DOCUMENTO_NO_ENCONTRADO_${documentId || 'unknown'}.pdf`;
+        } else if (recoveryInfo.isRecovered) {
+          downloadFileName = `RECUPERADO_${fileName || 'document.pdf'}`;
+        }
+        
+        link.download = downloadFileName;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -211,11 +319,12 @@ export default function PDFViewer({
       console.error('Error downloading PDF:', error);
       onError?.(error as Error);
     }
-  }, [documentId, pdfUrl, fileName, onError]);
+  }, [documentId, pdfUrl, fileName, recoveryInfo, onError]);
 
   // Manejadores para BlobViewer
-  const handleBlobReady = useCallback((newBlobUrl: string) => {
+  const handleBlobReady = useCallback((newBlobUrl: string, newRecoveryInfo: DocumentRecoveryInfo) => {
     setBlobUrl(newBlobUrl);
+    setRecoveryInfo(newRecoveryInfo);
     setLoadingState({ isLoading: false });
   }, []);
 
@@ -226,6 +335,13 @@ export default function PDFViewer({
 
   // Determinar la URL a usar
   const documentUrl = blobUrl || pdfUrl;
+
+  // Determinar el color de la barra de herramientas según el estado
+  const toolbarBgColor = recoveryInfo.isPlaceholder 
+    ? 'bg-red-50 border-red-200' 
+    : recoveryInfo.isRecovered 
+    ? 'bg-yellow-50 border-yellow-200' 
+    : 'bg-gray-50 border-gray-200';
 
   return (
     <div className={`pdf-viewer-container ${className}`} style={{ height, width }}>
@@ -238,9 +354,20 @@ export default function PDFViewer({
         />
       )}
 
+      {/* Banner de estado de recuperación */}
+      <DocumentStatusBanner recoveryInfo={recoveryInfo} />
+
       {/* Barra de herramientas */}
-      <div className="flex items-center justify-between p-3 bg-gray-50 border-b border-gray-200">
+      <div className={`flex items-center justify-between p-3 border-b ${toolbarBgColor}`}>
         <div className="flex items-center space-x-2">
+          {/* Indicador de estado visual */}
+          {recoveryInfo.isPlaceholder && (
+            <AlertTriangle className="w-4 h-4 text-red-500 mr-2" />
+          )}
+          {recoveryInfo.isRecovered && (
+            <Info className="w-4 h-4 text-yellow-600 mr-2" />
+          )}
+
           {/* Controles de navegación */}
           <button
             onClick={goToPrevPage}
@@ -314,7 +441,7 @@ export default function PDFViewer({
             onClick={downloadPDF}
             disabled={loadingState.isLoading}
             className="p-2 rounded-md border border-gray-300 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Descargar"
+            title={recoveryInfo.isPlaceholder ? "Descargar informe de documento faltante" : "Descargar documento"}
           >
             <Download className="w-4 h-4" />
           </button>
