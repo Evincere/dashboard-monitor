@@ -10,7 +10,10 @@ const protectedRoutes = [
   '/api/documents/reject',
   '/api/backups',
   '/api/dashboard',
-  '/api/security'
+  '/api/security',
+  '/dashboard-monitor/api/reports/list',
+  '/dashboard-monitor/api/reports/generate',
+  '/dashboard-monitor/api/reports'
 ];
 
 // Document view/download endpoints that should be public
@@ -38,8 +41,11 @@ const publicRoutes = [
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  
+
   console.log('🔍 Middleware check for:', pathname);
+
+  // Remove /dashboard-monitor prefix for route matching
+  const normalizedPath = pathname.replace('/dashboard-monitor', '');
 
   // Skip middleware for static files and Next.js internals
   if (
@@ -65,7 +71,7 @@ export function middleware(request: NextRequest) {
 
   // Check if route requires authentication
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
-  
+
   if (!isProtectedRoute) {
     return NextResponse.next();
   }
@@ -76,8 +82,8 @@ export function middleware(request: NextRequest) {
 
   if (!token) {
     return NextResponse.json(
-      { 
-        error: 'Authentication required', 
+      {
+        error: 'Authentication required',
         code: 'AUTH_REQUIRED',
         path: pathname
       },
@@ -89,8 +95,8 @@ export function middleware(request: NextRequest) {
   const payload = verifyAccessToken(token);
   if (!payload) {
     return NextResponse.json(
-      { 
-        error: 'Invalid or expired token', 
+      {
+        error: 'Invalid or expired token',
         code: 'INVALID_TOKEN',
         path: pathname
       },
@@ -102,8 +108,8 @@ export function middleware(request: NextRequest) {
   const isAdminRoute = adminRoutes.some(route => pathname.startsWith(route));
   if (isAdminRoute && payload.role !== 'ROLE_ADMIN') {
     return NextResponse.json(
-      { 
-        error: 'Insufficient permissions', 
+      {
+        error: 'Insufficient permissions',
         code: 'INSUFFICIENT_PERMISSIONS',
         required: 'ROLE_ADMIN',
         current: payload.role,
@@ -125,7 +131,7 @@ export function middleware(request: NextRequest) {
   response.headers.set('X-XSS-Protection', '1; mode=block');
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-  
+
   if (process.env.NODE_ENV === 'production') {
     response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   }

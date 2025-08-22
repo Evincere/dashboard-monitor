@@ -137,3 +137,4 @@ test-results.xml
 # Local configuration overrides
 next.config.local.ts
 docker-compose.override.yml
+/src/generated/prisma

@@ -1,0 +1,114 @@
+
+# Informe final para la sección de reportes administrativos
+
+## Contexto general del sistema
+
+El sistema del **Ministerio Público de la Defensa (MPD)** para concursos públicos está compuesto por dos grandes proyectos:
+
+1. **Backend oficial (`mpd_concursos`)**: implementado en **Spring Boot** con una arquitectura hexagonal. Gestiona concursos, inscripciones, usuarios, roles, documentación, notificaciones y paneles de control. Proporciona seguridad mediante JWT y roles (Administrador, Evaluador, Postulante, Auditor) y genera trazabilidad en todos los flujoshttps://github.com/Evincere/mpd_concursos/blob/e1440d1b20d501105038a37b5a115bddcc2dcf1f/README.md#L533-L539.  Dispone de endpoints para crear inscripcioneshttps://github.com/Evincere/mpd_concursos/blob/HEAD/concurso-backend/src/main/java/ar/gov/mpd/concursobackend/contest/infrastructure/controller/ContestInscriptionController.java#L16-L24, filtrar concursoshttps://github.com/Evincere/mpd_concursos/blob/HEAD/concurso-backend/src/main/java/ar/gov/mpd/concursobackend/filter/infrastructure/controller/ContestFilterController.java#L16-L42, cargar y descargar documentoshttps://github.com/Evincere/mpd_concursos/blob/HEAD/concurso-backend/src/main/java/ar/gov/mpd/concursobackend/document/infrastructure/controller/DocumentController.java#L48-L62https://github.com/Evincere/mpd_concursos/blob/HEAD/concurso-backend/src/main/java/ar/gov/mpd/concursobackend/document/infrastructure/controller/DocumentController.java#L268-L330, obtener estadísticas de los usuarioshttps://github.com/Evincere/mpd_concursos/blob/HEAD/concurso-backend/src/main/java/ar/gov/mpd/concursobackend/dashboard/infrastructure/controller/UserDashboardController.java#L136-L157 y gestionar notificacioneshttps://github.com/Evincere/mpd_concursos/blob/HEAD/concurso-backend/src/main/java/ar/gov/mpd/concursobackend/notification/infrastructure/rest/controller/NotificationController.java#L30-L57.
+
+2. **Microservicio `dashboard‑monitor`**: es un front‑end construido con **Next.js** (App Router, TypeScript y Tailwind) que sirve de intermediario entre los usuarios y el backend.  Expone un conjunto de rutas API para autenticar, gestionar postulaciones, mostrar estadísticas, manipular documentos, acceder a la base de datos, administrar usuarios, concursos, backups y flujos de validaciónhttps://github.com/Evincere/dashboard-monitor/blob/fd78fa57847fcb66ecd2d96bf51d08202a054c67/AUDITORIA_TECNICA/ESTRUCTURA_PROYECTO.md#L19-L30.  Las rutas `/api/documents` permiten descargar, visualizar, aprobar y rechazar documentoshttps://github.com/Evincere/dashboard-monitor/blob/fd78fa57847fcb66ecd2d96bf51d08202a054c67/AUDITORIA_TECNICA/ENDPOINTS_AUDITORIA.md#L50-L54 y las de validación permiten aprobar o rechazar postulacioneshttps://github.com/Evincere/dashboard-monitor/blob/fd78fa57847fcb66ecd2d96bf51d08202a054c67/AUDITORIA_TECNICA/ENDPOINTS_AUDITORIA.md#L57-L61.  En el módulo dashboard existen métricas estimadas (por ejemplo `Math.floor(totalEligible * 0.25)`) que deberían reemplazarse por consultas SQL reales para obtener datos exactos.
+
+El objetivo de la nueva sección es permitir a los administradores generar **reportes administrativos oficiales** a partir de los datos existentes (inscripciones, documentos, validaciones y auditoría) y de un archivo CSV adjunto con 252 registros que contiene, entre otros, nombre completo, DNI, correo, localidad, circunscripción, pertenencia MPDyP/SCJ/MPF, estado de admisión y observaciones.
+
+## Diseño de la nueva sección de reportes
+
+### Fase 1 – Exportación rápida desde la vista de postulaciones
+
+* **Botón “Exportar resultados”**: en la página de postulaciones del dashboard se añadirá un botón junto a los filtros existentes (estado de admisión, organismo, circunscripción, localidad, etc.).  Al hacer clic se abrirá un modal donde se selecciona el **tipo de reporte** (PDF, Excel, CSV).  Los filtros aplicados se reutilizan para limitar los registros incluidos, de modo que no se duplique la lógica de filtradohttps://github.com/Evincere/dashboard-monitor/blob/fd78fa57847fcb66ecd2d96bf51d08202a054c67/AUDITORIA_TECNICA/PLAN_ACCION_ESTRUCTURADO.md#L183-L196.
+
+* **Endpoint de generación**: se crea `POST /api/reports/generate`.  Este endpoint recibe como cuerpo el identificador del concurso, el tipo de reporte y los filtros.  Devuelve un identificador único (ID) del reporte.
+
+* **Descarga**: luego de generar el reporte, se llamará a `GET /api/reports/{id}/download` para obtener el archivo en el formato elegido.  La respuesta incluirá cabeceras para permitir la descarga directa.
+
+### Fase 2 – Sección dedicada de reportes y auditoría
+
+* **Menú lateral “📊 Reportes y auditoría”**: se agrega una nueva sección en la interfaz.  En ella, los administradores podrán:
+  * **Generar reportes especializados**: con parámetros avanzados (rango de fechas, tipo de documento, validador, categoría MPDyP/SCJ/MPF, circunscripción, etc.).
+  * **Historial y control de versiones**: consultar el historial de reportes (`GET /api/reports/history`), ver quién los generó, cuándo, con qué filtros y descargar de nuevo versiones anteriores.
+  * **Plantillas personalizadas**: listar plantillas almacenadas (`GET /api/reports/templates`) y permitir su edición para personalizar encabezados y pies de página.
+
+### Tipos de reportes propuestos
+
+1. **Reporte oficial de resultados (PDF)**https://github.com/Evincere/dashboard-monitor/blob/fd78fa57847fcb66ecd2d96bf51d08202a054c67/AUDITORIA_TECNICA/SISTEMA_REPORTES_PROPUESTO.md#L250-L280
+
+   * **Cabecera institucional**: logo, nombre del MPD y datos de contacto.
+   * **Datos del concurso**: título, período de inscripción, período de validación y funcionario responsable.
+   * **Resumen ejecutivo**: totales de postulaciones, número de aprobadas, rechazadas y pendientes.  Utilizar el CSV para calcular cuántos aspirantes están en cada estado y desglosar por organismo (MPDyP/SCJ/MPF) y circunscripción.
+   * **Listados**:  
+     * **Aprobados**: DNI, nombre completo, correo, localidad y circunscripciónhttps://github.com/Evincere/dashboard-monitor/blob/fd78fa57847fcb66ecd2d96bf51d08202a054c67/AUDITORIA_TECNICA/SISTEMA_REPORTES_PROPUESTO.md#L256-L273.  
+     * **Rechazados**: DNI, nombre completo, motivo de rechazo y observacioneshttps://github.com/Evincere/dashboard-monitor/blob/fd78fa57847fcb66ecd2d96bf51d08202a054c67/AUDITORIA_TECNICA/SISTEMA_REPORTES_PROPUESTO.md#L274-L277.  
+     * **Pendientes** (opcional): listado de quienes requieren corrección o revisión.
+   * **Firma digital**: espacio para firma del administrador y, opcionalmente, incluir un código QR para verificar la autenticidad del documento.
+
+2. **Reporte de progreso de validación (Excel/CSV)**
+
+   Basado en la interfaz `ValidationProgressReport` sugerida en la documentación del microservicio.  Debe incluir:
+
+   * **Overview**: número total de postulaciones, validadas, pendientes y en proceso.  
+   * **Por validador**: cantidad de expedientes validados por cada operador y tiempo medio de validación.  
+   * **Por tipo de documento**: número de documentos aprobados, rechazados y pendientes.  
+   * **Timeline**: evolución de las validaciones a lo largo del tiempo (por día o semana).  
+   * **Contenido por postulante**: para cada registro del CSV: DNI, nombre completo, estado de admisión, número total de documentos (`docs_total`), documentos aprobados y rechazados (`docs_aprobados`, `docs_rechazados`), porcentaje de completitud y fecha/hora de validación más reciente.
+
+3. **Reporte de auditoría (Excel o JSON)**https://github.com/Evincere/dashboard-monitor/blob/fd78fa57847fcb66ecd2d96bf51d08202a054c67/AUDITORIA_TECNICA/SISTEMA_REPORTES_PROPUESTO.md#L111-L118
+
+   * **Acciones de validación**: quién aprobó o rechazó cada documento con fecha y hora.  
+   * **Eventos de sistema**: cambios de estado de inscripciones, inicios de sesión, accesos a reportes y copias de seguridad.  Estas entradas se almacenarán en una nueva tabla `generated_reports` junto con metadatos (usuario, filtros, tamaño del archivo)https://github.com/Evincere/dashboard-monitor/blob/fd78fa57847fcb66ecd2d96bf51d08202a054c67/AUDITORIA_TECNICA/SISTEMA_REPORTES_PROPUESTO.md#L179-L196.  
+   * **Cambios en documentos**: versiones, modificaciones y comprobación de integridad.  
+   * **Acciones de usuario**: creación de concursos, asignación de validadores y cualquier otra acción administrativa.
+
+4. **Reporte demográfico (opcional)**
+
+   A partir de los campos **centro de vida**, **circunscripción**, **categoría (MPDyP/SCJ/MPF)** y **estado de admisión** del CSV se pueden generar análisis demográficos:
+
+   * Distribución de postulantes por circunscripción y centro de vida.  
+   * Participación de aspirantes por organismo.  
+   * Tasas de aprobación y rechazo por circunscripción y categoría.
+
+## Cambios técnicos necesarios
+
+1. **API**: añadir los endpoints:
+   * `POST /api/reports/generate` (generar un reporte).  
+   * `GET /api/reports/{id}/download` (descargar archivo).  
+   * `GET /api/reports/history` (listar reportes generados).  
+   * `GET /api/reports/templates` (listar plantillas).  
+
+2. **Persistencia**: crear la tabla `generated_reports` con campos: ID, usuario que generó el reporte, filtros aplicados (JSON), tipo de reporte, formato, ruta del archivo, tamaño del archivo y fecha de creaciónhttps://github.com/Evincere/dashboard-monitor/blob/fd78fa57847fcb66ecd2d96bf51d08202a054c67/AUDITORIA_TECNICA/SISTEMA_REPORTES_PROPUESTO.md#L179-L196.
+
+3. **Servicios de generación**: en el backend (o en el microservicio), implementar en `/src/lib/reports` servicios que:
+
+   * Ejecuten consultas SQL reales sobre la base `mpd_concursos` para obtener datos de inscripciones, documentos, usuarios y auditoría.  Evitar estimaciones como `Math.floor(totalEligible * 0.25)` y utilizar datos actualizadoshttps://github.com/Evincere/mpd_concursos/blob/HEAD/concurso-backend/src/main/java/ar/gov/mpd/concursobackend/dashboard/infrastructure/controller/UserDashboardController.java#L136-L157.  
+   * Integren la información del archivo CSV para enriquecer los reportes con localidades, circunscripción y pertenencia a organismo.  
+   * Generen los archivos en los formatos solicitados (PDF, Excel, CSV o JSON) utilizando bibliotecas como **jsPDF** para PDF y **xlsx** para Excel/CSV.
+
+4. **Seguridad y auditoría**: proteger los endpoints de generación y descarga mediante autenticación de administrador.  Registrar todas las acciones (quién generó, descargó, modificó o eliminó un reporte) y conservar el historial en la nueva tabla.  Esto complementa el sistema de trazabilidad existentehttps://github.com/Evincere/mpd_concursos/blob/HEAD/concurso-backend/src/main/java/ar/gov/mpd/concursobackend/auth/infrastructure/controller/UserStatusController.java#L38-L95.
+
+5. **Integración en el frontend**: 
+   * Incorporar el botón de exportación en la vista de postulaciones (fase 1) y un menú completo de reportes y auditoría en la barra lateral (fase 2).  
+   * Implementar páginas de generación de reportes y de historial, reutilizando los componentes de filtrado y tablas existentes.  
+   * Añadir notificaciones para avisar cuando un reporte está listo y permitir descargas recurrentes o programadas.
+
+## Valor añadido y funcionalidades avanzadas
+
+Para que la nueva sección sea una **herramienta estratégica** y no solo un exportador, se proponen las siguientes mejoras:
+
+1. **Paneles interactivos y filtros avanzados**: además del formato PDF/Excel, ofrecer vistas interactivas (gráficos, tablas dinámicas) que permitan explorar los datos por centro de vida, circunscripción o categoría MPDyP/SCJ/MPF.  Esto aprovecha la lógica de filtrado existentehttps://github.com/Evincere/dashboard-monitor/blob/fd78fa57847fcb66ecd2d96bf51d08202a054c67/AUDITORIA_TECNICA/PLAN_ACCION_ESTRUCTURADO.md#L183-L196 y ayuda a detectar tendencias antes de exportar.
+
+2. **Resumen ejecutivo automatizado**: utilizar el módulo de IA existente en el microservicio para generar un resumen textual de hallazgos y tendencias a partir de los datos de cada reporte.  Así, el resumen ejecutivo no solo mostrará cifras, sino también insights sobre áreas con mayor o menor participación, cuellos de botella en la validación, etc.
+
+3. **Indicadores de calidad y alertas**: incluir métricas como tiempo medio de validación, porcentaje de documentación observada por tipo, tasa de corrección en primera revisión y fechas límite próximas.  Configurar alertas cuando ciertos umbrales se incumplan, enlazando directamente a las inscripciones o documentos involucrados.
+
+4. **Mapas y visualizaciones demográficas**: generar mapas o gráficos que muestren la distribución geográfica de los postulantes (por localidad y circunscripción) y las tasas de aprobación/rechazo.  Esto podría identificar regiones con poca presencia o con altos índices de rechazo.
+
+5. **Historial de reportes y control de versiones**: mostrar en la sección de reportes la lista de reportes generados, con metadatos (tipo, fecha, creador, tamaño) y número de descargas.  Permitir descargar versiones antiguas y comparar reportes.
+
+6. **Programación y notificaciones**: permitir programar reportes recurrentes (por ejemplo, un reporte semanal de progreso de validación) y enviar notificaciones (correo o in‑app) cuando estén listos para descargar.
+
+7. **Firma digital y verificación de integridad**: añadir firmas digitales o códigos QR a los reportes PDF para validar su autenticidad y detectar modificaciones.  Esto añade valor legal y confianza en la documentación oficialhttps://github.com/Evincere/dashboard-monitor/blob/fd78fa57847fcb66ecd2d96bf51d08202a054c67/AUDITORIA_TECNICA/SISTEMA_REPORTES_PROPUESTO.md#L250-L280.
+
+8. **Auditoría completa de uso**: registrar quién genera cada reporte, qué filtros utiliza y cuándo lo descarga.  Estas acciones se guardarán en `generated_reports` y complementarán el subsistema de auditoría existentehttps://github.com/Evincere/mpd_concursos/blob/HEAD/concurso-backend/src/main/java/ar/gov/mpd/concursobackend/auth/infrastructure/controller/UserStatusController.java#L38-L95.
+
+## Conclusión
+
+La integración de una **sección de reportes administrativos** en el microservicio `dashboard‑monitor` transformará la plataforma en una herramienta integral de gestión y transparencia.  El backend oficial `mpd_concursos` ya expone la mayoría de los datos necesarios (concursos, inscripciones, documentos, usuarios, validaciones y auditoría), y el CSV proporciona información adicional sobre circunscripción, localidad y pertenencia institucional que enriquecerá los reportes.  La propuesta se estructura en dos fases (exportación rápida y módulo completo de reportes), define los endpoints y tablas necesarias, y sugiere funcionalidades de valor agregado para convertir los reportes en instrumentos de análisis, control y toma de decisiones.  Con la correcta implementación, el MPD dispondrá de documentación oficial actualizada y trazable que cumpla con los requerimientos administrativos y mejore la transparencia de sus procesos.

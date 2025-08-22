@@ -19,7 +19,8 @@ import {
   Library,
   Search,
   Activity,
-  FileCheck
+  FileCheck,
+  FileBarChart
 } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
@@ -46,7 +47,7 @@ const menuItems = [
     label: 'Consulta Inteligente',
     icon: BrainCircuit,
   },
-    {
+  {
     href: '/contests',
     label: 'Concursos',
     icon: Library,
@@ -61,7 +62,7 @@ const menuItems = [
     label: 'Esquema DB',
     icon: Search,
   },
-   {
+  {
     href: '/backups',
     label: 'Backups',
     icon: FileClock,
@@ -85,6 +86,11 @@ const menuItems = [
     href: '/performance',
     label: 'Rendimiento',
     icon: Activity,
+  },
+  {
+    href: '/reportes',
+    label: 'Reportes',
+    icon: FileBarChart,
   }
 ];
 
