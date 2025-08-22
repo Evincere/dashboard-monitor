@@ -7,7 +7,7 @@
 import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { BarChart3, Search, Settings, FileText, AlertTriangle, Users } from 'lucide-react';
+import { BarChart3, Search, Settings, FileText, AlertTriangle } from 'lucide-react';
 import { ExecutiveDashboard } from '@/components/reports/dashboard/ExecutiveDashboard';
 
 type TabValue = 'dashboard' | 'reports' | 'diagnostics' | 'config';
@@ -43,9 +43,9 @@ export default function ReportesPage() {
   ];
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
       {/* Header */}
-      <div className="space-y-2">
+      <div className="flex flex-col gap-2">
         <h1 className="text-3xl font-bold tracking-tight">Sistema de Reportes Administrativos</h1>
         <p className="text-muted-foreground">
           Herramientas avanzadas para análisis y reporte del proceso de validación de documentos
@@ -53,7 +53,7 @@ export default function ReportesPage() {
       </div>
 
       {/* Tabs Navigation */}
-      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as TabValue)}>
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as TabValue)} className="flex-1">
         <TabsList className="grid w-full grid-cols-4">
           {tabs.map((tab) => {
             const Icon = tab.icon;
@@ -71,12 +71,12 @@ export default function ReportesPage() {
         </TabsList>
 
         {/* Tab Content: Dashboard Ejecutivo */}
-        <TabsContent value="dashboard" className="space-y-6">
+        <TabsContent value="dashboard" className="flex-1 space-y-4">
           <ExecutiveDashboard />
         </TabsContent>
 
         {/* Tab Content: Reportes */}
-        <TabsContent value="reports" className="space-y-6">
+        <TabsContent value="reports" className="flex-1 space-y-4">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -88,9 +88,9 @@ export default function ReportesPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-12 text-muted-foreground">
-                <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p>Funcionalidad de reportes en desarrollo...</p>
+              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                <FileText className="w-12 h-12 mb-4 opacity-50" />
+                <p className="text-lg font-medium">Funcionalidad de reportes en desarrollo</p>
                 <p className="text-sm">Próximamente: generación automática de reportes oficiales</p>
               </div>
             </CardContent>
@@ -98,7 +98,7 @@ export default function ReportesPage() {
         </TabsContent>
 
         {/* Tab Content: Diagnóstico */}
-        <TabsContent value="diagnostics" className="space-y-6">
+        <TabsContent value="diagnostics" className="flex-1 space-y-4">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -110,9 +110,9 @@ export default function ReportesPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-12 text-muted-foreground">
-                <Search className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p>Herramientas de diagnóstico en desarrollo...</p>
+              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                <Search className="w-12 h-12 mb-4 opacity-50" />
+                <p className="text-lg font-medium">Herramientas de diagnóstico en desarrollo</p>
                 <p className="text-sm">Próximamente: detección automática de problemas técnicos</p>
               </div>
             </CardContent>
@@ -120,7 +120,7 @@ export default function ReportesPage() {
         </TabsContent>
 
         {/* Tab Content: Configuración */}
-        <TabsContent value="config" className="space-y-6">
+        <TabsContent value="config" className="flex-1 space-y-4">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -132,15 +132,15 @@ export default function ReportesPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-12 text-muted-foreground">
-                <Settings className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p>Panel de configuración en desarrollo...</p>
+              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                <Settings className="w-12 h-12 mb-4 opacity-50" />
+                <p className="text-lg font-medium">Panel de configuración en desarrollo</p>
                 <p className="text-sm">Próximamente: gestión de plantillas y automatización</p>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
-    </div>
+    </main>
   );
 }

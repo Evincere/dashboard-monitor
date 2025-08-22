@@ -28,16 +28,17 @@ export function ReportMetricCard({
 }: ReportMetricCardProps) {
   return (
     <Card className={cn(
-      'bg-card/60 backdrop-blur-sm border-white/10 shadow-lg transition-all hover:shadow-xl',
-      loading && 'animate-pulse opacity-70',
+      // Usar estilos consistentes con el design system del dashboard
+      'transition-all duration-200 hover:shadow-md',
+      loading && 'animate-pulse',
       className
     )}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">
+        <CardTitle className="text-sm font-medium">
           {title}
         </CardTitle>
         <Icon className={cn(
-          "h-4 w-4 text-muted-foreground transition-colors",
+          "h-4 w-4 text-muted-foreground",
           loading && "animate-pulse"
         )} />
       </CardHeader>

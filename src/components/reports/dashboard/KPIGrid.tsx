@@ -17,25 +17,26 @@ export function KPIGrid({ metrics, loading = false }: KPIGridProps) {
       title: 'Usuarios Registrados',
       value: metrics?.totalUsers ?? 0,
       icon: Users,
-      className: 'border-blue-200 bg-blue-50/50',
+      // Usar colores más sutiles y consistentes con el tema
+      className: 'border-primary/20 bg-primary/5',
     },
     {
       title: 'Documentos Procesados',
       value: metrics?.totalDocuments ?? 0,
       icon: FileText,
-      className: 'border-gray-200 bg-gray-50/50',
+      className: 'border-muted-foreground/20 bg-muted/5',
     },
     {
       title: 'Progreso de Validación',
       value: `${metrics?.processingProgress ?? 0}%`,
       icon: CheckCircle,
-      className: 'border-green-200 bg-green-50/50',
+      className: 'border-green-500/20 bg-green-500/5',
     },
     {
       title: 'Problemas Técnicos',
       value: metrics?.documentsWithTechnicalIssues ?? 0,
       icon: AlertTriangle,
-      className: 'border-red-200 bg-red-50/50',
+      className: 'border-destructive/20 bg-destructive/5',
     },
   ];
 
