@@ -138,7 +138,7 @@ export default function DocumentValidationPage() {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
-  const dni = params.dni as string;
+  const dni = params?.dni as string;
 
   // Zustand store
   const {
@@ -179,9 +179,9 @@ export default function DocumentValidationPage() {
     );
     try {
       console.log(
-        "📡 Haciendo fetch a /api/backend/inscriptions con tamaño=1000"
+        "📡 Haciendo fetch a /api/proxy-backend/inscriptions con tamaño=1000"
       );
-      const response = await fetch(apiUrl("backend/inscriptions?size=1000"));
+      const response = await fetch(apiUrl("proxy-backend/inscriptions?size=1000"));
       console.log("📨 Respuesta recibida:", {
         ok: response.ok,
         status: response.status,
@@ -497,7 +497,7 @@ export default function DocumentValidationPage() {
     try {
       // Obtener lista fresca directamente del backend (igual lógica que el modal)
       console.log("🔄 Obteniendo lista fresca de postulantes...");
-      const response = await fetch(apiUrl("backend/inscriptions?size=1000"));
+      const response = await fetch(apiUrl("proxy-backend/inscriptions?size=1000"));
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status} al obtener postulantes`);
@@ -604,6 +604,7 @@ export default function DocumentValidationPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            inscriptionId: postulant.inscription.id,
             revertedBy: "admin",
             reason: "Reversión administrativa para nueva evaluación",
           }),
@@ -743,7 +744,7 @@ export default function DocumentValidationPage() {
 
         try {
           // Obtener lista actualizada directamente del backend
-          const response = await fetch(apiUrl("backend/inscriptions?size=1000"));
+          const response = await fetch(apiUrl("proxy-backend/inscriptions?size=1000"));
           if (response.ok) {
             const result = await response.json();
             if (result.success && result.data && result.data.content) {
@@ -1328,8 +1329,8 @@ export default function DocumentValidationPage() {
                   key={doc.id}
                   onClick={() => setCurrentDocument(doc)}
                   className={`w-full p-2 rounded transition-colors ${doc.id === currentDocument?.id
-                      ? "bg-primary text-primary-foreground"
-                      : "hover:bg-muted"
+                    ? "bg-primary text-primary-foreground"
+                    : "hover:bg-muted"
                     }`}
                   title={doc.originalName || doc.fileName}
                 >
@@ -1589,8 +1590,8 @@ function DocumentListItem({
     <div
       onClick={onClick}
       className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-md ${isActive
-          ? "ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20"
-          : statusColor
+        ? "ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20"
+        : statusColor
         }`}
     >
       <div className="flex items-start gap-3">
@@ -2004,8 +2005,8 @@ function ValidationPanel({
             <div className="text-center py-6">
               <div
                 className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg mb-4 ${document.validationStatus === "APPROVED"
-                    ? "bg-emerald-100 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400"
-                    : "bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400"
+                  ? "bg-emerald-100 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400"
+                  : "bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400"
                   }`}
               >
                 {document.validationStatus === "APPROVED" ? (

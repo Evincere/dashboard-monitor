@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import backendClient, { ApiResponse, PagedResponse } from '@/lib/backend-client';
-import { BackendInscription } from '@/types/backend';
+import backendClient from '@/lib/backend-client';
 
 /**
  * @fileOverview API para revertir el estado de una postulación de REJECTED o APPROVED a PENDING
@@ -8,6 +7,7 @@ import { BackendInscription } from '@/types/backend';
  */
 
 interface RevertRequest {
+  inscriptionId: string;
   reason?: string;
   revertedBy: string;
 }
@@ -19,16 +19,26 @@ export async function POST(
   try {
     const { dni } = await params;
     const body: RevertRequest = await request.json();
-    const { reason, revertedBy } = body;
+    const { inscriptionId, reason, revertedBy } = body;
 
     console.log(`🔄 [REVERT] Starting revert process for DNI: ${dni}`);
-    console.log(`📋 [REVERT] Request body:`, { reason, revertedBy });
+    console.log(`📋 [REVERT] Request body:`, { inscriptionId, reason, revertedBy });
 
+    // Validaciones de entrada
     if (!dni) {
       console.error(`❌ [REVERT] DNI is missing`);
       return NextResponse.json({
         success: false,
         error: 'DNI is required',
+        timestamp: new Date().toISOString()
+      }, { status: 400 });
+    }
+
+    if (!inscriptionId) {
+      console.error(`❌ [REVERT] inscriptionId is missing`);
+      return NextResponse.json({
+        success: false,
+        error: 'inscriptionId is required',
         timestamp: new Date().toISOString()
       }, { status: 400 });
     }
@@ -42,69 +52,14 @@ export async function POST(
       }, { status: 400 });
     }
 
-    console.log(`🔄 [REVERT] Reverting postulation state for DNI: ${dni} by ${revertedBy}`);
+    console.log(`🔄 [REVERT] Reverting inscription ${inscriptionId} for DNI: ${dni} by ${revertedBy}`);
 
-    // Paso 1: Buscar el usuario por DNI
-    const usersResponse = await backendClient.getUsers({ size: 1000 });
-
-    if (!usersResponse.success || !usersResponse.data?.content?.length) {
-      console.error(`❌ [REVERT] Failed to fetch users from backend`);
-      return NextResponse.json({
-        success: false,
-        error: 'User not found in backend',
-        timestamp: new Date().toISOString()
-      }, { status: 404 });
-    }
-
-    const user = usersResponse.data.content.find((u: any) =>
-      (u.dni === dni) || (u.username === dni)
-    );
-
-    if (!user) {
-      console.error(`❌ [REVERT] User with DNI ${dni} not found`);
-      return NextResponse.json({
-        success: false,
-        error: `User with DNI ${dni} not found`,
-        timestamp: new Date().toISOString()
-      }, { status: 404 });
-    }
-
-    console.log(`👤 [REVERT] Found user: ${user.fullName || user.name} (ID: ${user.id})`);
-
-    // Paso 2: Buscar la inscripción del usuario
-    const inscriptionsResponse: ApiResponse<PagedResponse<BackendInscription>> = await backendClient.getInscriptions({
-      userId: user.id,
-      size: 10
-    });
-
-    if (!inscriptionsResponse.success || !inscriptionsResponse.data?.content?.length) {
-      console.error(`❌ [REVERT] No inscription found for user ${user.id}`);
-      return NextResponse.json({
-        success: false,
-        error: 'No inscription found for this user',
-        timestamp: new Date().toISOString()
-      }, { status: 404 });
-    }
-
-    const inscription = inscriptionsResponse.data.content[0];
-    console.log(`📋 [REVERT] Found inscription: ${inscription.id} (current status: ${inscription.status})`);
-
-    // Verificar que está en estado REJECTED o APPROVED
-    if (inscription.status !== 'REJECTED' && inscription.status !== 'APPROVED') {
-      console.error(`❌ [REVERT] Invalid status for revert: ${inscription.status}`);
-      return NextResponse.json({
-        success: false,
-        error: `Inscription is not in REJECTED or APPROVED status. Current status: ${inscription.status}`,
-        timestamp: new Date().toISOString()
-      }, { status: 400 });
-    }
-
-    // Paso 3: Cambiar estado en el backend Spring Boot usando la API real
+    // Directamente usar el inscriptionId para cambiar estado a PENDING usando startValidation
     try {
-      console.log(`🔧 [REVERT] Calling backend startValidation for inscription ${inscription.id}`);
+      console.log(`🔧 [REVERT] Calling backend startValidation for inscription ${inscriptionId}`);
       
       const stateChangeResponse = await backendClient.startValidation(
-        inscription.id,
+        inscriptionId,
         reason || `Estado revertido por ${revertedBy} - Revisión manual`
       );
 
@@ -113,16 +68,15 @@ export async function POST(
         throw new Error(stateChangeResponse.error || 'Backend state change failed');
       }
 
-      console.log(`✅ [REVERT] Successfully reverted inscription ${inscription.id} from ${inscription.status} to PENDING`);
+      console.log(`✅ [REVERT] Successfully reverted inscription ${inscriptionId} to PENDING`);
 
       return NextResponse.json({
         success: true,
         message: 'Postulation status reverted successfully',
         data: {
           inscription: {
-            id: inscription.id,
+            id: inscriptionId,
             dni,
-            previousStatus: inscription.status,
             newStatus: 'PENDING',
             revertedAt: new Date().toISOString(),
             revertedBy,
