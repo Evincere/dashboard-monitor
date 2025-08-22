@@ -4,9 +4,9 @@ import fs from 'fs/promises';
 import path from 'path';
 
 const DOCUMENT_BASE_PATHS = [
-  process.env.DOCUMENTS_PATH || '/data/documents',
-  process.env.LEGACY_DOCUMENTS_PATH || '/data/legacy',
-  process.env.BACKUP_DOCUMENTS_PATH || '/data/backups'
+  process.env.DOCUMENTS_PATH || '/var/lib/docker/volumes/mpd_concursos_storage_data_prod/_data/documents',
+  process.env.LEGACY_DOCUMENTS_PATH || '/var/lib/docker/volumes/mpd_concursos_storage_data_prod/_data/recovered_documents',
+  process.env.BACKUP_DOCUMENTS_PATH || '/var/lib/docker/volumes/mpd_concursos_backup_data_prod/_data'
 ];
 
 
@@ -60,6 +60,7 @@ export async function GET(
     console.log(`📋 [DOCUMENT_VIEW] Document ID: ${id}`);
     console.log(`🔗 [DOCUMENT_VIEW] Referer: ${referer}`);
     console.log(`🌐 [DOCUMENT_VIEW] Request URL: ${request.url}`);
+    console.log(`📁 [DOCUMENT_VIEW] Search paths: ${JSON.stringify(DOCUMENT_BASE_PATHS)}`);
     console.log(`⏰ [DOCUMENT_VIEW] Timestamp: ${new Date().toISOString()}`);
 
     // Initialize document search variables
@@ -141,9 +142,6 @@ export async function GET(
       }
     }
 
-    // Initialize document info
-    // Search through document paths for the requested file
-
     // Get empty document info for error reporting
     const emptyDocInfo = {
       fileName: '',
@@ -154,7 +152,6 @@ export async function GET(
     if (!document) {
       console.error(`❌ [DOCUMENT_VIEW] Document with ID ${id} not found across all users`);
       console.error(`🔍 [DOCUMENT_VIEW] Search completed across all available users`);
-      console.error(`⏰ [DOCUMENT_VIEW] Search duration: ${Date.now() - Date.parse(new Date().toISOString())}ms`);
       return NextResponse.json({
         error: 'Document file not found',
         message: 'The document exists in the database but the file could not be accessed',
@@ -185,25 +182,15 @@ export async function GET(
     console.log(`   - Upload Date: ${document.uploadDate || 'Unknown'}`);
     console.log(`   - Validation Status: ${document.validationStatus || 'Unknown'}`);
     console.log(`👤 [DOCUMENT_VIEW] Document owner: ${documentOwnerUser?.fullName || documentOwnerUser?.name} (DNI: ${documentOwnerUser?.dni})`);
-    console.log(`📁 [DOCUMENT_VIEW] Full document object:`, JSON.stringify(document, null, 2));
 
     // Get document information
     const { fileName, filePath, mimeType } = getDocumentInfo(document, documentOwnerUser);
-
-    // Log file resolution details
-    if (!filePath && fileName) {
-      const userDni = documentOwnerUser?.dni || documentOwnerUser?.username;
-      console.log(`🔧 [DOCUMENT_VIEW] Constructed filePath from DNI and fileName: ${userDni}/${fileName}`);
-      console.log(`📝 [DOCUMENT_VIEW] Construction details: DNI=${userDni}, fileName=${fileName}`);
-    }
 
     console.log(`📁 [DOCUMENT_VIEW] File resolution details:`);
     console.log(`   - File Name: ${fileName}`);
     console.log(`   - File Path: ${filePath}`);
     console.log(`   - MIME Type: ${mimeType}`);
     console.log(`   - Document Owner DNI: ${documentOwnerUser?.dni || 'N/A'}`);
-    console.log(`🔍 [DOCUMENT_VIEW] Document fields available:`, Object.keys(document));
-    console.log(`📊 [DOCUMENT_VIEW] Full document metadata:`, JSON.stringify(document, null, 2));
 
     if (!fileName || !filePath) {
       return NextResponse.json({
@@ -221,14 +208,6 @@ export async function GET(
     // Try to read the file from various possible locations
     const searchPaths = DOCUMENT_BASE_PATHS;
 
-    // Build possible file patterns - files might have UUID prefixes
-    const possibleFilePatterns = [
-      filePath,                                    // Direct path as constructed
-      `${id}_*`,                                   // UUID prefix pattern
-      `${id}_${fileName.replace(/\s+/g, '_')}*`,   // UUID + sanitized filename
-      `${id}*`                                     // UUID with any suffix
-    ];
-
     let fileBuffer: Buffer | null = null;
     let actualFilePath = '';
 
@@ -241,7 +220,7 @@ export async function GET(
         if (stats.isFile()) {
           fileBuffer = await fs.readFile(directPath);
           actualFilePath = directPath;
-          console.log(`✅ Direct file found at: ${actualFilePath}`);
+          console.log(`✅ [DOCUMENT_VIEW] Direct file found at: ${actualFilePath}`);
           break;
         }
       } catch (err) {
@@ -254,7 +233,7 @@ export async function GET(
         const userDir = path.join(basePath, userDni);
         try {
           const files = await fs.readdir(userDir);
-          console.log(`📁 Files in ${userDir}:`, files);
+          console.log(`📁 [DOCUMENT_VIEW] Files in ${userDir}:`, files);
 
           // Look for files that start with the document ID
           const matchingFile = files.find(file => file.startsWith(id));
@@ -265,94 +244,22 @@ export async function GET(
             if (stats.isFile()) {
               fileBuffer = await fs.readFile(matchedPath);
               actualFilePath = matchedPath;
-              console.log(`✅ Pattern-matched file found at: ${actualFilePath}`);
+              console.log(`✅ [DOCUMENT_VIEW] Pattern-matched file found at: ${actualFilePath}`);
               break;
             }
           }
         } catch (err) {
           const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-          console.log(`⚠️ Could not read directory ${userDir}:`, errorMessage);
-          continue;
-        }
-      }
-    }
-
-
-    // Enhanced file search with more flexible patterns
-    console.log(`🔍 [ENHANCED_SEARCH] Starting enhanced file search for document ${id}`);
-
-    // Try to find any file that might match this document
-    for (const basePath of searchPaths) {
-      const userDni = documentOwnerUser?.dni || documentOwnerUser?.username;
-      if (userDni) {
-        const userDir = path.join(basePath, userDni);
-        try {
-          const files = await fs.readdir(userDir);
-          console.log(`📁 [ENHANCED_SEARCH] Files in ${userDir}:`, files);
-
-          // Try different matching strategies
-          let matchingFile = null;
-
-          // Strategy 1: Exact ID match (UUID prefix)
-          matchingFile = files.find(file => file.startsWith(id));
-
-          // Strategy 2: If no exact match, try to find files with similar document type
-          if (!matchingFile && document.documentType) {
-            const docTypeKeywords = document.documentType.toLowerCase()
-              .replace(/[^a-z\s]/g, '')
-              .split(/\s+/)
-              .filter((word: string) => word.length > 2);
-
-            console.log(`🔍 [ENHANCED_SEARCH] Searching by document type keywords:`, docTypeKeywords);
-
-            matchingFile = files.find(file => {
-              const fileName = file.toLowerCase();
-              return docTypeKeywords.some((keyword: string) =>
-                fileName.includes(keyword) ||
-                fileName.includes(keyword.replace(/ñ/g, 'n')) ||
-                fileName.includes(keyword.replace(/á/g, 'a').replace(/é/g, 'e').replace(/í/g, 'i').replace(/ó/g, 'o').replace(/ú/g, 'u'))
-              );
-            });
-
-            if (matchingFile) {
-              console.log(`🎯 [ENHANCED_SEARCH] Found potential match by document type: ${matchingFile}`);
-            }
-          }
-
-          // Strategy 3: If still no match, try date-based matching
-          if (!matchingFile && document.uploadDate) {
-            const uploadDate = new Date(document.uploadDate);
-            const dateStr = uploadDate.toISOString().split('T')[0].replace(/-/g, '');
-
-            matchingFile = files.find(file => file.includes(dateStr));
-
-            if (matchingFile) {
-              console.log(`📅 [ENHANCED_SEARCH] Found potential match by date: ${matchingFile}`);
-            }
-          }
-
-          if (matchingFile) {
-            const matchedPath = path.join(userDir, matchingFile);
-            const stats = await fs.stat(matchedPath);
-            if (stats.isFile()) {
-              fileBuffer = await fs.readFile(matchedPath);
-              actualFilePath = matchedPath;
-              console.log(`✅ [ENHANCED_SEARCH] Enhanced search found file at: ${actualFilePath}`);
-              break;
-            }
-          }
-        } catch (err) {
-          const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-          console.log(`⚠️ [ENHANCED_SEARCH] Could not read directory ${userDir}:`, errorMessage);
+          console.log(`⚠️ [DOCUMENT_VIEW] Could not read directory ${userDir}:`, errorMessage);
           continue;
         }
       }
     }
 
     if (!fileBuffer) {
-      console.error(`❌ File not found in any of the expected locations for document ${id}`);
-      console.error('Tried search paths:', DOCUMENT_BASE_PATHS);
-      console.error('Document owner DNI:', documentOwnerUser?.dni || documentOwnerUser?.username);
+      console.error(`❌ [DOCUMENT_VIEW] File not found in any of the expected locations for document ${id}`);
+      console.error('📁 [DOCUMENT_VIEW] Tried search paths:', DOCUMENT_BASE_PATHS);
+      console.error('👤 [DOCUMENT_VIEW] Document owner DNI:', documentOwnerUser?.dni || documentOwnerUser?.username);
 
       const { fileName, filePath } = getDocumentInfo(document, documentOwnerUser);
       return NextResponse.json({
@@ -386,13 +293,16 @@ export async function GET(
     // Convert Buffer to Uint8Array for NextResponse
     const uint8Array = new Uint8Array(fileBuffer);
 
+    console.log(`✅ [DOCUMENT_VIEW] Successfully serving file: ${actualFilePath}`);
+    console.log(`📊 [DOCUMENT_VIEW] File size: ${fileBuffer.length} bytes`);
+
     return new NextResponse(uint8Array, {
       status: 200,
       headers
     });
 
   } catch (error) {
-    console.error('❌ Error viewing document:', error);
+    console.error('❌ [DOCUMENT_VIEW] Error viewing document:', error);
     return NextResponse.json(
       {
         error: 'Failed to view document',
