@@ -3,6 +3,7 @@ import { Inter, Poppins } from 'next/font/google';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { SidebarProvider } from '@/components/ui/sidebar';
+import { QueryProvider } from '@/lib/query-provider';
 
 const fontBody = Inter({
   subsets: ['latin'],
@@ -28,9 +29,11 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body className={`${fontBody.variable} ${fontHeadline.variable} font-body antialiased`}>
-        <SidebarProvider>
-          {children}
-        </SidebarProvider>
+        <QueryProvider>
+          <SidebarProvider>
+            {children}
+          </SidebarProvider>
+        </QueryProvider>
         <Toaster />
       </body>
     </html>

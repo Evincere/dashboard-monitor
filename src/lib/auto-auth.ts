@@ -12,7 +12,7 @@ const ADMIN_CREDENTIALS = {
 const getBackendUrl = () => {
   if (typeof window !== 'undefined') {
     const origin = window.location.origin;
-    
+
     // In production, always use the main backend API endpoint first
     if (origin.includes('dattaweb.com')) {
       // The backend is always at /api/, not /dashboard-monitor/api/
@@ -27,7 +27,7 @@ const getBackendUrl = () => {
 const getAlternativeBackendUrls = () => {
   if (typeof window !== 'undefined') {
     const origin = window.location.origin;
-    
+
     if (origin.includes('dattaweb.com')) {
       return [
         `${origin}/dashboard-monitor/api/auth/login`, // Try this as alternative (should fail)
@@ -61,23 +61,23 @@ interface StoredAuth {
  */
 export function getStoredAuth(): StoredAuth | null {
   if (typeof window === 'undefined') return null;
-  
+
   try {
     const stored = localStorage.getItem(AUTH_STORAGE_KEY);
     if (!stored) return null;
-    
+
     const auth: StoredAuth = JSON.parse(stored);
-    
+
     // Check if token is expired (with 5 minute buffer)
     const now = Date.now();
     const expiresAt = auth.expiresAt - (5 * 60 * 1000); // 5 minutes buffer
-    
+
     if (now >= expiresAt) {
       console.log('🔄 Stored auth token expired, removing...');
       localStorage.removeItem(AUTH_STORAGE_KEY);
       return null;
     }
-    
+
     return auth;
   } catch (error) {
     console.error('❌ Error reading stored auth:', error);
@@ -91,16 +91,16 @@ export function getStoredAuth(): StoredAuth | null {
  */
 function storeAuth(authData: AuthResponse): void {
   if (typeof window === 'undefined' || !authData.token || !authData.username) return;
-  
+
   const expiresAt = Date.now() + (23 * 60 * 60 * 1000); // 23 hours (1 hour buffer)
-  
+
   const storedAuth: StoredAuth = {
     token: authData.token,
     username: authData.username,
     authorities: authData.authorities || [],
     expiresAt
   };
-  
+
   try {
     localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(storedAuth));
     console.log('✅ Auth data stored successfully');
@@ -114,11 +114,11 @@ function storeAuth(authData: AuthResponse): void {
  */
 function setAuthCookies(token: string): void {
   if (typeof document === 'undefined') return;
-  
+
   // Set token as cookie for API requests
   const expires = new Date();
   expires.setTime(expires.getTime() + (23 * 60 * 60 * 1000)); // 23 hours
-  
+
   document.cookie = `accessToken=${token}; path=/; expires=${expires.toUTCString()}; SameSite=Lax`;
   console.log('✅ Auth cookies set');
 }
@@ -129,7 +129,7 @@ function setAuthCookies(token: string): void {
 async function tryAuthenticateWithUrl(url: string): Promise<{ success: boolean; data?: AuthResponse; error?: string }> {
   try {
     console.log('📡 Trying authentication URL:', url);
-    
+
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -138,33 +138,33 @@ async function tryAuthenticateWithUrl(url: string): Promise<{ success: boolean; 
       },
       body: JSON.stringify(ADMIN_CREDENTIALS)
     });
-    
+
     console.log('📡 Auth response status:', response.status, 'for URL:', url);
-    
+
     if (!response.ok) {
-      return { 
-        success: false, 
-        error: `HTTP ${response.status}: ${response.statusText}` 
+      return {
+        success: false,
+        error: `HTTP ${response.status}: ${response.statusText}`
       };
     }
-    
+
     const authData: AuthResponse = await response.json();
     console.log('📋 Auth response received from', url, ':', { hasToken: !!authData.token, username: authData.username });
-    
+
     if (!authData.token) {
-      return { 
-        success: false, 
-        error: 'No token received from server' 
+      return {
+        success: false,
+        error: 'No token received from server'
       };
     }
-    
+
     return { success: true, data: authData };
-    
+
   } catch (error) {
     console.log('❌ Auth failed for URL', url, ':', error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Network error' 
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Network error'
     };
   }
 }
@@ -174,34 +174,34 @@ async function tryAuthenticateWithUrl(url: string): Promise<{ success: boolean; 
  */
 export async function authenticateWithBackend(): Promise<{ success: boolean; error?: string; data?: AuthResponse }> {
   console.log('🔐 Attempting authentication with backend...');
-  
+
   // Try primary URL first (should be the correct one now)
   const primaryUrl = getBackendUrl();
   const primaryResult = await tryAuthenticateWithUrl(primaryUrl);
-  
-  if (primaryResult.success && primaryResult.data) {
+
+  if (primaryResult.success && primaryResult.data?.token) {
     storeAuth(primaryResult.data);
     setAuthCookies(primaryResult.data.token);
     console.log('✅ Authentication successful with primary URL:', primaryUrl);
     return { success: true, data: primaryResult.data };
   }
-  
+
   // Try alternative URLs only if primary fails
   const alternativeUrls = getAlternativeBackendUrls();
   console.log('🔄 Primary URL failed, trying alternatives...', alternativeUrls);
-  
+
   for (const url of alternativeUrls) {
     if (url === primaryUrl) continue; // Skip if already tried
-    
+
     const result = await tryAuthenticateWithUrl(url);
-    if (result.success && result.data) {
+    if (result.success && result.data?.token) {
       storeAuth(result.data);
       setAuthCookies(result.data.token);
       console.log('✅ Authentication successful with alternative URL:', url);
       return { success: true, data: result.data };
     }
   }
-  
+
   // All attempts failed
   const allErrors = [primaryResult.error, ...alternativeUrls.map(() => 'Failed')];
   console.error('💥 All authentication attempts failed');
@@ -216,7 +216,7 @@ export async function authenticateWithBackend(): Promise<{ success: boolean; err
  */
 export async function ensureAuthenticated(): Promise<boolean> {
   console.log('🔍 Checking authentication status...');
-  
+
   // Check if we already have valid auth
   const storedAuth = getStoredAuth();
   if (storedAuth) {
@@ -224,11 +224,11 @@ export async function ensureAuthenticated(): Promise<boolean> {
     setAuthCookies(storedAuth.token);
     return true;
   }
-  
+
   // Need to authenticate
   console.log('🔄 No valid auth found, attempting auto-login...');
   const authResult = await authenticateWithBackend();
-  
+
   if (authResult.success) {
     console.log('✅ Auto-login successful');
     return true;
@@ -243,14 +243,14 @@ export async function ensureAuthenticated(): Promise<boolean> {
  */
 export function clearAuth(): void {
   if (typeof window === 'undefined') return;
-  
+
   localStorage.removeItem(AUTH_STORAGE_KEY);
-  
+
   // Clear auth cookies
   if (typeof document !== 'undefined') {
     document.cookie = 'accessToken=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT';
   }
-  
+
   console.log('🧹 Authentication data cleared');
 }
 
