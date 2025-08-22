@@ -4,22 +4,19 @@
  */
 
 const ADMIN_CREDENTIALS = {
-  username: 'admin',
-  password: 'admin123'
+  email: "admin",
+  username: "admin",
+  password: "admin123"
 };
 
 // Dynamic backend URL based on environment - CORRECTED LOGIC
 const getBackendUrl = () => {
   if (typeof window !== 'undefined') {
     const origin = window.location.origin;
-
-    // In production, always use the main backend API endpoint first
-    if (origin.includes('dattaweb.com')) {
-      // The backend is always at /api/, not /dashboard-monitor/api/
-      return `${origin}/api/auth/login`;
-    }
+    // Use the main backend API, not dashboard-monitor's internal auth
+    return `${origin}/api/auth/login`;
   }
-  // Fallback for development
+  // Fallback for development - use main backend
   return 'http://localhost:8080/api/auth/login';
 };
 
@@ -27,14 +24,10 @@ const getBackendUrl = () => {
 const getAlternativeBackendUrls = () => {
   if (typeof window !== 'undefined') {
     const origin = window.location.origin;
-
-    if (origin.includes('dattaweb.com')) {
-      return [
-        `${origin}/dashboard-monitor/api/auth/login`, // Try this as alternative (should fail)
-        `${origin}/backend/api/auth/login`,
-        `${origin}:8080/api/auth/login`
-      ];
-    }
+    return [
+      `${origin}/api/auth/login`, // Try main backend as alternative
+      `${origin}:8080/api/auth/login`
+    ];
   }
   return [];
 };

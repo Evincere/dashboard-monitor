@@ -1,5 +1,6 @@
 "use client";
 import { apiUrl, routeUrl } from "@/lib/utils";
+import { authFetch } from "@/lib/auth-fetch";
 
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -181,7 +182,7 @@ export default function DocumentValidationPage() {
       console.log(
         "📡 Haciendo fetch a /api/proxy-backend/inscriptions con tamaño=1000"
       );
-      const response = await fetch(apiUrl("proxy-backend/inscriptions?size=1000"));
+      const response = await authFetch(apiUrl("proxy-backend/inscriptions?size=1000"));
       console.log("📨 Respuesta recibida:", {
         ok: response.ok,
         status: response.status,
@@ -497,7 +498,7 @@ export default function DocumentValidationPage() {
     try {
       // Obtener lista fresca directamente del backend (igual lógica que el modal)
       console.log("🔄 Obteniendo lista fresca de postulantes...");
-      const response = await fetch(apiUrl("proxy-backend/inscriptions?size=1000"));
+      const response = await authFetch(apiUrl("proxy-backend/inscriptions?size=1000"));
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status} al obtener postulantes`);
@@ -706,7 +707,7 @@ export default function DocumentValidationPage() {
       // PASO 2: Ahora aprobar la postulación (PENDING -> APPROVED)
       console.log("🟢 Aprobando postulación (PENDING -> APPROVED)...");
 
-      const response = await fetch(apiUrl(`postulations/${dni}/approve`), {
+      const response = await authFetch(apiUrl(`postulations/${dni}/approve`), {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
@@ -744,7 +745,7 @@ export default function DocumentValidationPage() {
 
         try {
           // Obtener lista actualizada directamente del backend
-          const response = await fetch(apiUrl("proxy-backend/inscriptions?size=1000"));
+          const response = await authFetch(apiUrl("proxy-backend/inscriptions?size=1000"));
           if (response.ok) {
             const result = await response.json();
             if (result.success && result.data && result.data.content) {
@@ -811,7 +812,7 @@ export default function DocumentValidationPage() {
       console.log("✅ Iniciando aprobación y navegación...");
 
       // 1. Aprobar la postulación actual
-      const approveResponse = await fetch(apiUrl(`postulations/${dni}/approve`), {
+      const approveResponse = await authFetch(apiUrl(`postulations/${dni}/approve`), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1018,7 +1019,7 @@ export default function DocumentValidationPage() {
       });
 
       // Llamar al API route local para rechazar la inscripción
-      const response = await fetch(apiUrl(`postulations/${dni}/reject`), {
+      const response = await authFetch(apiUrl(`postulations/${dni}/reject`), {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",

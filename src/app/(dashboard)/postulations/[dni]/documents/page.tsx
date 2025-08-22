@@ -93,7 +93,7 @@ export default function PostulantDocumentsPage() {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
-  const dni = params.dni as string;
+  const dni = params?.dni as string;
 
   const [data, setData] = useState<DocumentsPageData | null>(null);
   const [loading, setLoading] = useState(true);

@@ -1,7 +1,8 @@
 module.exports = {
   apps: [{
     name: 'dashboard-monitor',
-    script: '.next/standalone/server.js',
+    script: 'npm',
+    args: 'start',
     cwd: '/home/semper/dashboard-monitor',
     instances: 1,
     exec_mode: 'fork',

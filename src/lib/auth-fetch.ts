@@ -2,7 +2,7 @@
  * Authenticated fetch wrapper that automatically includes JWT token
  */
 
-import { getAuthToken } from './auto-auth';
+import { getAuthToken, ensureAuthenticated } from './auto-auth';
 
 interface AuthFetchOptions extends RequestInit {
   headers?: HeadersInit;
@@ -15,6 +15,14 @@ export async function authFetch(
   input: RequestInfo | URL,
   init?: AuthFetchOptions
 ): Promise<Response> {
+  // Ensure we have a valid authentication token
+  const isAuthenticated = await ensureAuthenticated();
+  
+  if (!isAuthenticated) {
+    console.error('❌ Authentication failed, cannot make authenticated request');
+    throw new Error('Authentication failed');
+  }
+  
   const token = getAuthToken();
   
   const headers: HeadersInit = {
