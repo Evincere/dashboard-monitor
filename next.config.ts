@@ -36,6 +36,37 @@ const nextConfig: NextConfig = {
     maxInactiveAge: 25 * 1000,
     pagesBufferLength: 2,
   },
+  // Webpack configuration to handle module resolution issues
+  webpack: (config, { dev, isServer }) => {
+    // Handle handlebars require.extensions issue
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      fs: false,
+      path: false,
+      crypto: false,
+    };
+
+    // Ignore problematic modules that cause warnings
+    config.ignoreWarnings = [
+      /require.extensions is not supported by webpack/,
+      /Critical dependency: the request of a dependency is an expression/,
+    ];
+
+    // Handle dynamic requires in node_modules
+    config.module.rules.push({
+      test: /node_modules.*\.js$/,
+      resolve: {
+        fullySpecified: false,
+      },
+    });
+
+    // Add externals for server-side only modules
+    if (isServer) {
+      config.externals = [...(config.externals || []), 'handlebars'];
+    }
+
+    return config;
+  },
 };
 
 export default nextConfig;

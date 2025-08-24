@@ -337,3 +337,198 @@ mkdir -p src/app/api/reports/{dashboard,diagnostics,templates}
 **Versión**: 1.0  
 **Actualizado**: Agosto 2025  
 **Estado**: Plan de Implementación Aprobado  
+
+---
+
+## 🔍 FASE ADICIONAL: HERRAMIENTAS FORENSES (Agregado Agosto 2025)
+
+### **Contexto: Integración de Metodología Forense Desarrollada**
+Basado en investigaciones reales que revelaron pérdidas masivas sistemáticas de documentos (hasta 56.3% en algunos casos), se integran herramientas forenses avanzadas al sistema de reportes administrativos.
+
+### **Objetivos de la Fase Forense**
+- Detectar automáticamente pérdidas documentales y placeholders
+- Proporcionar herramientas de recuperación seguras y avanzadas  
+- Generar reportes forenses con validez administrativa
+- Automatizar la detección proactiva de problemas de integridad
+
+---
+
+## 🛠️ FASE FORENSE 1: HERRAMIENTAS BÁSICAS (2-3 semanas)
+
+### **Sprint F1.1: Infraestructura Forense (1 semana)**
+
+#### **Días 1-2: Setup de Servicios Base**
+```bash
+# Estructura para herramientas forenses
+mkdir -p src/lib/forensics/{services,types,utils}
+mkdir -p src/components/reports/forensics/{shared}
+mkdir -p src/app/api/forensics/{integrity,placeholders,recovery}
+```
+
+#### **Archivos a crear:**
+
+1. **`src/lib/forensics/types/forensic.ts`** (60-80 líneas)
+   ```typescript
+   export interface IntegrityAnalysis {
+     userId: string;
+     dni: string;
+     name: string;
+     totalDocuments: number;
+     physicalFiles: number;
+     placeholders: number;
+     missing: number;
+     integrityScore: number;
+     classification: 'ÓPTIMO' | 'MODERADO' | 'CRÍTICO' | 'PLACEHOLDER';
+     lastAnalyzed: Date;
+   }
+   ```
+
+2. **`src/lib/forensics/services/DocumentIntegrityService.ts`** (120-150 líneas)
+   - `analyzeUserIntegrity(dni: string): Promise<IntegrityAnalysis>`
+   - `detectPlaceholders(dni: string): Promise<PlaceholderDetection[]>`
+   - `bulkIntegrityAnalysis(dnis: string[]): Promise<IntegrityAnalysis[]>`
+   
+3. **`src/app/api/forensics/integrity/analyze/route.ts`** (80-100 líneas)
+   - POST endpoint para análisis de integridad individual
+   - Detección de placeholders por tamaño y contenido
+   - Cálculo de score de integridad (0-100)
+
+#### **Días 3-5: Componentes de Interfaz**
+
+4. **`src/components/reports/forensics/ForensicDashboard.tsx`** (100-120 líneas)
+   - Panel principal con métricas de integridad general
+   - Distribución de clasificaciones (Óptimo/Moderado/Crítico)
+   - Alertas de casos críticos detectados
+
+5. **`src/components/reports/forensics/DocumentIntegrityAnalyzer.tsx`** (80-100 líneas)
+   - Formulario para análisis individual por DNI
+   - Visualización de resultados de integridad
+   - Lista de documentos con estado detallado
+
+#### **Días 6-7: Integración y Testing**
+6. **Integración con página de reportes**: Agregar tab "Forense"
+7. **Testing básico**: Verificar funcionamiento con casos conocidos
+
+### **Sprint F1.2: Detección de Placeholders (1 semana)**
+
+#### **Días 1-3: Servicios de Detección**
+1. **`src/lib/forensics/services/PlaceholderDetectionService.ts`** (100-120 líneas)
+   - `detectBySize(path: string): Promise<string[]>`
+   - `detectByContent(path: string): Promise<PlaceholderInfo[]>`
+   - `detectByTimestamp(path: string): Promise<MassReplacementEvent[]>`
+
+2. **`src/app/api/forensics/placeholders/detect/route.ts`** (60-80 líneas)
+   - POST endpoint para detección de placeholders
+   - Combinación de métodos de detección
+   - Reporte de placeholders encontrados
+
+#### **Días 4-7: Componente de Detección**
+3. **`src/components/reports/forensics/PlaceholderDetector.tsx`** (90-110 líneas)
+   - Interfaz para ejecutar detección masiva
+   - Visualización de placeholders detectados
+   - Opciones para análisis por usuario o global
+
+### **Sprint F1.3: Reportes Forenses Básicos (1 semana)**
+
+#### **Días 1-4: Generador de Reportes**
+1. **`src/lib/forensics/services/ForensicReportService.ts`** (150-180 líneas)
+   - `generateIntegrityReport(analysis: IntegrityAnalysis[])`
+   - `generatePlaceholderReport(detections: PlaceholderDetection[])`
+   - `generateExecutiveSummary(data: ForensicData)`
+
+2. **`src/components/reports/forensics/ForensicReportGenerator.tsx`** (100-120 líneas)
+   - Selección de tipo de reporte (Individual/Masivo/Ejecutivo)
+   - Configuración de parámetros del reporte
+   - Generación y descarga de PDFs
+
+#### **Días 5-7: Integración Final**
+3. **Actualización de página de reportes**: Integrar tab forense
+4. **Testing integral**: Verificar flujo completo
+5. **Documentación**: Actualizar README y guías de uso
+
+---
+
+## 🔧 FASE FORENSE 2: HERRAMIENTAS AVANZADAS (3-4 semanas)
+
+### **Sprint F2.1: Recuperación Básica (Métodos Seguros)**
+- Búsqueda en directorios temporales y cache
+- Análisis de logs para reconstruir rutas
+- Verificación en backups automáticos
+- Detección en memoria y procesos activos
+
+### **Sprint F2.2: Análisis Masivo y Automatización**
+- Análisis de múltiples usuarios simultáneos
+- Sistema de alertas automáticas
+- Programación de análisis periódicos
+- Dashboard de tendencias y patrones
+
+### **Sprint F2.3: Integración con Auditoría**
+- Logging de todas las actividades forenses
+- Trazabilidad de recuperaciones exitosas
+- Historial de análisis realizados
+- Métricas de efectividad de recuperación
+
+---
+
+## 🚨 FASE FORENSE 3: HERRAMIENTAS ESPECIALIZADAS (2-3 semanas)
+
+### **Sprint F3.1: Recuperación Avanzada (Sesión Especializada)**
+⚠️ **IMPORTANTE**: Estos métodos requieren sesión dedicada con precauciones:
+
+- **PhotoRec**: Recuperación por firmas de archivo
+- **Foremost**: Carving de archivos PDF
+- **Extundelete**: Específico para EXT4
+- **Análisis de inodos**: Recuperación de archivos eliminados
+
+### **Sprint F3.2: Validación Legal y Reportes Oficiales**
+- Reportes con validez jurídica
+- Firma digital de documentos forenses
+- Cadena de custodia digital
+- Certificación de procedimientos
+
+---
+
+## 📊 ENTREGABLES CLAVE DE FASES FORENSES
+
+### **Fase Forense 1:**
+- ✅ Dashboard forense operativo
+- ✅ Análisis de integridad individual
+- ✅ Detección básica de placeholders  
+- ✅ Reportes forenses en PDF
+
+### **Fase Forense 2:**
+- ✅ Análisis masivo de usuarios
+- ✅ Sistema de alertas automáticas
+- ✅ Herramientas de recuperación seguras
+- ✅ Integración completa con auditoría
+
+### **Fase Forense 3:**
+- ✅ Herramientas de recuperación avanzada
+- ✅ Reportes con validez legal
+- ✅ Automatización completa del sistema
+- ✅ Certificación de procedimientos forenses
+
+---
+
+## ⚠️ CONSIDERACIONES CRÍTICAS PARA IMPLEMENTACIÓN
+
+### **Seguridad y Rendimiento**
+- **Métodos seguros**: No afectan el rendimiento del sistema
+- **Métodos avanzados**: Requieren planificación y supervisión
+- **Horarios de ejecución**: Separar métodos por impacto al sistema
+
+### **Validez Legal**
+- Documentar todos los procedimientos seguidos
+- Mantener cadena de custodia digital
+- Generar reportes certificados y firmados digitalmente
+
+### **Escalabilidad**
+- Diseñar para análisis de miles de usuarios
+- Optimizar consultas de base de datos
+- Implementar cache para análisis repetitivos
+
+---
+
+**Actualización**: Agosto 2025  
+**Basado en**: Metodología Forense v2.0 desarrollada en investigaciones reales  
+**Estado**: Especificación lista para implementación
