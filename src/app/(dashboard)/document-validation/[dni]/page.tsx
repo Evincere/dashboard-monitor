@@ -3,7 +3,8 @@
 import { apiUrl } from '@/lib/utils';
 import { useState, useEffect, Suspense } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { 
+import { ArrowRight } from 'lucide-react';
+import {
   ArrowLeft,
   User,
   FileText,
@@ -119,13 +120,21 @@ function PostulantExpedienteContent() {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
-  const dni = params.dni as string;
+  const dni = params?.dni as string;
+
+  if (!dni) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <p className="text-muted-foreground">DNI no válido</p>
+      </div>
+    );
+  }
 
   const [postulant, setPostulant] = useState<PostulantData | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedDocument, setSelectedDocument] = useState<string | null>(null);
   const [validationComments, setValidationComments] = useState('');
-  const [documentComments, setDocumentComments] = useState<{ [id: string]: string }>({});
+  const [documentComments, setDocumentComments] = useState<{ [documentId: string]: { status: string; comments: string } }>({});
   const [submitting, setSubmitting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [allPostulantsDNI, setAllPostulantsDNI] = useState<string[]>([]);
@@ -139,19 +148,22 @@ function PostulantExpedienteContent() {
 
       const data = await response.json();
       setPostulant(data.postulant);
-      
+
       // Update postulants list for navigation if available
       if (data.navigation?.postulantsList) {
         setAllPostulantsDNI(data.navigation.postulantsList);
       }
-      
+
       // Initialize document comments
-      const initialComments: { [id: string]: string } = {};
+      const initialComments: { [documentId: string]: { status: string; comments: string } } = {};
       data.postulant.documents.forEach((doc: any) => {
-        initialComments[doc.id] = doc.comments || '';
+        initialComments[doc.id] = {
+          status: doc.status || 'pending',
+          comments: doc.comments || ''
+        };
       });
       setDocumentComments(initialComments);
-      
+
       // Select first document by default
       if (data.postulant.documents.length > 0) {
         setSelectedDocument(data.postulant.documents[0].id);
@@ -171,7 +183,7 @@ function PostulantExpedienteContent() {
   useEffect(() => {
     if (dni) {
       fetchPostulantData();
-      
+
       // Fetch navigation data (list of all postulants for keyboard navigation)
       fetch(apiUrl('validation/postulants?getAllDNIs=true'))
         .then(res => res.json())
@@ -217,51 +229,51 @@ function PostulantExpedienteContent() {
   const navigateToNextPostulation = async (currentDni: string) => {
     try {
       console.log('🔍 Buscando siguiente postulación después de procesar:', currentDni);
-      
+
       const response = await fetch(`/dashboard-monitor/api/validation/next-postulation?currentDni=${currentDni}`, {
         headers: { 'Content-Type': 'application/json' }
       });
-      
+
       const result = await response.json();
-      
+
       if (response.ok && result.success && result.data?.nextPostulation) {
         const nextDni = result.data.nextPostulation.dni;
         const nextName = result.data.nextPostulation.fullName;
-        
+
         console.log(`✅ Siguiente postulación encontrada: ${nextName} (DNI: ${nextDni})`);
-        
+
         toast({
           title: 'Navegando a siguiente postulación',
           description: `Cargando documentos de ${nextName}`,
           duration: 2000
         });
-        
+
         // Navegar a la siguiente postulación
         router.push(`/validation/${nextDni}`);
         return true;
       } else {
         console.log('ℹ️ No se encontraron más postulaciones para validar');
-        
+
         toast({
           title: 'Validación completada',
           description: 'No hay más postulaciones disponibles para validar en este momento',
           duration: 3000
         });
-        
+
         // Regresar al listado
         router.push('/validation');
         return false;
       }
     } catch (error) {
       console.error('❌ Error al buscar siguiente postulación:', error);
-      
+
       toast({
         title: 'Error de navegación',
         description: 'No se pudo cargar la siguiente postulación. Regresando al listado.',
         variant: 'destructive',
         duration: 3000
       });
-      
+
       // En caso de error, regresar al listado
       router.push('/validation');
       return false;
@@ -270,8 +282,8 @@ function PostulantExpedienteContent() {
   const handleValidationDecision = async (decision: ValidationDecision) => {
     setSubmitting(true);
     try {
-      const endpoint = decision.action === 'approve' 
-        ? apiUrl('validation/approve') 
+      const endpoint = decision.action === 'approve'
+        ? apiUrl('validation/approve')
         : apiUrl('validation/reject');
 
       const response = await fetch(endpoint, {
@@ -313,29 +325,29 @@ function PostulantExpedienteContent() {
       const response = await fetch(`/dashboard-monitor/api/postulations/${postulant.user.dni}/revert`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
           revertedBy: 'admin', // TODO: obtener usuario actual
           reason: 'Reversión administrativa para nueva evaluación'
         })
       });
-      
+
       const result = await response.json();
-      
+
       if (!response.ok || !result.success) {
         throw new Error(result.error || 'Failed to revert');
       }
-      
-      toast({ 
-        title: 'Estado Revertido', 
+
+      toast({
+        title: 'Estado Revertido',
         description: `Postulación revertida de ${result.data.inscription.previousState} a PENDING`
       });
       await fetchPostulantData();
     } catch (error) {
       console.error('Error reverting postulation:', error);
-      toast({ 
-        title: 'Error', 
-        description: error instanceof Error ? error.message : 'Error al revertir', 
-        variant: 'destructive' 
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Error al revertir',
+        variant: 'destructive'
       });
     }
   };
@@ -398,7 +410,7 @@ function PostulantExpedienteContent() {
             <Skeleton className="h-4 w-48" />
           </div>
         </div>
-        
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 flex-1">
           <div className="lg:col-span-1 space-y-6">
             <Card>
@@ -414,7 +426,7 @@ function PostulantExpedienteContent() {
               </CardContent>
             </Card>
           </div>
-          
+
           <div className="lg:col-span-2">
             <Card className="h-full">
               <CardHeader>
@@ -450,73 +462,73 @@ function PostulantExpedienteContent() {
     <div className="flex flex-col h-full p-4 md:p-8">
       {/* Header */}
       <header className="space-y-4 mb-8">
-        <BreadcrumbNavigation 
-          items={ValidationBreadcrumbs.postulant(postulant.user.fullName)} 
+        <BreadcrumbNavigation
+          items={ValidationBreadcrumbs.postulant(postulant.user.fullName)}
           showIndex
           currentIndex={allPostulantsDNI.findIndex(d => d === dni)}
           totalCount={allPostulantsDNI.length}
         />
         <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="outline" size="icon" onClick={() => router.back()}>
-            <ArrowLeft className="w-4 h-4" />
-          </Button>
-          <div>
-            <h1 className="text-3xl font-bold font-headline flex items-center gap-2">
-              <ShieldCheck className="w-8 h-8 text-primary" />
-              {postulant.user.fullName}
-            </h1>
-            <p className="text-muted-foreground">
-              DNI: {postulant.user.dni} • Validación de Expediente
-            </p>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          <Badge 
-            variant={getStatusBadgeVariant(postulant.validationStatus)}
-            className="flex items-center gap-1"
-          >
-            {getStatusIcon(postulant.validationStatus)}
-            {postulant.validationStatus === 'IN_REVIEW' ? 'En Revisión' : 
-             postulant.validationStatus === 'PENDING' ? 'Pendiente' :
-             postulant.validationStatus}
-          </Badge>
-          
-          {/* Navigation Controls */}
-          <div className="flex items-center gap-1">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={navigateToPrevious}
-              disabled={!canGoPrevious()}
-              title="Anterior postulante (P o Shift+←)"
-            >
+          <div className="flex items-center gap-4">
+            <Button variant="outline" size="icon" onClick={() => router.back()}>
               <ArrowLeft className="w-4 h-4" />
             </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={navigateToNext}
-              disabled={!canGoNext()}
-              title="Siguiente postulante (N o Shift+→)"
+            <div>
+              <h1 className="text-3xl font-bold font-headline flex items-center gap-2">
+                <ShieldCheck className="w-8 h-8 text-primary" />
+                {postulant.user.fullName}
+              </h1>
+              <p className="text-muted-foreground">
+                DNI: {postulant.user.dni} • Validación de Expediente
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Badge
+              variant={getStatusBadgeVariant(postulant.validationStatus)}
+              className="flex items-center gap-1"
             >
-              <ArrowRight className="w-4 h-4" />
+              {getStatusIcon(postulant.validationStatus)}
+              {postulant.validationStatus === 'IN_REVIEW' ? 'En Revisión' :
+                postulant.validationStatus === 'PENDING' ? 'Pendiente' :
+                  postulant.validationStatus}
+            </Badge>
+
+            {/* Navigation Controls */}
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={navigateToPrevious}
+                disabled={!canGoPrevious()}
+                title="Anterior postulante (P o Shift+←)"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={navigateToNext}
+                disabled={!canGoNext()}
+                title="Siguiente postulante (N o Shift+→)"
+              >
+                <ArrowRight className="w-4 h-4" />
+              </Button>
+            </div>
+
+            <KeyboardShortcutsHelp />
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={fetchPostulantData}
+              disabled={refreshing}
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+              Actualizar
             </Button>
           </div>
-          
-          <KeyboardShortcutsHelp />
-          
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={fetchPostulantData}
-            disabled={refreshing}
-          >
-            <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-            Actualizar
-          </Button>
-        </div>
         </div>
       </header>
 
@@ -537,26 +549,26 @@ function PostulantExpedienteContent() {
                 <Mail className="w-4 h-4 text-muted-foreground" />
                 <span>{postulant.user.email}</span>
               </div>
-              
+
               {postulant.user.telefono && (
                 <div className="flex items-center gap-2 text-sm">
                   <Phone className="w-4 h-4 text-muted-foreground" />
                   <span>{postulant.user.telefono}</span>
                 </div>
               )}
-              
+
               {postulant.user.direccion && (
                 <div className="flex items-center gap-2 text-sm">
                   <MapPin className="w-4 h-4 text-muted-foreground" />
                   <span className="text-wrap">{postulant.user.direccion}</span>
                 </div>
               )}
-              
+
               <div className="flex items-center gap-2 text-sm">
                 <Building className="w-4 h-4 text-muted-foreground" />
                 <span>{postulant.inscription.centroDeVida}</span>
               </div>
-              
+
               <div className="flex items-center gap-2 text-sm">
                 <Calendar className="w-4 h-4 text-muted-foreground" />
                 <span>Inscrito: {formatDate(postulant.inscription.inscriptionDate)}</span>
@@ -606,9 +618,8 @@ function PostulantExpedienteContent() {
               {postulant.documents.map((doc) => (
                 <div
                   key={doc.id}
-                  className={`p-3 border rounded-lg cursor-pointer transition-colors hover:bg-muted/50 ${
-                    selectedDocument === doc.id ? 'border-primary bg-primary/10' : 'border-border'
-                  }`}
+                  className={`p-3 border rounded-lg cursor-pointer transition-colors hover:bg-muted/50 ${selectedDocument === doc.id ? 'border-primary bg-primary/10' : 'border-border'
+                    }`}
                   onClick={() => setSelectedDocument(doc.id)}
                 >
                   <div className="flex items-center justify-between">
@@ -616,7 +627,7 @@ function PostulantExpedienteContent() {
                       <p className="font-medium truncate">{doc.fileName}</p>
                       <p className="text-xs text-muted-foreground">{doc.fileType}</p>
                     </div>
-                    <Badge 
+                    <Badge
                       variant={getStatusBadgeVariant(doc.status)}
                       className="text-xs"
                     >
@@ -664,8 +675,8 @@ function PostulantExpedienteContent() {
               <div className="flex flex-col gap-2">
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button 
-                      className="w-full" 
+                    <Button
+                      className="w-full"
                       disabled={submitting || postulant.validationStatus !== 'PENDING'}
                       title="Aprobar postulante (A)"
                     >
@@ -684,8 +695,8 @@ function PostulantExpedienteContent() {
                     <AlertDialogFooter className="flex-col sm:flex-row gap-2">
                       <AlertDialogCancel>Cancelar</AlertDialogCancel>
                       <div className="flex gap-2">
-                        <AlertDialogAction 
-                          variant="outline"
+                        <AlertDialogAction
+                          className="border border-input bg-background hover:bg-accent hover:text-accent-foreground"
                           onClick={() => handleValidationDecision({
                             action: 'approve',
                             comments: validationComments,
@@ -694,7 +705,7 @@ function PostulantExpedienteContent() {
                         >
                           Solo Aprobar
                         </AlertDialogAction>
-                        <AlertDialogAction 
+                        <AlertDialogAction
                           onClick={handleApproveAndContinue}
                           className="bg-green-600 hover:bg-green-700"
                         >
@@ -707,9 +718,9 @@ function PostulantExpedienteContent() {
 
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button 
-                      variant="destructive" 
-                      className="w-full" 
+                    <Button
+                      variant="destructive"
+                      className="w-full"
                       disabled={submitting || postulant.validationStatus !== 'PENDING'}
                       title="Rechazar postulante (R)"
                     >
@@ -728,8 +739,8 @@ function PostulantExpedienteContent() {
                     <AlertDialogFooter className="flex-col sm:flex-row gap-2">
                       <AlertDialogCancel>Cancelar</AlertDialogCancel>
                       <div className="flex gap-2">
-                        <AlertDialogAction 
-                          variant="outline"
+                        <AlertDialogAction
+                          className="border border-input bg-background hover:bg-accent hover:text-accent-foreground"
                           onClick={() => handleValidationDecision({
                             action: 'reject',
                             comments: validationComments,
@@ -738,8 +749,8 @@ function PostulantExpedienteContent() {
                         >
                           Solo Rechazar
                         </AlertDialogAction>
-                        <AlertDialogAction 
-                          variant="destructive"
+                        <AlertDialogAction
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                           onClick={handleRejectAndContinue}
                         >
                           Rechazar y Continuar →
@@ -783,7 +794,7 @@ function PostulantExpedienteContent() {
             <CardContent className="flex-1 flex flex-col min-h-0">
               {selectedDoc ? (
                 <div className="flex-1 min-h-0">
-                  <PDFViewer 
+                  <PDFViewer
                     documentId={selectedDoc.id}
                     fileName={selectedDoc.fileName}
                     className="h-full"
@@ -805,10 +816,13 @@ function PostulantExpedienteContent() {
                     <EnhancedComments
                       label="Comentarios del documento"
                       placeholder="Agregue comentarios específicos para este documento..."
-                      value={documentComments[selectedDoc.id] || ''}
+                      value={documentComments[selectedDoc.id]?.comments || ''}
                       onChange={(value) => setDocumentComments(prev => ({
                         ...prev,
-                        [selectedDoc.id]: value
+                        [selectedDoc.id]: {
+                          status: prev[selectedDoc.id]?.status || 'pending',
+                          comments: value
+                        }
                       }))}
                       documentId={selectedDoc.id}
                       disabled={submitting}

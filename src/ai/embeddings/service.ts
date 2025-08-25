@@ -40,7 +40,7 @@ export class EmbeddingService {
   constructor(
     private config?: Partial<EmbeddingConfig>,
     private storageDir?: string
-  ) {}
+  ) { }
 
   /**
    * Initialize the embedding service
@@ -50,17 +50,27 @@ export class EmbeddingService {
 
     try {
       console.log('🚀 Initializing Embedding Service...');
-      
+
       // Initialize transformer and storage
       this.transformer = await getSentenceTransformer(this.config);
       this.storage = await getVectorStorage(this.storageDir);
-      
+
       this.initialized = true;
       console.log('✅ Embedding Service initialized successfully');
     } catch (error) {
       console.error('❌ Failed to initialize Embedding Service:', error);
       throw error;
     }
+  }
+
+  /**
+   * Generate embedding for a given text.
+   * @param text The text to encode.
+   * @returns The embedding vector.
+   */
+  async encode(text: string): Promise<{ embedding: number[] }> {
+    await this.ensureInitialized();
+    return this.transformer.encode(text);
   }
 
   /**
@@ -147,11 +157,11 @@ export class EmbeddingService {
 
       if (includeResponses) {
         // Find corresponding response
-        const responses = await this.storage.list(doc => 
-          doc.metadata.type === 'response' && 
+        const responses = await this.storage.list(doc =>
+          doc.metadata.type === 'response' &&
           doc.metadata.queryId === queryDoc.id
         );
-        
+
         if (responses.length > 0) {
           response = responses[0].text;
         }
@@ -230,9 +240,9 @@ export class EmbeddingService {
       text,
       embedding: embedding.embedding,
       metadata: {
-        type: 'context',
         timestamp: Date.now(),
         ...metadata,
+        type: 'context' as const,
       },
     });
   }
@@ -242,7 +252,7 @@ export class EmbeddingService {
    */
   async getMemoryStats() {
     await this.ensureInitialized();
-    
+
     const storageStats = await this.storage.getStats();
     const modelInfo = this.transformer.getModelInfo();
 
@@ -287,7 +297,7 @@ export class EmbeddingService {
    */
   async importMemory(documents: VectorDocument[]): Promise<void> {
     await this.ensureInitialized();
-    
+
     const documentsToStore = documents.map(doc => ({
       text: doc.text,
       embedding: doc.embedding,

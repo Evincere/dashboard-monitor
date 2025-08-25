@@ -1,0 +1,440 @@
+// ================================================
+// VISOR DE REPORTES PDF - USANDO REACT-PDF (COMO EL VALIDADOR)
+// ================================================
+
+'use client';
+
+import React, { useState, useCallback, useEffect } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
+import { 
+  Download, 
+  ZoomIn, 
+  ZoomOut, 
+  RotateCw, 
+  X, 
+  Eye,
+  AlertCircle,
+  Loader2,
+  RefreshCw,
+  ChevronLeft,
+  ChevronRight
+} from 'lucide-react';
+import { authFetch } from '@/lib/auth-fetch';
+import { Document, Page, pdfjs } from 'react-pdf';
+
+// Configurar PDF.js worker - IGUAL QUE EN EL VALIDADOR
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
+
+interface ReportViewerProps {
+  isOpen: boolean;
+  onClose: () => void;
+  reportData: {
+    title: string;
+    type: string;
+    generateDate: string;
+    pdfUrl?: string;
+  } | null;
+  isLoading?: boolean;
+  error?: string | null;
+  onRetry?: () => void;
+}
+
+export function ReportViewer({ 
+  isOpen, 
+  onClose, 
+  reportData, 
+  isLoading = false, 
+  error = null,
+  onRetry 
+}: ReportViewerProps) {
+  const [zoom, setZoom] = useState(100);
+  const [rotation, setRotation] = useState(0);
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+  
+  // Estados específicos de react-pdf - IGUAL QUE EN EL VALIDADOR
+  const [numPages, setNumPages] = useState<number>(0);
+  const [pageNumber, setPageNumber] = useState<number>(1);
+  const [scale, setScale] = useState<number>(1.0);
+
+  // FIXED: Load PDF with authentication when modal opens - USANDO REACT-PDF
+  useEffect(() => {
+    let isCancelled = false;
+
+    const loadPdf = async () => {
+      if (!reportData?.pdfUrl || !isOpen) return;
+
+      setPdfLoading(true);
+      setPdfError(null);
+
+      try {
+        console.log('📥 Loading authenticated PDF with react-pdf:', reportData.pdfUrl);
+        
+        // FIXED: Use authFetch for authenticated PDF loading - IGUAL QUE EN EL VALIDADOR
+        const response = await authFetch(reportData.pdfUrl);
+        
+        if (!response.ok) {
+          throw new Error(`Error ${response.status}: ${response.statusText}`);
+        }
+
+        const blob = await response.blob();
+        
+        if (!isCancelled) {
+          // Clean up previous blob URL
+          if (pdfBlobUrl) {
+            URL.revokeObjectURL(pdfBlobUrl);
+          }
+          
+          const newBlobUrl = URL.createObjectURL(blob);
+          setPdfBlobUrl(newBlobUrl);
+          console.log('✅ PDF blob created for react-pdf');
+        }
+      } catch (err) {
+        if (!isCancelled) {
+          const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
+          console.error('❌ Error loading PDF:', errorMessage);
+          setPdfError(errorMessage);
+        }
+      } finally {
+        if (!isCancelled) {
+          setPdfLoading(false);
+        }
+      }
+    };
+
+    if (isOpen && reportData?.pdfUrl) {
+      loadPdf();
+    }
+
+    return () => {
+      isCancelled = true;
+      // Clean up blob URL when component unmounts or modal closes
+      if (pdfBlobUrl) {
+        URL.revokeObjectURL(pdfBlobUrl);
+        setPdfBlobUrl(null);
+      }
+    };
+  }, [isOpen, reportData?.pdfUrl]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Funciones de react-pdf - IGUAL QUE EN EL VALIDADOR
+  const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
+    setNumPages(numPages);
+    console.log(`📄 PDF loaded successfully with react-pdf: ${numPages} pages`);
+  }, []);
+
+  const onDocumentLoadError = useCallback((error: Error) => {
+    console.error('PDF load error with react-pdf:', error);
+    setPdfError(error.message);
+  }, []);
+
+  // Funciones de navegación - IGUAL QUE EN EL VALIDADOR
+  const goToPrevPage = useCallback(() => {
+    if (pageNumber > 1) {
+      setPageNumber(pageNumber - 1);
+    }
+  }, [pageNumber]);
+
+  const goToNextPage = useCallback(() => {
+    if (pageNumber < numPages) {
+      setPageNumber(pageNumber + 1);
+    }
+  }, [pageNumber, numPages]);
+
+  const handleZoomIn = useCallback(() => {
+    setScale(prev => Math.min(prev + 0.2, 3.0));
+    setZoom(prev => Math.min(prev + 25, 300));
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    setScale(prev => Math.max(prev - 0.2, 0.5));
+    setZoom(prev => Math.max(prev - 25, 50));
+  }, []);
+
+  const handleRotate = useCallback(() => {
+    setRotation(prev => (prev + 90) % 360);
+  }, []);
+
+  // FIXED: Use authenticated fetch for downloads
+  const handleDownload = useCallback(async () => {
+    if (!reportData?.pdfUrl) return;
+
+    try {
+      console.log('⬇️ Starting authenticated download:', reportData.pdfUrl);
+      
+      const response = await authFetch(reportData.pdfUrl);
+      
+      if (!response.ok) {
+        throw new Error(`Error ${response.status}: ${response.statusText}`);
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${reportData.title.replace(/\s+/g, '_')}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      
+      console.log('✅ Download completed successfully');
+    } catch (err) {
+      console.error('❌ Error downloading PDF:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
+      alert(`Error al descargar: ${errorMessage}`);
+    }
+  }, [reportData]);
+
+  const resetViewSettings = useCallback(() => {
+    setZoom(100);
+    setRotation(0);
+    setScale(1.0);
+    setPageNumber(1);
+  }, []);
+
+  // Reset view when modal opens/closes
+  React.useEffect(() => {
+    if (!isOpen) {
+      resetViewSettings();
+      setPdfError(null);
+    }
+  }, [isOpen, resetViewSettings]);
+
+  const handleRetryPdf = useCallback(() => {
+    setPdfError(null);
+    setPdfLoading(true);
+    resetViewSettings();
+  }, [resetViewSettings]);
+
+  if (!isOpen || !reportData) return null;
+
+  const showPdfLoading = isLoading || pdfLoading;
+  const showPdfError = error || pdfError;
+  const actualError = error || pdfError;
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-6xl max-h-[90vh] p-0">
+        <DialogHeader className="p-6 pb-4 border-b">
+          <div className="flex items-center justify-between">
+            <div>
+              <DialogTitle className="text-xl font-semibold mb-2">
+                {reportData.title}
+              </DialogTitle>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Badge variant="secondary">{reportData.type}</Badge>
+                <span>•</span>
+                <span>Generado: {reportData.generateDate}</span>
+              </div>
+            </div>
+            <Button variant="ghost" size="sm" onClick={onClose}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </DialogHeader>
+
+        {/* Toolbar - IGUAL QUE EN EL VALIDADOR */}
+        <div className="flex items-center justify-between p-4 border-b bg-muted/50">
+          <div className="flex items-center gap-2">
+            {/* Navegación de páginas */}
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={goToPrevPage}
+              disabled={pageNumber <= 1 || showPdfLoading || !!showPdfError}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            
+            <span className="text-sm font-medium px-2 min-w-20 text-center">
+              {showPdfLoading ? '-' : pageNumber} de {showPdfLoading ? '-' : numPages}
+            </span>
+            
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={goToNextPage}
+              disabled={pageNumber >= numPages || showPdfLoading || !!showPdfError}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            
+            <div className="h-4 w-px bg-border mx-2" />
+            
+            {/* Controles de zoom */}
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={handleZoomOut}
+              disabled={scale <= 0.5 || showPdfLoading || !!showPdfError}
+            >
+              <ZoomOut className="h-4 w-4" />
+            </Button>
+            
+            <span className="text-sm font-medium min-w-16 text-center">
+              {Math.round(scale * 100)}%
+            </span>
+            
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={handleZoomIn}
+              disabled={scale >= 3.0 || showPdfLoading || !!showPdfError}
+            >
+              <ZoomIn className="h-4 w-4" />
+            </Button>
+            
+            <div className="h-4 w-px bg-border mx-2" />
+            
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={handleRotate}
+              disabled={showPdfLoading || !!showPdfError}
+            >
+              <RotateCw className="h-4 w-4" />
+            </Button>
+            
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={resetViewSettings}
+              disabled={showPdfLoading || !!showPdfError}
+            >
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+          </div>
+
+          <Button 
+            onClick={handleDownload}
+            disabled={!reportData.pdfUrl || showPdfLoading || !!showPdfError}
+            size="sm"
+          >
+            <Download className="h-4 w-4 mr-2" />
+            Descargar PDF
+          </Button>
+        </div>
+
+        {/* PDF Content - USANDO REACT-PDF IGUAL QUE EL VALIDADOR */}
+        <div className="flex-1 p-4">
+          {showPdfLoading && (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-16">
+                <Loader2 className="h-12 w-12 animate-spin text-blue-600 mb-4" />
+                <h3 className="text-lg font-medium mb-2">
+                  {isLoading ? 'Generando reporte...' : 'Cargando PDF...'}
+                </h3>
+                <p className="text-sm text-muted-foreground text-center">
+                  Por favor espera mientras se procesa tu solicitud
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {!!showPdfError && (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-16">
+                <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
+                <h3 className="text-lg font-medium text-red-700 mb-2">Error al cargar el reporte</h3>
+                <p className="text-sm text-muted-foreground text-center mb-4">
+                  {actualError}
+                </p>
+                <div className="flex gap-2">
+                  {onRetry && (
+                    <Button onClick={onRetry} variant="outline">
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Reintentar Generación
+                    </Button>
+                  )}
+                  {pdfError && (
+                    <Button onClick={handleRetryPdf} variant="outline">
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Recargar PDF
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {!showPdfLoading && !showPdfError && pdfBlobUrl && (
+            <div className="flex justify-center bg-gray-100 p-4 rounded-lg">
+              {/* FIXED: Usar react-pdf en lugar de iframe para evitar problemas de CSP */}
+              <Document
+                file={pdfBlobUrl}
+                onLoadSuccess={onDocumentLoadSuccess}
+                onLoadError={onDocumentLoadError}
+                loading={
+                  <div className="flex items-center justify-center p-8">
+                    <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                    <span>Procesando PDF...</span>
+                  </div>
+                }
+                error={
+                  <div className="text-center p-8 text-red-600">
+                    <p>Error al procesar el documento PDF.</p>
+                    <Button
+                      onClick={handleRetryPdf}
+                      className="mt-2"
+                      variant="outline"
+                      size="sm"
+                    >
+                      Reintentar
+                    </Button>
+                  </div>
+                }
+              >
+                <Page
+                  pageNumber={pageNumber}
+                  scale={scale}
+                  rotate={rotation}
+                  loading={
+                    <div className="flex items-center justify-center p-8 bg-white border border-gray-200 rounded">
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                      <span className="text-sm">Cargando página...</span>
+                    </div>
+                  }
+                  error={
+                    <div className="text-center p-8 bg-white border border-gray-200 rounded text-red-600">
+                      <p>Error al cargar la página {pageNumber}</p>
+                    </div>
+                  }
+                  renderTextLayer={false}
+                  renderAnnotationLayer={false}
+                />
+              </Document>
+            </div>
+          )}
+
+          {!showPdfLoading && !showPdfError && !pdfBlobUrl && reportData.pdfUrl && (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-16">
+                <Eye className="h-12 w-12 text-gray-400 mb-4" />
+                <h3 className="text-lg font-medium mb-2">Preparando vista previa...</h3>
+                <p className="text-sm text-muted-foreground text-center">
+                  Cargando el reporte con react-pdf
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {!showPdfLoading && !showPdfError && !reportData.pdfUrl && (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-16">
+                <Eye className="h-12 w-12 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-medium mb-2">Reporte no disponible</h3>
+                <p className="text-sm text-muted-foreground text-center">
+                  El PDF del reporte no está disponible para visualización
+                </p>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}

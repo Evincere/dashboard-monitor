@@ -1,120 +1,140 @@
-import { PrismaClient } from '@prisma/client';
-import { AuditReport, ValidationAction, SystemEvent, DocumentChange, UserAction } from '../types';
-import { Document, DocumentAudit, SecurityEvent, AuditLog } from '../types/db';
+import { ReportType, AuditReport } from '../types';
+import { BaseReportGenerator } from './BaseReportGenerator';
 
-export class AuditReportGenerator {
-    private prisma: PrismaClient;
-
-    constructor() {
-        this.prisma = new PrismaClient();
-    }
-
+export class AuditReportGenerator extends BaseReportGenerator {
     async generate(contestId?: number): Promise<AuditReport> {
-        const [
-            validationActions,
-            systemEvents,
-            documentChanges,
-            userActions
-        ] = await Promise.all([
-            this.getValidationActions(contestId),
-            this.getSystemEvents(contestId),
-            this.getDocumentChanges(contestId),
-            this.getUserActions(contestId)
-        ]);
+        const documentChanges = await this.getDocumentChanges(contestId);
+        const userActions = await this.getUserActions(contestId);
+        const validationActions = await this.getValidationActions(contestId);
+        const systemEvents = await this.getSystemEvents(contestId);
 
         return {
+            documentChanges,
+            userActions,
             validationActions,
             systemEvents,
-            documentChanges,
-            userActions
         };
     }
 
-    private async getValidationActions(contestId?: number): Promise<ValidationAction[]> {
-        const documents = await this.prisma.documents.findMany({
-            where: contestId ? { contestId } : undefined,
-            include: {
-                document_audit: true
-            }
-        });
+    private async getDocumentChanges(contestId?: number) {
+        try {
+            const documents = await this.executeQuery<any>(`
+                SELECT 
+                    d.*,
+                    u.first_name,
+                    u.last_name,
+                    v.first_name as validator_first_name,
+                    v.last_name as validator_last_name
+                FROM documents d
+                LEFT JOIN user_entity u ON d.user_id = u.id
+                LEFT JOIN user_entity v ON d.validator_id = v.id
+                WHERE d.updated_at != d.upload_date
+                ${contestId ? 'AND d.inscription_id IN (SELECT id FROM inscriptions WHERE contest_id = ?)' : ''}
+                ORDER BY d.updated_at DESC
+            `, contestId ? [contestId] : []);
 
-        return documents.flatMap((doc: Document) =>
-            doc.document_audit.map((audit: DocumentAudit) => ({
-                actionId: audit.id.toString(),
+            return documents.map(doc => ({
+                changeId: `change_${doc.id}`,
                 documentId: doc.id.toString(),
-                validatorId: audit.userId,
-                action: audit.action as 'APPROVE' | 'REJECT',
-                timestamp: audit.createdAt,
-                comments: audit.comments || undefined
-            }))
-        );
+                changedBy: doc.validator_first_name ? 
+                    `${doc.validator_first_name} ${doc.validator_last_name}` : 'System',
+                timestamp: doc.updated_at,
+                previousVersion: 'pending',
+                newVersion: doc.status
+            }));
+        } catch (error) {
+            console.error('Error getting document changes:', error);
+            return [];
+        }
     }
 
-    private async getSystemEvents(contestId?: number): Promise<SystemEvent[]> {
-        const events = await this.prisma.security_events.findMany({
-            where: contestId ? {
-                OR: [
-                    { metadata: { contains: contestId.toString() } },
-                    { details: { contains: contestId.toString() } }
-                ]
-            } : undefined,
-            orderBy: { timestamp: 'asc' }
-        });
+    private async getValidationActions(contestId?: number) {
+        try {
+            const actions = await this.executeQuery<any>(`
+                SELECT 
+                    d.id,
+                    d.validator_id,
+                    d.status,
+                    d.validation_date,
+                    d.rejection_reason,
+                    v.first_name,
+                    v.last_name
+                FROM documents d
+                LEFT JOIN user_entity v ON d.validator_id = v.id
+                WHERE d.validation_date IS NOT NULL
+                ${contestId ? 'AND d.inscription_id IN (SELECT id FROM inscriptions WHERE contest_id = ?)' : ''}
+                ORDER BY d.validation_date DESC
+            `, contestId ? [contestId] : []);
 
-        return events.map((event: SecurityEvent) => ({
-            eventId: event.id.toString(),
-            eventType: event.eventType,
-            timestamp: event.timestamp,
-            details: JSON.parse(event.details || '{}')
-        }));
+            return actions.map(action => ({
+                actionId: `validation_${action.id}`,
+                documentId: action.id.toString(),
+                validatorId: action.validator_id?.toString() || 'unknown',
+                action: action.status === 'approved' ? 'APPROVE' as const : 'REJECT' as const,
+                timestamp: action.validation_date,
+                comments: action.rejection_reason || undefined
+            }));
+        } catch (error) {
+            console.error('Error getting validation actions:', error);
+            return [];
+        }
     }
 
-    private async getDocumentChanges(contestId?: number): Promise<DocumentChange[]> {
-        const documents = await this.prisma.documents.findMany({
-            where: contestId ? { contestId } : undefined,
-            include: {
-                document_audit: {
-                    orderBy: { createdAt: 'asc' }
-                }
-            }
-        });
+    private async getSystemEvents(contestId?: number) {
+        try {
+            const events = await this.executeQuery<any>(`
+                SELECT 
+                    id,
+                    event_type,
+                    severity,
+                    description,
+                    created_at
+                FROM system_events
+                ${contestId ? 'WHERE contest_id = ?' : ''}
+                ORDER BY created_at DESC
+                LIMIT 100
+            `, contestId ? [contestId] : []);
 
-        return documents.flatMap((doc: Document) => {
-            const changes: DocumentChange[] = [];
-            const audits = doc.document_audit;
-
-            for (let i = 1; i < audits.length; i++) {
-                changes.push({
-                    changeId: `${doc.id}-${i}`,
-                    documentId: doc.id.toString(),
-                    changedBy: audits[i].userId,
-                    timestamp: audits[i].createdAt,
-                    previousVersion: audits[i - 1].status,
-                    newVersion: audits[i].status
-                });
-            }
-
-            return changes;
-        });
+            return events.map(event => ({
+                eventId: event.id.toString(),
+                eventType: event.event_type,
+                details: { description: event.description, severity: event.severity },
+                timestamp: event.created_at
+            }));
+        } catch (error) {
+            console.error('Error getting system events:', error);
+            return [];
+        }
     }
 
-    private async getUserActions(contestId?: number): Promise<UserAction[]> {
-        const actions = await this.prisma.audit_logs.findMany({
-            where: contestId ? {
-                OR: [
-                    { metadata: { contains: contestId.toString() } },
-                    { details: { contains: contestId.toString() } }
-                ]
-            } : undefined,
-            orderBy: { timestamp: 'desc' }
-        });
 
-        return actions.map((action: AuditLog) => ({
-            actionId: action.id.toString(),
-            userId: action.userId,
-            actionType: action.action,
-            timestamp: action.timestamp,
-            details: JSON.parse(action.details || '{}')
-        }));
+    private async getUserActions(contestId?: number) {
+        try {
+            const actions = await this.executeQuery<any>(`
+                SELECT 
+                    al.*,
+                    u.first_name,
+                    u.last_name
+                FROM audit_logs al
+                LEFT JOIN user_entity u ON al.user_id = u.id
+                ${contestId ? 'WHERE al.contest_id = ?' : ''}
+                ORDER BY al.created_at DESC
+                LIMIT 1000
+            `, contestId ? [contestId] : []);
+
+            return actions.map(action => ({
+                actionId: action.id.toString(),
+                userId: action.user_id?.toString() || 'unknown',
+                userName: action.first_name ? `${action.first_name} ${action.last_name}` : 'Unknown',
+                actionType: action.action_type,
+                resourceType: action.resource_type,
+                resourceId: action.resource_id?.toString(),
+                timestamp: action.created_at,
+                details: action.description
+            }));
+        } catch (error) {
+            console.error('Error getting user actions:', error);
+            return [];
+        }
     }
 }

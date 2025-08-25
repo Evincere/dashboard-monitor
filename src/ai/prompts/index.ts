@@ -61,6 +61,7 @@ import { promptManager } from './prompt-manager';
 import { promptConfigManager } from './prompt-config';
 import { queryResolver } from '../flows/iterative-query-resolver';
 import { SupportedProvider } from '../providers/types';
+import { ZodType } from 'zod';
 
 /**
  * Unified interface for all specialized prompting capabilities
@@ -82,7 +83,7 @@ export class SpecializedPromptingSystem {
     }
   ) {
     const dbSchema = options?.dbSchema || await this.getDbSchema();
-    
+
     if (options?.useIterativeResolution || options?.complexity === 'complex') {
       return await queryResolver.resolveQuery({
         query: userQuery,
@@ -110,7 +111,7 @@ export class SpecializedPromptingSystem {
   async executeTemplate<T>(
     templateId: string,
     parameters: Record<string, any>,
-    outputSchema: any,
+    outputSchema: ZodType<T>,
     options?: {
       provider?: SupportedProvider;
       useCache?: boolean;
@@ -123,7 +124,7 @@ export class SpecializedPromptingSystem {
       outputSchema,
       options
     );
-    return result.output;
+    return outputSchema.parse(result.output);
   }
 
   /**
@@ -144,7 +145,7 @@ export class SpecializedPromptingSystem {
 
     // Use the configured execution settings
     const config = promptConfigManager.getExecutionConfig('intent_classifier_v2');
-    
+
     return await promptManager.executePrompt(
       'intent_classifier',
       { userQuery, dbSchema, conversationHistory },
@@ -237,11 +238,11 @@ export class SpecializedPromptingSystem {
     if (settings.defaultProvider) {
       // Set default provider for all prompt managers
     }
-    
+
     if (settings.cacheEnabled !== undefined) {
       // Configure caching for all components
     }
-    
+
     // Apply other settings...
   }
 

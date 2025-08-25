@@ -17,7 +17,6 @@ export interface PersistentMemoryConfig {
   cleanupInterval: number; // milliseconds
   similarityThreshold: number;
   enableAutoCleanup: boolean;
-  backupInterval: number; // milliseconds
 }
 
 export interface MemorySearchOptions {
@@ -66,7 +65,6 @@ export class PersistentMemoryManager {
       cleanupInterval: 24 * 60 * 60 * 1000, // 24 hours
       similarityThreshold: 0.7,
       enableAutoCleanup: true,
-      backupInterval: 7 * 24 * 60 * 60 * 1000, // 7 days
       ...config,
     };
   }
@@ -81,7 +79,7 @@ export class PersistentMemoryManager {
       console.log('🧠 Initializing Persistent Memory Manager...');
 
       this.embeddingService = embeddingService;
-      
+
       // Get vector storage from embedding service
       const stats = await embeddingService.getMemoryStats();
       this.vectorStorage = (embeddingService as any).storage;
@@ -94,16 +92,12 @@ export class PersistentMemoryManager {
         this.startAutoCleanup();
       }
 
-      // Start automatic backup
-      this.startAutoBackup();
-
       this.initialized = true;
       console.log('✅ Persistent Memory Manager initialized successfully');
-      
+
       // Log initial stats
       const memoryStats = await this.getMemoryStats();
       console.log(`📊 Memory initialized with ${memoryStats.totalEntries} entries`);
-      
     } catch (error) {
       console.error('❌ Failed to initialize Persistent Memory Manager:', error);
       throw error;
@@ -139,7 +133,7 @@ export class PersistentMemoryManager {
     };
 
     const result = await this.embeddingService.storeQueryResponse(context);
-    
+
     console.log(`💾 Stored query-response pair: ${query.substring(0, 50)}...`);
     return {
       queryId: result.queryId,
@@ -273,8 +267,8 @@ export class PersistentMemoryManager {
       oldestEntry: Math.min(...timestamps, Date.now()),
       newestEntry: Math.max(...timestamps, 0),
       averageSimilarity: similarities.length > 0 ? similarities.reduce((a, b) => a + b, 0) / similarities.length : 0,
-      lastCleanup: this.getLastCleanupTime(),
-      lastBackup: this.getLastBackupTime(),
+      lastCleanup: await this.getLastCleanupTime(),
+      lastBackup: await this.getLastBackupTime(),
     };
   }
 
@@ -303,9 +297,9 @@ export class PersistentMemoryManager {
     for (const doc of allDocuments) {
       const age = now - doc.metadata.timestamp;
       const isOld = doc.metadata.timestamp < cutoffTime;
-      const isImportant = doc.metadata.importance === 'high' || 
-                         doc.metadata.type === 'context' ||
-                         doc.metadata.category === 'schema';
+      const isImportant = doc.metadata.importance === 'high' ||
+        doc.metadata.type === 'context' ||
+        doc.metadata.category === 'schema';
 
       if (isOld && !isImportant) {
         await this.vectorStorage.delete(doc.id);
@@ -349,50 +343,26 @@ export class PersistentMemoryManager {
   }
 
   /**
-   * Create backup of memory data
+   * Export memory data for backup/snapshot
+   * @internal Used by MemoryPersistenceService
    */
-  async createBackup(): Promise<string> {
+  async exportMemoryData(): Promise<{
+    stats: MemoryStats;
+    documents: any[];
+  }> {
     await this.ensureInitialized();
-
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const backupDir = join(this.config.storageDir, 'backups');
-    const backupFile = join(backupDir, `memory-backup-${timestamp}.json`);
-
-    await fs.mkdir(backupDir, { recursive: true });
-
-    const allDocuments = await this.embeddingService.exportMemory();
     const stats = await this.getMemoryStats();
-
-    const backupData = {
-      timestamp: Date.now(),
-      version: '1.0',
-      stats,
-      documents: allDocuments,
-    };
-
-    await fs.writeFile(backupFile, JSON.stringify(backupData, null, 2));
-    await this.updateLastBackupTime();
-
-    console.log(`💾 Memory backup created: ${backupFile}`);
-    return backupFile;
+    const documents = await this.embeddingService.exportMemory();
+    return { stats, documents };
   }
 
   /**
-   * Restore memory from backup
+   * Import memory data from backup/snapshot
+   * @internal Used by MemoryPersistenceService
    */
-  async restoreFromBackup(backupFile: string): Promise<void> {
+  async importMemoryData(documents: any[]): Promise<void> {
     await this.ensureInitialized();
-
-    console.log(`📥 Restoring memory from backup: ${backupFile}`);
-
-    const backupData = JSON.parse(await fs.readFile(backupFile, 'utf-8'));
-    
-    if (!backupData.documents || !Array.isArray(backupData.documents)) {
-      throw new Error('Invalid backup file format');
-    }
-
-    await this.embeddingService.importMemory(backupData.documents);
-    console.log(`✅ Restored ${backupData.documents.length} memory entries from backup`);
+    await this.embeddingService.importMemory(documents);
   }
 
   /**
@@ -451,31 +421,43 @@ export class PersistentMemoryManager {
   }
 
   /**
-   * Start automatic backup process
-   */
-  private startAutoBackup(): void {
-    if (this.backupTimer) {
-      clearInterval(this.backupTimer);
-    }
-
-    this.backupTimer = setInterval(async () => {
-      try {
-        await this.createBackup();
-      } catch (error) {
-        console.error('❌ Auto backup failed:', error);
-      }
-    }, this.config.backupInterval);
-
-    console.log(`⏰ Auto backup scheduled every ${this.config.backupInterval / (24 * 60 * 60 * 1000)} days`);
-  }
-
-  /**
    * Get last cleanup time from metadata
    */
-  private getLastCleanupTime(): number {
+  /**
+   * Create backup of memory data
+   */
+  async createBackup(): Promise<string> {
+    await this.ensureInitialized();
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const backupDir = join(this.config.storageDir, 'backups');
+    const backupFile = join(backupDir, `memory-backup-${timestamp}.json`);
+
+    await fs.mkdir(backupDir, { recursive: true });
+
+    const allDocuments = await this.embeddingService.exportMemory();
+    const stats = await this.getMemoryStats();
+
+    const backupData = {
+      timestamp: Date.now(),
+      version: '1.0',
+      stats,
+      documents: allDocuments,
+    };
+
+    await fs.writeFile(backupFile, JSON.stringify(backupData, null, 2));
+    await this.updateLastBackupTime();
+
+    console.log(`💾 Memory backup created: ${backupFile}`);
+    return backupFile;
+  }
+
+
+  private async getLastCleanupTime(): Promise<number> {
     try {
       const metadataFile = join(this.config.storageDir, 'cleanup-metadata.json');
-      const data = require(metadataFile);
+      const content = await fs.readFile(metadataFile, 'utf-8');
+      const data = JSON.parse(content);
       return data.lastCleanup || 0;
     } catch {
       return 0;
@@ -499,10 +481,11 @@ export class PersistentMemoryManager {
   /**
    * Get last backup time from metadata
    */
-  private getLastBackupTime(): number {
+  private async getLastBackupTime(): Promise<number> {
     try {
       const metadataFile = join(this.config.storageDir, 'backup-metadata.json');
-      const data = require(metadataFile);
+      const content = await fs.readFile(metadataFile, 'utf-8');
+      const data = JSON.parse(content);
       return data.lastBackup || 0;
     } catch {
       return 0;

@@ -78,11 +78,11 @@ interface PostulantExpediente {
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { dni: string } }
+  { params }: { params: Promise<{ dni: string }> }
 ) {
   try {
-    const dni = params.dni;
-    
+    const { dni } = await params;
+
     if (!dni) {
       return NextResponse.json({
         success: false,
@@ -95,7 +95,7 @@ export async function GET(
 
     // Usar la función del cliente que ya combina los datos
     const postulantResponse = await backendClient.getPostulantByDni(dni);
-    
+
     if (!postulantResponse.success) {
       console.error('Error fetching postulant:', postulantResponse.error);
       return NextResponse.json({
@@ -153,7 +153,7 @@ export async function GET(
 
     // Determinar estado actual de validación
     let currentValidationStatus: 'PENDING' | 'APPROVED' | 'REJECTED' | 'PARTIAL' = 'PENDING';
-    
+
     if (documentStats.total === 0) {
       currentValidationStatus = 'PENDING';
     } else if (documentStats.approved === documentStats.total) {
@@ -244,7 +244,7 @@ export async function GET(
 
   } catch (error) {
     console.error('Postulant expediente API error:', error);
-    
+
     return NextResponse.json({
       success: false,
       error: 'Failed to fetch postulant expediente',

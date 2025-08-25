@@ -1,0 +1,129 @@
+%PDF-1.3
+1 0 obj
+<<
+/Type /Catalog
+/Outlines 2 0 R
+/Pages 3 0 R
+>>
+endobj
+2 0 obj
+<<
+/Type /Outlines
+/Count 0
+>>
+endobj
+3 0 obj
+<<
+/Type /Pages
+/Count 1
+/Kids [4 0 R]
+>>
+endobj
+4 0 obj
+<<
+/Type /Page
+/Parent 3 0 R
+/Resources <<
+/Font <<
+/F1 5 0 R
+>>
+>>
+/MediaBox [0 0 612 792]
+/Contents 6 0 R
+>>
+endobj
+5 0 obj
+<<
+/Type /Font
+/Subtype /Type1
+/BaseFont /Times-Roman
+>>
+endobj
+6 0 obj
+<<
+/Length 1637
+>>
+stream
+BT
+/F1 12 Tf
+72 720 Td
+(MINISTERIO PUBLICO DE LA DEFENSA) Tj
+0 -20 Td
+(Sistema de Concursos - Validacion de Documentos) Tj
+0 -30 Td
+(DOCUMENTO NO ENCONTRADO) Tj
+0 -30 Td
+() Tj
+0 -20 Td
+(INFORMACION DEL DOCUMENTO) Tj
+0 -20 Td
+(-----------------------------------) Tj
+0 -15 Td
+(Usuario: N/A \(DNI: 34642267\)) Tj
+0 -15 Td
+(Tipo de Documento: Título Universitario y Certificado Analítico) Tj
+0 -15 Td
+(ID de Documento: cd4a1392-f52f-4cf2-9a60-b124d84e2c9a) Tj
+0 -15 Td
+(Archivo Esperado: Título Universitario y Certificado Analítico.pdf) Tj
+0 -15 Td
+(Ruta Esperada: 34642267/Título Universitario y Certificado Analítico.pdf) Tj
+0 -15 Td
+(Fecha de Carga: 6/8/2025, 10:44:21) Tj
+0 -15 Td
+() Tj
+0 -20 Td
+(RUTAS DE BUSQUEDA) Tj
+0 -20 Td
+(-----------------) Tj
+0 -15 Td
+(Se busco el archivo en las siguientes ubicaciones:) Tj
+0 -15 Td
+(1. /var/lib/docker/volumes/mpd_concursos_storage_data_prod/_data/documents/34642) Tj
+0 -15 Td
+(2. /var/lib/docker/volumes/mpd_concursos_storage_data_prod/_data/recovered_docum) Tj
+0 -15 Td
+(3. /var/lib/docker/volumes/mpd_concursos_backup_data_prod/_data/34642267) Tj
+0 -15 Td
+() Tj
+0 -20 Td
+(INSTRUCCIONES PARA EL ADMINISTRADOR) Tj
+0 -20 Td
+(-----------------------------------) Tj
+0 -15 Td
+(1. Marcar esta postulacion como "Documentacion Incompleta") Tj
+0 -15 Td
+(2. Contactar al usuario para informar sobre el) Tj
+0 -15 Td
+(   documento faltante) Tj
+0 -15 Td
+(3. Solicitar que vuelva a cargar el documento requerido) Tj
+0 -15 Td
+(4. Una vez recargado, procesar nuevamente la validacion) Tj
+0 -15 Td
+() Tj
+0 -30 Td
+(Generado automaticamente el 22/8/2025, 06:59:24) Tj
+0 -15 Td
+(Sistema de Validacion de Documentos v1.0) Tj
+0 -15 Td
+ET
+endstream
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000010 00000 n 
+0000000079 00000 n 
+0000000126 00000 n 
+0000000183 00000 n 
+0000000334 00000 n 
+0000000397 00000 n 
+trailer
+<<
+/Size 7
+/Root 1 0 R
+>>
+startxref
+2137
+%%EOF

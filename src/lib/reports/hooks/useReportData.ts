@@ -4,6 +4,7 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, useCallback } from 'react';
+import { authFetch } from '@/lib/auth-fetch'; // ✅ Importar authFetch
 import type { DashboardMetrics, TechnicalIssue, ReportFilter } from '../types/index';
 
 // =====================================
@@ -16,24 +17,41 @@ export function useReportData() {
   const { data: metrics, isLoading, error, refetch } = useQuery({
     queryKey: ['dashboard-metrics'],
     queryFn: async (): Promise<DashboardMetrics> => {
-      const response = await fetch('/api/reports/dashboard/metrics');
+      console.log('🔍 [useReportData] Fetching dashboard metrics...');
+      
+      // ✅ Usar authFetch en lugar de fetch
+      const response = await authFetch('/api/reports/dashboard/metrics');
+      
       if (!response.ok) {
-        throw new Error('Failed to fetch dashboard metrics');
+        console.error('❌ [useReportData] Fetch failed:', response.status, response.statusText);
+        throw new Error(`Failed to fetch dashboard metrics: ${response.status}`);
       }
-      return response.json();
+      
+      const data = await response.json();
+      console.log('✅ [useReportData] Metrics received:', {
+        totalUsers: data.totalUsers,
+        totalDocuments: data.totalDocuments,
+        progress: data.processingProgress
+      });
+      
+      return data;
     },
     staleTime: 5 * 60 * 1000,  // 5 minutos
     gcTime: 10 * 60 * 1000,    // 10 minutos 
     refetchInterval: autoRefresh ? 30000 : false, // Auto-refresh cada 30s
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
+    retry: 3, // ✅ Añadir retry para casos de falla temporal
+    retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 30000),
   });
 
   const toggleAutoRefresh = useCallback(() => {
     setAutoRefresh(prev => !prev);
-  }, []);
+    console.log('🔧 [useReportData] Auto-refresh toggled:', !autoRefresh);
+  }, [autoRefresh]);
 
   const forceRefresh = useCallback(() => {
+    console.log('🔄 [useReportData] Force refresh triggered');
     refetch();
   }, [refetch]);
 
@@ -65,7 +83,9 @@ export function useTechnicalIssues(filters?: ReportFilter) {
       }
 
       const url = `/api/reports/diagnostics/issues?${searchParams}`;
-      const response = await fetch(url);
+      
+      // ✅ Usar authFetch también aquí
+      const response = await authFetch(url);
 
       if (!response.ok) {
         throw new Error('Failed to fetch technical issues');
@@ -75,6 +95,7 @@ export function useTechnicalIssues(filters?: ReportFilter) {
     },
     staleTime: 2 * 60 * 1000,  // 2 minutos
     enabled: true,
+    retry: 2,
   });
 
   return {
@@ -108,7 +129,8 @@ export function useReportCache() {
     queryClient.prefetchQuery({
       queryKey: ['dashboard-metrics'],
       queryFn: async () => {
-        const response = await fetch('/api/reports/dashboard/metrics');
+        // ✅ Usar authFetch también en prefetch
+        const response = await authFetch('/api/reports/dashboard/metrics');
         return response.json();
       },
       staleTime: 5 * 60 * 1000,

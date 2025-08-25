@@ -1,19 +1,34 @@
-import { ReportType, ValidationProgressReport } from '../types';
-import { PrismaClient } from '@prisma/client';
-import { ValidationStats, DocumentStatusCount, ValidationOverview, DocumentTypeMetrics } from '../types/validation';
-import { ValidatorMetric, ValidatorUser, DocumentMetric, DocumentTypeInfo } from '../types/metrics';
+import { ReportType, ValidationProgressReport, ValidatorMetrics, DocumentTypeMetrics, ValidationTimelinePoint } from '../types';
+import { BaseReportGenerator } from './BaseReportGenerator';
 
-export class ValidationProgressReportGenerator {
-    private prisma: PrismaClient;
+interface DocumentCount {
+    status: string;
+    count: number;
+}
 
-    constructor() {
-        this.prisma = new PrismaClient();
-    }
+interface ValidatorMetricResult {
+    validatorId: string;
+    validatorName: string;
+    validatedCount: number;
+    averageValidationTime: number;
+}
 
+interface DocumentTypeMetricResult {
+    documentType: string;
+    approved: number;
+    rejected: number;
+    pending: number;
+}
+
+interface TimelineDataResult {
+    date: string;
+    validatedCount: number;
+    approvedCount: number;
+    rejectedCount: number;
+}
+
+export class ValidationProgressReportGenerator extends BaseReportGenerator {
     async generate(contestId?: number): Promise<ValidationProgressReport> {
-        // TODO: Implementar la lógica real de generación del reporte
-        // Este es un ejemplo básico de la estructura
-
         const overview = await this.getOverview(contestId);
         const byValidator = await this.getValidatorMetrics(contestId);
         const byDocumentType = await this.getDocumentTypeMetrics(contestId);
@@ -27,169 +42,114 @@ export class ValidationProgressReportGenerator {
         };
     }
 
-    private async getOverview(contestId?: number) {
-        const [totalPostulations, validations] = await Promise.all([
-            this.prisma.inscription.count({
-                where: contestId ? { contestId: contestId } : {}
-            }),
-            this.prisma.document.groupBy({
-                by: ['status'],
-                where: {
-                    inscription: {
-                        contestId: contestId || undefined
-                    }
-                },
-                _count: true
-            })
-        ]);
+    private async getOverview(contestId?: number): Promise<ValidationProgressReport['overview']> {
+        try {
+            const totalPostulations = await this.executeQuerySingle<{ count: number }>(`
+                SELECT COUNT(*) as count FROM inscriptions
+                ${contestId ? 'WHERE contest_id = ?' : ''}
+            `, contestId ? [contestId] : []);
 
-        const validationStats: ValidationStats = validations.reduce((acc: ValidationStats, curr: DocumentStatusCount) => {
-            switch (curr.status) {
-                case 'VALIDATED':
-                    acc.validationCompleted += curr._count;
-                    break;
-                case 'PENDING':
-                    acc.validationPending += curr._count;
-                    break;
-                case 'IN_REVIEW':
-                    acc.validationInProgress += curr._count;
-                    break;
-            }
-            return acc;
-        }, {
-            validationCompleted: 0,
-            validationPending: 0,
-            validationInProgress: 0
-        });
+            const documentStats = await this.executeQuery<DocumentCount>(`
+                SELECT status, COUNT(*) as count
+                FROM documents 
+                ${contestId ? 'WHERE inscription_id IN (SELECT id FROM inscriptions WHERE contest_id = ?)' : ''}
+                GROUP BY status
+            `, contestId ? [contestId] : []);
 
-        return {
-            totalPostulations,
-            ...validationStats
-        };
-    }
-
-    private async getValidatorMetrics(contestId?: number) {
-        const validatorMetrics = await this.prisma.document.groupBy({
-            by: ['validatorId'],
-            where: {
-                inscription: {
-                    contestId: contestId || undefined
-                },
-                status: 'VALIDATED'
-            },
-            _count: true,
-            _avg: {
-                validationTime: true
-            }
-        });
-
-        const validatorIds = validatorMetrics.map((m: ValidatorMetric) => m.validatorId).filter(Boolean);
-        const validators = await this.prisma.user.findMany({
-            where: {
-                id: {
-                    in: validatorIds as string[]
-                }
-            },
-            select: {
-                id: true,
-                name: true,
-                lastName: true
-            }
-        });
-
-        return validatorMetrics.map((metric: ValidatorMetric) => {
-            const validator = validators.find((v: ValidatorUser) => v.id === metric.validatorId);
             return {
-                validatorId: metric.validatorId || '',
-                validatorName: validator ? `${validator.name} ${validator.lastName}` : 'Sistema',
-                validatedCount: metric._count,
-                averageValidationTime: metric._avg?.validationTime || 0
+                totalPostulations: totalPostulations?.count || 0,
+                validationCompleted: documentStats.find(s => s.status === 'APPROVED')?.count || 0,
+                validationPending: documentStats.find(s => s.status === 'PENDING')?.count || 0,
+                validationInProgress: documentStats.find(s => s.status === 'IN_PROGRESS')?.count || 0
             };
-        });
+        } catch (error) {
+            console.error('Error getting overview:', error);
+            return {
+                totalPostulations: 0,
+                validationCompleted: 0,
+                validationPending: 0,
+                validationInProgress: 0
+            };
+        }
     }
 
-    private async getDocumentTypeMetrics(contestId?: number) {
-        // Get document type metrics
-        const metrics = await this.prisma.document.groupBy({
-            by: ['documentTypeId', 'status'],
-            where: {
-                inscription: {
-                    contestId: contestId || undefined
-                },
-                status: {
-                    in: ['APPROVED', 'REJECTED']
-                }
-            },
-            _count: true,
-        }) as DocumentMetric[];
+    private async getValidatorMetrics(contestId?: number): Promise<ValidatorMetrics[]> {
+        try {
+            const metrics = await this.executeQuery<ValidatorMetricResult>(`
+                SELECT 
+                    v.id as validatorId,
+                    v.name as validatorName,
+                    COUNT(d.id) as validatedCount,
+                    AVG(TIMESTAMPDIFF(SECOND, d.submitted_at, d.validated_at)) as averageValidationTime
+                FROM validators v
+                LEFT JOIN documents d ON d.validator_id = v.id
+                ${contestId ? 'WHERE d.inscription_id IN (SELECT id FROM inscriptions WHERE contest_id = ?)' : ''}
+                GROUP BY v.id, v.name
+            `, contestId ? [contestId] : []);
 
-        // Get document type information
-        const documentTypes = await this.prisma.documentType.findMany({
-            where: {
-                id: {
-                    in: [...new Set(metrics.map(m => m.documentTypeId))]
-                }
-            },
-            select: {
-                id: true,
-                name: true
-            }
-        }) as DocumentTypeInfo[];
-
-        // Process and aggregate metrics
-        const metricsMap = metrics.reduce((acc: Record<number, { approved: number; rejected: number }>, metric) => {
-            if (!acc[metric.documentTypeId]) {
-                acc[metric.documentTypeId] = { approved: 0, rejected: 0 };
-            }
-
-            if (metric.status === 'APPROVED') {
-                acc[metric.documentTypeId].approved = metric._count;
-            } else if (metric.status === 'REJECTED') {
-                acc[metric.documentTypeId].rejected = metric._count;
-            }
-
-            return acc;
-        }, {});
-
-        // Format final results
-        return documentTypes.map(docType => ({
-            documentType: docType.name,
-            approved: metricsMap[docType.id]?.approved || 0,
-            rejected: metricsMap[docType.id]?.rejected || 0,
-            pending: 0 // Since we're not currently tracking pending documents
-        }));
+            return metrics.map(m => ({
+                validatorId: m.validatorId,
+                validatorName: m.validatorName,
+                validatedCount: m.validatedCount || 0,
+                averageValidationTime: m.averageValidationTime || 0
+            }));
+        } catch (error) {
+            console.error('Error getting validator metrics:', error);
+            return [];
+        }
     }
 
-    private async getTimelineData(contestId?: number) {
-        // Get validations by date
-        const dailyValidations = await this.prisma.$queryRaw`
-            SELECT 
-                DATE(validatedAt) as date,
-                COUNT(*) as validationsCount,
-                SUM(CASE WHEN status = 'APPROVED' THEN 1 ELSE 0 END) * 100.0 / COUNT(*) as approvalRate,
-                COUNT(DISTINCT validatorId) as validatorCount
-            FROM document
-            WHERE validatedAt IS NOT NULL
-            ${contestId ? this.prisma.Prisma.sql`AND inscriptionId IN (
-                SELECT id FROM inscription WHERE contestId = ${contestId}
-            )` : this.prisma.Prisma.empty}
-            GROUP BY DATE(validatedAt)
-            ORDER BY date ASC
-        ` as Array<{
-            date: Date;
-            validationsCount: number;
-            approvalRate: number;
-            validatorCount: number;
-        }>;
+    private async getDocumentTypeMetrics(contestId?: number): Promise<DocumentTypeMetrics[]> {
+        try {
+            const metrics = await this.executeQuery<DocumentTypeMetricResult>(`
+                SELECT 
+                    dt.id as documentTypeId,
+                    dt.name as documentType,
+                    SUM(CASE WHEN d.status = 'APPROVED' THEN 1 ELSE 0 END) as approved,
+                    SUM(CASE WHEN d.status = 'REJECTED' THEN 1 ELSE 0 END) as rejected,
+                    SUM(CASE WHEN d.status = 'PENDING' THEN 1 ELSE 0 END) as pending
+                FROM document_types dt
+                LEFT JOIN documents d ON d.document_type_id = dt.id
+                ${contestId ? 'WHERE d.inscription_id IN (SELECT id FROM inscriptions WHERE contest_id = ?)' : ''}
+                GROUP BY dt.id, dt.name
+            `, contestId ? [contestId] : []);
 
-        return dailyValidations.map(day => ({
-            date: day.date.toISOString().split('T')[0],
-            validationsCount: Number(day.validationsCount),
-            approvalRate: Number(day.approvalRate),
-            validatorCount: Number(day.validatorCount),
-            validatedCount: Number(day.validationsCount), // Same as validationsCount for backward compatibility
-            approvedCount: Math.round(Number(day.validationsCount) * Number(day.approvalRate) / 100),
-            rejectedCount: Math.round(Number(day.validationsCount) * (100 - Number(day.approvalRate)) / 100)
-        }));
+            return metrics.map(m => ({
+                documentType: m.documentType,
+                approved: m.approved || 0,
+                rejected: m.rejected || 0,
+                pending: m.pending || 0
+            }));
+        } catch (error) {
+            console.error('Error getting document type metrics:', error);
+            return [];
+        }
+    }
+
+    private async getTimelineData(contestId?: number): Promise<ValidationTimelinePoint[]> {
+        try {
+            const data = await this.executeQuery<TimelineDataResult>(`
+                SELECT 
+                    DATE(validated_at) as date,
+                    COUNT(*) as validatedCount,
+                    SUM(CASE WHEN status = 'APPROVED' THEN 1 ELSE 0 END) as approvedCount,
+                    SUM(CASE WHEN status = 'REJECTED' THEN 1 ELSE 0 END) as rejectedCount
+                FROM documents
+                WHERE validated_at IS NOT NULL
+                ${contestId ? 'AND inscription_id IN (SELECT id FROM inscriptions WHERE contest_id = ?)' : ''}
+                GROUP BY DATE(validated_at)
+                ORDER BY date
+            `, contestId ? [contestId] : []);
+
+            return data.map(d => ({
+                date: d.date,
+                validatedCount: d.validatedCount || 0,
+                approvedCount: d.approvedCount || 0,
+                rejectedCount: d.rejectedCount || 0
+            }));
+        } catch (error) {
+            console.error('Error getting timeline data:', error);
+            return [];
+        }
     }
 }

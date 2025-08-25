@@ -3,9 +3,9 @@ import { routeUrl } from '@/lib/utils';
 
 import { useState, useEffect, Suspense, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { 
-  ShieldCheck, 
-  Search, 
+import {
+  ShieldCheck,
+  Search,
   Filter,
   RefreshCw,
   CheckCircle,
@@ -72,6 +72,8 @@ interface Postulant {
 }
 
 interface PostulantsResponse {
+  success: boolean;
+  error?: string;
   postulants: Postulant[];
   pagination: {
     page: number;
@@ -127,7 +129,7 @@ function ValidationPageContent() {
   // Available circunscripciones
   const circunscripciones = [
     'PRIMERA_CIRCUNSCRIPCION',
-    'SEGUNDA_CIRCUNSCRIPCION', 
+    'SEGUNDA_CIRCUNSCRIPCION',
     'TERCERA_CIRCUNSCRIPCION',
     'CUARTA_CIRCUNSCRIPCION'
   ];
@@ -144,12 +146,12 @@ function ValidationPageContent() {
       if (debouncedSearchTerm && debouncedSearchTerm.trim().length >= 2) {
         params.append('search', debouncedSearchTerm.trim());
       }
-      
+
       // Only add filters if they're not 'all'
       if (circunscripcionFilter && circunscripcionFilter !== 'all') {
         params.append('circunscripcion', circunscripcionFilter);
       }
-      
+
       if (statusFilter && statusFilter !== 'all') {
         params.append('status', statusFilter);
       }
@@ -163,7 +165,7 @@ function ValidationPageContent() {
       }
 
       const data: PostulantsResponse = await response.json();
-      
+
       if (!data.success) {
         throw new Error(data.error || 'Unknown error from API');
       }
@@ -184,7 +186,7 @@ function ValidationPageContent() {
         description: error instanceof Error ? error.message : 'No se pudieron cargar los postulantes',
         variant: 'destructive',
       });
-      
+
       // Set empty state on error
       setPostulants([]);
       setStatistics(null);
@@ -248,9 +250,9 @@ function ValidationPageContent() {
   };
 
   const hasActiveFilters = () => {
-    return searchTerm.trim().length > 0 || 
-           circunscripcionFilter !== 'all' || 
-           statusFilter !== 'all';
+    return searchTerm.trim().length > 0 ||
+      circunscripcionFilter !== 'all' ||
+      statusFilter !== 'all';
   };
 
   if (loading && !postulants.length) {
@@ -266,7 +268,7 @@ function ValidationPageContent() {
             Revisión y validación de postulantes aptos para el concurso multifuero MPD.
           </p>
         </header>
-        
+
         <div className="grid gap-6 md:grid-cols-4 mb-8">
           {[...Array(4)].map((_, i) => (
             <Card key={i} className="bg-card/60 backdrop-blur-sm border-white/10 shadow-lg">
@@ -279,7 +281,7 @@ function ValidationPageContent() {
             </Card>
           ))}
         </div>
-        
+
         <div className="grid gap-6 md:grid-cols-3 lg:grid-cols-4">
           {[...Array(8)].map((_, i) => (
             <Card key={i} className="bg-card/60 backdrop-blur-sm border-white/10 shadow-lg">
@@ -307,20 +309,20 @@ function ValidationPageContent() {
         <p className="text-muted-foreground mt-2">
           Revisión y validación de postulantes aptos para el concurso multifuero MPD.
         </p>
-        </header>
+      </header>
 
-        {/* Enhanced Progress Indicator */}
-        {statistics && (
-          <div className="mb-6">
-            <ProgressIndicator 
-              statistics={statistics} 
-              variant="detailed"
-            />
-          </div>
-        )}
+      {/* Enhanced Progress Indicator */}
+      {statistics && (
+        <div className="mb-6">
+          <ProgressIndicator
+            statistics={statistics}
+            variant="detailed"
+          />
+        </div>
+      )}
 
-        {/* Statistics Cards */}
-        <div className="grid gap-6 md:grid-cols-4 mb-8">
+      {/* Statistics Cards */}
+      <div className="grid gap-6 md:grid-cols-4 mb-8">
         <Card className="bg-card/60 backdrop-blur-sm border-white/10 shadow-lg">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Postulantes</CardTitle>
@@ -346,8 +348,8 @@ function ValidationPageContent() {
               {getProgressPercentage()}%
             </div>
             <div className="w-full bg-secondary rounded-full h-2 mt-2">
-              <div 
-                className="bg-primary h-2 rounded-full transition-all duration-300" 
+              <div
+                className="bg-primary h-2 rounded-full transition-all duration-300"
                 style={{ width: `${getProgressPercentage()}%` }}
               />
             </div>
@@ -455,8 +457,8 @@ function ValidationPageContent() {
             <div className="flex gap-2">
               <QuickSearch className="min-w-[160px]" />
               <KeyboardShortcutsHelp />
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={fetchPostulants}
                 disabled={loading}
                 className="bg-input/80 border-white/10"
@@ -465,7 +467,7 @@ function ValidationPageContent() {
                 Actualizar
               </Button>
               {hasActiveFilters() && (
-                <Button 
+                <Button
                   variant="outline"
                   onClick={clearFilters}
                   className="bg-input/80 border-white/10"
@@ -534,14 +536,14 @@ function ValidationPageContent() {
             <Search className="w-12 h-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-semibold mb-2">No se encontraron postulantes</h3>
             <p className="text-muted-foreground text-center">
-              {hasActiveFilters() 
+              {hasActiveFilters()
                 ? 'Intenta modificar los filtros de búsqueda o limpiarlos para ver más resultados.'
                 : 'No hay postulantes disponibles para validación en este momento.'
               }
             </p>
             {hasActiveFilters() && (
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 className="mt-4"
                 onClick={clearFilters}
               >
@@ -566,14 +568,14 @@ function ValidationPageContent() {
                       DNI: {postulant.dni}
                     </CardDescription>
                   </div>
-                  <Badge 
+                  <Badge
                     variant={getStatusBadgeVariant(postulant.validationStatus)}
                     className="flex items-center gap-1"
                   >
                     {getStatusIcon(postulant.validationStatus)}
-                    {postulant.validationStatus === 'IN_REVIEW' ? 'En Revisión' : 
-                     postulant.validationStatus === 'PENDING' ? 'Pendiente' :
-                     postulant.validationStatus}
+                    {postulant.validationStatus === 'IN_REVIEW' ? 'En Revisión' :
+                      postulant.validationStatus === 'PENDING' ? 'Pendiente' :
+                        postulant.validationStatus}
                   </Badge>
                 </div>
               </CardHeader>
@@ -582,7 +584,7 @@ function ValidationPageContent() {
                   <MapPin className="w-4 h-4" />
                   <span>{postulant.circunscripcion.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase())}</span>
                 </div>
-                
+
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <FileText className="w-4 h-4" />
                   <span>{postulant.documentsCount} documentos</span>
@@ -600,7 +602,7 @@ function ValidationPageContent() {
                   )}
                 </div>
 
-                <Button 
+                <Button
                   onClick={() => handleViewPostulant(postulant.dni)}
                   className="w-full mt-4"
                   size="sm"

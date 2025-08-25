@@ -126,7 +126,7 @@ export class SemanticSearchService {
     console.log(`🔍 Performing semantic search: "${query.substring(0, 50)}..."`);
 
     // Generate query embedding
-    const queryEmbedding = await this.embeddingService.transformer.encode(query);
+    const queryEmbedding = await this.embeddingService.encode(query);
 
     // Search across all specified types
     const allResults: SearchResult[] = [];
@@ -162,7 +162,7 @@ export class SemanticSearchService {
 
     // Convert to semantic search results
     const semanticResults: SemanticSearchResult[] = [];
-    
+
     for (let i = 0; i < Math.min(rankedResults.length, topK); i++) {
       const result = rankedResults[i];
       const doc = result.document;
@@ -277,7 +277,7 @@ export class SemanticSearchService {
         .filter(q => q.query.toLowerCase().includes(partialQuery.toLowerCase()))
         .slice(0, 3)
         .map(q => q.query);
-      
+
       suggestions.push(...popularQueries);
     }
 
@@ -307,7 +307,7 @@ export class SemanticSearchService {
 
     // Top queries analysis
     const queryFrequency = new Map<string, { count: number; similarities: number[] }>();
-    
+
     for (const query of queries) {
       const key = query.text.toLowerCase().trim();
       if (!queryFrequency.has(key)) {
@@ -324,8 +324,8 @@ export class SemanticSearchService {
       .map(([query, data]) => ({
         query,
         count: data.count,
-        avgSimilarity: data.similarities.length > 0 
-          ? data.similarities.reduce((a, b) => a + b, 0) / data.similarities.length 
+        avgSimilarity: data.similarities.length > 0
+          ? data.similarities.reduce((a, b) => a + b, 0) / data.similarities.length
           : 0,
       }))
       .sort((a, b) => b.count - a.count)
@@ -563,18 +563,18 @@ export class SemanticSearchService {
    */
   private updateSearchAnalytics(query: string, resultCount: number, searchTime: number): void {
     this.searchAnalytics.totalSearches++;
-    
+
     // Update average result count
-    this.searchAnalytics.averageResultCount = 
-      (this.searchAnalytics.averageResultCount * (this.searchAnalytics.totalSearches - 1) + resultCount) / 
+    this.searchAnalytics.averageResultCount =
+      (this.searchAnalytics.averageResultCount * (this.searchAnalytics.totalSearches - 1) + resultCount) /
       this.searchAnalytics.totalSearches;
 
     // Update performance metrics
     const metrics = this.searchAnalytics.performanceMetrics;
-    metrics.averageSearchTime = 
-      (metrics.averageSearchTime * (this.searchAnalytics.totalSearches - 1) + searchTime) / 
+    metrics.averageSearchTime =
+      (metrics.averageSearchTime * (this.searchAnalytics.totalSearches - 1) + searchTime) /
       this.searchAnalytics.totalSearches;
-    
+
     metrics.slowestSearchTime = Math.max(metrics.slowestSearchTime, searchTime);
     metrics.fastestSearchTime = Math.min(metrics.fastestSearchTime, searchTime);
 
@@ -598,11 +598,11 @@ export class SemanticSearchService {
   private calculateQualityScore(): number {
     const avgResultCount = this.searchAnalytics.averageResultCount;
     const avgSearchTime = this.searchAnalytics.performanceMetrics.averageSearchTime;
-    
+
     // Quality score based on result relevance and performance
     const relevanceScore = Math.min(avgResultCount / 10, 1); // Normalize to 0-1
     const performanceScore = Math.max(0, 1 - (avgSearchTime / 1000)); // Penalize slow searches
-    
+
     return (relevanceScore + performanceScore) / 2;
   }
 

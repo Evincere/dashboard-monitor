@@ -138,3 +138,4 @@ test-results.xml
 next.config.local.ts
 docker-compose.override.yml
 /src/generated/prisma
+backups

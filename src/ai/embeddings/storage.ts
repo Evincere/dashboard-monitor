@@ -8,18 +8,38 @@ import { promises as fs } from 'fs';
 import { join } from 'path';
 import { SentenceTransformer } from './transformer';
 
+export interface DocumentMetadata {
+  type: 'query' | 'response' | 'context';
+  timestamp: number;
+  [key: string]: any;
+}
+
 export interface VectorDocument {
   id: string;
   text: string;
   embedding: number[];
-  metadata: {
-    timestamp: number;
-    type: 'query' | 'response' | 'context';
-    source?: string;
-    userId?: string;
-    sessionId?: string;
-    [key: string]: any;
-  };
+  metadata: DocumentMetadata;
+}
+
+export interface VectorDocument {
+  id: string;
+  text: string;
+  embedding: number[];
+  metadata: DocumentMetadata;
+}
+
+export interface VectorDocument {
+  id: string;
+  text: string;
+  embedding: number[];
+  metadata: DocumentMetadata;
+}
+
+export interface VectorDocument {
+  id: string;
+  text: string;
+  embedding: number[];
+  metadata: DocumentMetadata;
 }
 
 export interface SearchResult {
@@ -62,7 +82,7 @@ export class VectorStorage {
 
       // Load existing documents
       await this.loadDocuments();
-      
+
       console.log(`📚 Vector storage initialized with ${this.documents.size} documents`);
     } catch (error) {
       console.error('❌ Failed to initialize vector storage:', error);
@@ -133,11 +153,11 @@ export class VectorStorage {
 
     // Filter documents
     let candidates = Array.from(this.documents.values());
-    
+
     if (type) {
       candidates = candidates.filter(doc => doc.metadata.type === type);
     }
-    
+
     if (filter) {
       candidates = candidates.filter(filter);
     }
@@ -192,10 +212,10 @@ export class VectorStorage {
    */
   async getStats(): Promise<VectorStorageStats> {
     await this.ensureLoaded();
-    
+
     const docs = Array.from(this.documents.values());
     const storageSize = await this.getStorageSize();
-    
+
     return {
       totalDocuments: docs.length,
       storageSize,
@@ -214,7 +234,7 @@ export class VectorStorage {
     keepTypes?: Array<'query' | 'response' | 'context'>;
   } = {}): Promise<number> {
     await this.ensureLoaded();
-    
+
     const { maxAge, maxDocuments, keepTypes } = options;
     const now = Date.now();
     let deletedCount = 0;
@@ -223,8 +243,8 @@ export class VectorStorage {
     if (maxAge) {
       const cutoffTime = now - maxAge;
       for (const [id, doc] of this.documents) {
-        if (doc.metadata.timestamp < cutoffTime && 
-            (!keepTypes || !keepTypes.includes(doc.metadata.type))) {
+        if (doc.metadata.timestamp < cutoffTime &&
+          (!keepTypes || !keepTypes.includes(doc.metadata.type))) {
           this.documents.delete(id);
           deletedCount++;
         }
@@ -235,7 +255,7 @@ export class VectorStorage {
     if (maxDocuments && this.documents.size > maxDocuments) {
       const sortedDocs = Array.from(this.documents.values())
         .sort((a, b) => b.metadata.timestamp - a.metadata.timestamp);
-      
+
       const toDelete = sortedDocs.slice(maxDocuments);
       for (const doc of toDelete) {
         if (!keepTypes || !keepTypes.includes(doc.metadata.type)) {
@@ -260,12 +280,12 @@ export class VectorStorage {
     try {
       const data = await fs.readFile(this.documentsFile, 'utf-8');
       const docs: VectorDocument[] = JSON.parse(data);
-      
+
       this.documents.clear();
       for (const doc of docs) {
         this.documents.set(doc.id, doc);
       }
-      
+
       this.isLoaded = true;
     } catch (error) {
       if ((error as any).code === 'ENOENT') {
@@ -284,7 +304,7 @@ export class VectorStorage {
   private async saveDocuments(): Promise<void> {
     const docs = Array.from(this.documents.values());
     await fs.writeFile(this.documentsFile, JSON.stringify(docs, null, 2));
-    
+
     // Save metadata
     const stats = await this.getStats();
     await fs.writeFile(this.metadataFile, JSON.stringify(stats, null, 2));

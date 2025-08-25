@@ -5,15 +5,32 @@ import { NextRequest, NextResponse } from 'next/server';
  * Usa directamente la API del backend con toda la información incluida
  */
 
+interface ContestInfo {
+  title?: string;
+  position?: string;
+}
+
+interface Inscription {
+  state: string;
+  id: string;  // Changed from optional since it's required for getRealCentroDeVida
+  userInfo?: {
+    dni?: string;
+    fullName?: string;
+    email?: string;
+  };
+  inscriptionDate?: string;
+  contestInfo?: ContestInfo;
+}
+
 // Función para obtener centro de vida desde base de datos MySQL
 async function getRealCentroDeVida(inscriptionId: string): Promise<string> {
   try {
     if (!inscriptionId) return '';
-    
+
     const cleanUUID = inscriptionId.replace(/-/g, '').toLowerCase();
     const { exec } = require('child_process');
     const query = `mysql -u root -proot1234 mpd_concursos -e "SELECT centro_de_vida FROM inscriptions WHERE id = UNHEX('${cleanUUID}');" -s -N`;
-    
+
     return new Promise((resolve) => {
       exec(query, (error: any, stdout: string) => {
         if (error) {
@@ -21,13 +38,13 @@ async function getRealCentroDeVida(inscriptionId: string): Promise<string> {
           resolve('');
           return;
         }
-        
+
         const result = stdout.trim();
         if (!result) {
           resolve('');
           return;
         }
-        
+
         // Limpiar encoding
         const cleanResult = result
           .replace(/Ã¡/g, 'á')
@@ -36,7 +53,7 @@ async function getRealCentroDeVida(inscriptionId: string): Promise<string> {
           .replace(/Ãº/g, 'ú')
           .replace(/Ã±/g, 'ñ')
           .replace(/Ã/g, 'í');
-          
+
         console.log(`✅ Centro de vida obtenido: "${cleanResult}"`);
         resolve(cleanResult);
       });
@@ -53,7 +70,7 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '0');
     const pageSize = parseInt(searchParams.get('pageSize') || '15');
     const onlyStats = searchParams.get('onlyStats') === 'true';
-    
+
     console.log(`🔄 Postulations management - Page ${page}, Size ${pageSize}`);
 
     // Obtener token de autenticación del backend
@@ -62,14 +79,14 @@ export async function GET(request: NextRequest) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: 'admin', password: 'admin123' })
     });
-    
+
     if (!loginResponse.ok) {
       throw new Error('Failed to authenticate with backend');
     }
-    
+
     const loginData = await loginResponse.json();
     const token = loginData.token;
-    
+
     // Obtener inscripciones del backend
     const inscriptionsResponse = await fetch('http://localhost:8080/api/admin/inscriptions?size=1000', {
       headers: {
@@ -77,25 +94,25 @@ export async function GET(request: NextRequest) {
         'Content-Type': 'application/json'
       }
     });
-    
+
     if (!inscriptionsResponse.ok) {
       throw new Error('Failed to fetch inscriptions from backend');
     }
-    
+
     const inscriptionsData = await inscriptionsResponse.json();
-    const allInscriptions = inscriptionsData.content || [];
-    
+    const allInscriptions: Inscription[] = inscriptionsData.content || [];
+
     console.log(`📋 Got ${allInscriptions.length} inscriptions from backend`);
-    
+
     // Estadísticas
     const stats = {
       total: allInscriptions.length,
-      completedWithDocs: allInscriptions.filter(i => i.state === 'COMPLETED_WITH_DOCS').length,
-      validationPending: allInscriptions.filter(i => ['ACTIVE', 'COMPLETED_WITH_DOCS', 'PENDING'].includes(i.state)).length,
-      validationCompleted: allInscriptions.filter(i => i.state === 'APPROVED').length,
-      validationRejected: allInscriptions.filter(i => i.state === 'REJECTED').length
+      completedWithDocs: allInscriptions.filter((i: Inscription) => i.state === 'COMPLETED_WITH_DOCS').length,
+      validationPending: allInscriptions.filter((i: Inscription) => ['ACTIVE', 'COMPLETED_WITH_DOCS', 'PENDING'].includes(i.state)).length,
+      validationCompleted: allInscriptions.filter((i: Inscription) => i.state === 'APPROVED').length,
+      validationRejected: allInscriptions.filter((i: Inscription) => i.state === 'REJECTED').length
     };
-    
+
     if (onlyStats) {
       return NextResponse.json({
         success: true,
@@ -106,31 +123,31 @@ export async function GET(request: NextRequest) {
         source: 'simplified-stats'
       });
     }
-    
+
     // Paginación
     const totalPages = Math.ceil(allInscriptions.length / pageSize);
     const startIndex = page * pageSize;
     const endIndex = startIndex + pageSize;
     const paginatedInscriptions = allInscriptions.slice(startIndex, endIndex);
-    
+
     console.log(`📄 Processing ${paginatedInscriptions.length} inscriptions for page ${page}`);
-    
+
     // Procesar postulaciones
     const postulations = [];
-    
+
     for (const inscription of paginatedInscriptions) {
       try {
         if (!inscription.userInfo?.dni) {
           console.warn(`Skipping inscription ${inscription.id} - no DNI`);
           continue;
         }
-        
+
         const dni = inscription.userInfo.dni;
         console.log(`📄 Processing ${dni}...`);
-        
+
         // Obtener centro de vida real
         const realCentroDeVida = await getRealCentroDeVida(inscription.id);
-        
+
         const postulation = {
           id: inscription.id,
           user: {
@@ -160,15 +177,15 @@ export async function GET(request: NextRequest) {
           priority: 'MEDIUM',
           completionPercentage: 0
         };
-        
+
         postulations.push(postulation);
         console.log(`✅ Added postulation for ${dni} with centro de vida: "${realCentroDeVida}"`);
-        
+
       } catch (error) {
         console.error(`Error processing inscription ${inscription.id}:`, error);
       }
     }
-    
+
     console.log(`✅ Successfully processed ${postulations.length} postulations`);
 
     return NextResponse.json({
@@ -189,7 +206,7 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error('❌ Postulations management API error:', error);
-    
+
     return NextResponse.json({
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',

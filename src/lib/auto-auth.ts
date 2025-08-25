@@ -1,23 +1,23 @@
 /**
  * Auto-authentication system for dashboard-monitor microservice
  * Uses admin credentials from the main project to authenticate automatically
+ * FIXED: Use correct credentials format for backend
  */
 
 const ADMIN_CREDENTIALS = {
-  email: "admin",
-  username: "admin",
+  username: "admin",  // FIXED: Use username instead of email
   password: "admin123"
 };
 
-// Dynamic backend URL based on environment - CORRECTED LOGIC
+// Dynamic backend URL based on environment - UPDATED FOR PROXY
 const getBackendUrl = () => {
   if (typeof window !== 'undefined') {
     const origin = window.location.origin;
-    // Use the main backend API, not dashboard-monitor's internal auth
-    return `${origin}/api/auth/login`;
+    // Try through the dashboard-monitor proxy first
+    return `${origin}/dashboard-monitor/api/auth/login`;
   }
-  // Fallback for development - use main backend
-  return 'http://localhost:8080/api/auth/login';
+  // Fallback for development
+  return 'http://localhost:3000/dashboard-monitor/api/auth/login';
 };
 
 // Alternative backend URLs to try if the first one fails
@@ -25,8 +25,12 @@ const getAlternativeBackendUrls = () => {
   if (typeof window !== 'undefined') {
     const origin = window.location.origin;
     return [
-      `${origin}/api/auth/login`, // Try main backend as alternative
-      `${origin}:8080/api/auth/login`
+      `${origin}/api/auth/login`, // Try direct API
+      // Only use localhost in development
+      ...(process.env.NODE_ENV === 'development' ? [
+        'http://localhost:3000/dashboard-monitor/api/auth/login',
+        'http://localhost:8080/api/auth/login'
+      ] : [])
     ];
   }
   return [];
@@ -63,7 +67,7 @@ export function getStoredAuth(): StoredAuth | null {
 
     // Check if token is expired (with 5 minute buffer)
     const now = Date.now();
-    const expiresAt = auth.expiresAt - (5 * 60 * 1000); // 5 minutes buffer
+    const expiresAt = auth.expiresAt - (60 * 1000); // 1 minute buffer
 
     if (now >= expiresAt) {
       console.log('🔄 Stored auth token expired, removing...');
@@ -135,14 +139,19 @@ async function tryAuthenticateWithUrl(url: string): Promise<{ success: boolean; 
     console.log('📡 Auth response status:', response.status, 'for URL:', url);
 
     if (!response.ok) {
+      const errorText = await response.text().catch(() => 'Unknown error');
       return {
         success: false,
-        error: `HTTP ${response.status}: ${response.statusText}`
+        error: `HTTP ${response.status}: ${errorText}`
       };
     }
 
     const authData: AuthResponse = await response.json();
-    console.log('📋 Auth response received from', url, ':', { hasToken: !!authData.token, username: authData.username });
+    console.log('📋 Auth response received from', url, ':', {
+      hasToken: !!authData.token,
+      username: authData.username,
+      authorities: authData.authorities?.length || 0
+    });
 
     if (!authData.token) {
       return {

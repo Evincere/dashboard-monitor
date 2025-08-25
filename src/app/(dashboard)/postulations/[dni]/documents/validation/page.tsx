@@ -182,7 +182,7 @@ export default function DocumentValidationPage() {
       console.log(
         "📡 Haciendo fetch a /api/proxy-backend/inscriptions con tamaño=1000"
       );
-      const response = await authFetch(apiUrl("proxy-backend/inscriptions?size=1000"));
+      const response = await authFetch("/api/proxy-backend/inscriptions?size=1000");
       console.log("📨 Respuesta recibida:", {
         ok: response.ok,
         status: response.status,

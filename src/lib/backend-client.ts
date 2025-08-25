@@ -449,6 +449,12 @@ class BackendClient {
     });
   }
 
+  async revertDocument(documentId: string): Promise<ApiResponse<BackendDocument>> {
+    return this.request<BackendDocument>(`/admin/documentos/${documentId}/revertir`, {
+      method: 'PATCH'
+    });
+  }
+
   /**
    * Elimina un documento del sistema
    */

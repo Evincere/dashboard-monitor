@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useFormState } from 'react-dom';
 import { useFormStatus } from 'react-dom';
 import { BrainCircuit, Loader, Wand2, Star, Clock } from 'lucide-react';
 import { handleAiQuery } from '@/lib/actions';
@@ -9,7 +9,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
-const initialState = {
+import { AiQueryState } from '@/lib/actions';
+
+const initialState: AiQueryState = {
   summary: null,
   error: null,
   quality: null,
@@ -27,7 +29,7 @@ function SubmitButton() {
 }
 
 export default function AiQueryPage() {
-  const [state, formAction] = useActionState(handleAiQuery, initialState);
+  const [state, formAction] = useFormState(handleAiQuery, initialState);
 
   return (
     <div className="flex flex-col h-full p-4 md:p-8">

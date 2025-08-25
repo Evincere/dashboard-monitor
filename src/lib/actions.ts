@@ -56,7 +56,17 @@ export async function handleNaturalQuery(_: NaturalQueryState, formData: FormDat
   }
 }
 
-export async function handleAiQuery(prevState: any, formData: FormData) {
+export type AiQueryState = {
+  error: string | null;
+  summary: string | null;
+  quality: string | null;
+  processingTime: string | null;
+};
+
+export async function handleAiQuery(
+  prevState: AiQueryState,
+  formData: FormData
+): Promise<AiQueryState> {
   try {
     const validatedFields = aiQuerySchema.safeParse({
       question: formData.get('question'),
@@ -64,7 +74,7 @@ export async function handleAiQuery(prevState: any, formData: FormData) {
 
     if (!validatedFields.success) {
       return {
-        error: validatedFields.error.flatten().fieldErrors.question?.join(', '),
+        error: validatedFields.error.flatten().fieldErrors.question?.join(', ') || 'Error de validación',
         summary: null,
         quality: null,
         processingTime: null,

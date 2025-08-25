@@ -251,11 +251,8 @@ export class ContextualLearningSystem {
             usageCount: 1,
             lastUsed: Date.now(),
             metadata: {
-                processingTime: metadata.processingTime,
-                sqlQueries: metadata.sqlQueries,
-                dataPoints: metadata.dataPoints || 0,
-                userFeedback: metadata.userFeedback,
                 ...metadata,
+                dataPoints: metadata.dataPoints || 0,
             },
         };
 
@@ -630,6 +627,7 @@ export class ContextualLearningSystem {
                         metadata: {
                             processingTime: memory.metadata.processingTime || 0,
                             sqlQueries: [],
+                            dataPoints: 0,
                         },
                     };
 
@@ -709,8 +707,8 @@ export class ContextualLearningSystem {
         if (!this.embeddingService) return 0.5;
 
         try {
-            const queryEmbedding = await this.embeddingService.transformer.encode(query);
-            const responseEmbedding = await this.embeddingService.transformer.encode(response);
+            const queryEmbedding = await this.embeddingService.encode(query);
+            const responseEmbedding = await this.embeddingService.encode(response);
 
             // Calculate cosine similarity
             const similarity = this.cosineSimilarity(queryEmbedding.embedding, responseEmbedding.embedding);

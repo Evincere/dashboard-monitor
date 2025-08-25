@@ -1,0 +1,72 @@
+// ================================================
+// PDF VIEWER WRAPPER - SSR SAFE
+// ================================================
+
+'use client';
+
+import dynamic from 'next/dynamic';
+import React from 'react';
+import { Loader2 } from 'lucide-react';
+
+// Dynamically import react-pdf components to avoid SSR issues
+const Document = dynamic(
+  () => import('react-pdf').then((mod) => ({ default: mod.Document })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex items-center justify-center p-8">
+        <Loader2 className="w-6 h-6 animate-spin mr-2" />
+        <span>Cargando visor PDF...</span>
+      </div>
+    ),
+  }
+);
+
+const Page = dynamic(
+  () => import('react-pdf').then((mod) => ({ default: mod.Page })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex items-center justify-center p-8 bg-white border border-gray-200 rounded">
+        <Loader2 className="w-4 h-4 animate-spin mr-2" />
+        <span className="text-sm">Cargando página...</span>
+      </div>
+    ),
+  }
+);
+
+// Configure PDF.js worker only on client side
+if (typeof window !== 'undefined') {
+  import('react-pdf').then(async (pdfjs) => {
+    const { pdfjs: pdfjsLib } = pdfjs;
+    // Configure PDF.js worker with local file
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `${process.env.NODE_ENV === "development" ? "" : "/dashboard-monitor"}/workers/pdf.worker.min.js`;
+  });
+}
+
+interface PDFDocumentProps {
+  file: string;
+  onLoadSuccess: ({ numPages }: { numPages: number }) => void;
+  onLoadError: (error: Error) => void;
+  loading?: React.ReactNode;
+  error?: React.ReactNode;
+  children: React.ReactNode;
+}
+
+interface PDFPageProps {
+  pageNumber: number;
+  scale: number;
+  rotate: number;
+  loading?: React.ReactNode;
+  error?: React.ReactNode;
+  renderTextLayer?: boolean;
+  renderAnnotationLayer?: boolean;
+}
+
+export function PDFDocument(props: PDFDocumentProps) {
+  return <Document {...props} />;
+}
+
+export function PDFPage(props: PDFPageProps) {
+  return <Page {...props} />;
+}

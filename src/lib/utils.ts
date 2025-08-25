@@ -7,7 +7,7 @@ export function cn(...inputs: ClassValue[]) {
 
 // API URL utility that respects basePath
 export function apiUrl(path: string): string {
-  const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+  const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '/dashboard-monitor';
   // Remove leading slash from path if present to avoid double slashes
   const cleanPath = path.startsWith('/') ? path.slice(1) : path;
   return `${basePath}/api/${cleanPath}`;
@@ -23,7 +23,7 @@ export function routeUrl(path: string): string {
 
 // For cases where you need the full path with basePath (like href attributes)
 export function fullRouteUrl(path: string): string {
-  const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '';
+  const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '/dashboard-monitor';
   const cleanPath = path.startsWith('/') ? path.slice(1) : path;
   return `${basePath}/${cleanPath}`;
 }

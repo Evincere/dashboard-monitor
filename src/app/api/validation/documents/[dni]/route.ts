@@ -43,11 +43,11 @@ function sanitizeFileName(fileName: string): string {
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { dni: string } }
+  { params }: { params: Promise<{ dni: string }> }
 ) {
   try {
     const { searchParams } = new URL(request.url);
-    const dni = params.dni;
+    const { dni } = await params;
     const fileName = searchParams.get('file');
     const download = searchParams.get('download') === 'true';
 

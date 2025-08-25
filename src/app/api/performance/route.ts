@@ -135,23 +135,3 @@ export async function POST(request: NextRequest) {
 /**
  * GET /api/performance/prometheus - Export metrics in Prometheus format
  */
-export async function prometheus(request: NextRequest) {
-  try {
-    const metrics = performanceMonitor.exportPrometheusMetrics();
-    
-    return new Response(metrics, {
-      headers: {
-        'Content-Type': 'text/plain; version=0.0.4; charset=utf-8'
-      }
-    });
-
-  } catch (error) {
-    console.error('[Performance API] Prometheus export error:', error);
-    return new Response('# Error exporting metrics\n', {
-      status: 500,
-      headers: {
-        'Content-Type': 'text/plain'
-      }
-    });
-  }
-}

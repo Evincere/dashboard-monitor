@@ -5,11 +5,11 @@ import { routeUrl, apiUrl } from '@/lib/utils';
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
-  FolderKanban, 
-  Search, 
-  FileDown, 
-  Eye, 
-  Trash2, 
+  FolderKanban,
+  Search,
+  FileDown,
+  Eye,
+  Trash2,
   Filter,
   RefreshCw,
   CheckCircle,
@@ -121,7 +121,7 @@ interface DocumentsResponse {
 function DocumentsPageContent() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [statistics, setStatistics] = useState<DocumentsResponse['statistics'] | null>(null);
-  const [documentTypes, setDocumentTypes] = useState<Array<{type: string; count: number}>>([]);
+  const [documentTypes, setDocumentTypes] = useState<Array<{ type: string; count: number }>>([]);
   const [pagination, setPagination] = useState<DocumentsResponse['pagination'] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -146,19 +146,14 @@ function DocumentsPageContent() {
   const [userFilter, setUserFilter] = useState('');
 
   useEffect(() => {
+    if (!searchParams) return;
     const userParam = searchParams.get('user');
     if (userParam) {
       setUserFilter(userParam);
     }
   }, [searchParams]);
-    useEffect(() => {
-      const userParam = searchParams.get('user');
-      if (userParam) {
-        setUserFilter(userParam);
-      }
-    }, [searchParams]);
 
-    const fetchDocuments = async () => {
+  const fetchDocuments = async () => {
     setLoading(true);
     setError(null);
     try {
@@ -258,7 +253,7 @@ function DocumentsPageContent() {
   const handleDownload = async (id: string, name: string) => {
     try {
       const response = await fetch(apiUrl(`documents/download?id=${id}`));
-      
+
       if (response.ok) {
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
@@ -269,7 +264,7 @@ function DocumentsPageContent() {
         a.click();
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
-        
+
         toast({
           title: 'Descarga Iniciada',
           description: `Descargando "${name}"`,
@@ -340,7 +335,7 @@ function DocumentsPageContent() {
             Busque, visualice y administre todos los documentos cargados por los usuarios.
           </p>
         </header>
-        
+
         <div className="grid gap-6 md:grid-cols-4 mb-8">
           {[...Array(4)].map((_, i) => (
             <Card key={i} className="bg-card/60 backdrop-blur-sm border-white/10 shadow-lg">
@@ -353,7 +348,7 @@ function DocumentsPageContent() {
             </Card>
           ))}
         </div>
-        
+
         <Card className="bg-card/60 backdrop-blur-sm border-white/10 shadow-lg flex-grow">
           <CardHeader>
             <Skeleton className="h-6 w-32" />
@@ -383,7 +378,7 @@ function DocumentsPageContent() {
             Busque, visualice y administre todos los documentos cargados por los usuarios.
           </p>
         </header>
-        
+
         <Card className="bg-card/60 backdrop-blur-sm border-white/10 shadow-lg flex-grow">
           <CardHeader>
             <CardTitle className="text-destructive">Error al cargar documentos</CardTitle>
@@ -416,7 +411,7 @@ function DocumentsPageContent() {
               Busque, visualice y administre todos los documentos cargados por los usuarios.
             </p>
           </div>
-          
+
           <div className="flex gap-3">
             <Link href={routeUrl("postulations")}>
               <Button className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-lg hover:shadow-xl transition-all">
@@ -506,9 +501,9 @@ function DocumentsPageContent() {
               <p className="text-destructive text-sm">
                 <strong>Error:</strong> {error}
               </p>
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => setError(null)}
                 className="mt-2"
               >
@@ -554,8 +549,8 @@ function DocumentsPageContent() {
             </Select>
 
 
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={fetchDocuments}
               disabled={loading}
               className="bg-input/80 border-white/10"
@@ -633,13 +628,13 @@ function DocumentsPageContent() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <DocumentTypeBadge 
-                          documentType={doc.documentType} 
+                        <DocumentTypeBadge
+                          documentType={doc.documentType}
                           variant="compact"
                         />
                       </TableCell>
                       <TableCell>
-                        <Badge 
+                        <Badge
                           variant={getStatusBadgeVariant(doc.validationStatus)}
                           className="flex items-center gap-1 w-fit"
                         >
@@ -655,8 +650,8 @@ function DocumentsPageContent() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
-                          <Button 
-                            variant="outline" 
+                          <Button
+                            variant="outline"
                             size="icon"
                             onClick={() => handleDownload(doc.id, doc.originalName)}
                             title="Descargar"
@@ -671,21 +666,21 @@ function DocumentsPageContent() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent>
-                              <DropdownMenuItem 
+                              <DropdownMenuItem
                                 onClick={() => handleStatusChange(doc.id, 'APPROVED')}
                                 className="text-green-600"
                               >
                                 <CheckCircle className="w-4 h-4 mr-2" />
                                 Aprobar
                               </DropdownMenuItem>
-                              <DropdownMenuItem 
+                              <DropdownMenuItem
                                 onClick={() => handleStatusChange(doc.id, 'PENDING')}
                                 className="text-yellow-600"
                               >
                                 <Clock className="w-4 h-4 mr-2" />
                                 Pendiente
                               </DropdownMenuItem>
-                              <DropdownMenuItem 
+                              <DropdownMenuItem
                                 onClick={() => handleStatusChange(doc.id, 'REJECTED')}
                                 className="text-red-600"
                               >
@@ -705,13 +700,13 @@ function DocumentsPageContent() {
                               <AlertDialogHeader>
                                 <AlertDialogTitle>¿Eliminar documento?</AlertDialogTitle>
                                 <AlertDialogDescription>
-                                  Esta acción no se puede deshacer. El archivo "{doc.originalName}" 
+                                  Esta acción no se puede deshacer. El archivo "{doc.originalName}"
                                   será eliminado permanentemente del sistema y del almacenamiento.
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>
                                 <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                <AlertDialogAction 
+                                <AlertDialogAction
                                   onClick={() => handleDelete(doc.id, doc.originalName)}
                                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                                 >

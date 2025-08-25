@@ -3,7 +3,7 @@ import backendClient from '@/lib/backend-client';
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { dni: string } }
+  { params }: { params: Promise<{ dni: string }> }
 ) {
   try {
     const resolvedParams = await params;

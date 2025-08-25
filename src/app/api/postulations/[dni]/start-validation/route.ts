@@ -3,12 +3,12 @@ import backendClient from '@/lib/backend-client';
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { dni: string } }
+  { params }: { params: Promise<{ dni: string }> }
 ) {
   console.log('🟡 API Route - Iniciando proceso de validación /api/postulations/[dni]/start-validation');
   
   try {
-    const { dni } = params;
+    const { dni } = await params;
     console.log('🔍 DNI extraído de params:', dni);
 
     // Leer el body de la request

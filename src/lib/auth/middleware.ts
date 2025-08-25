@@ -1,8 +1,13 @@
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
-import prisma from '@/lib/db';
-import jwt from 'jsonwebtoken';
+import { executeQuerySingle } from '@/lib/db/mysql';
 import { getSessionToken, Session } from './session';
+
+interface UserRow {
+    id: string;
+    email: string;
+    role: string;
+}
 
 export async function withAuth(
     handler: (req: NextRequest, userId: string) => Promise<NextResponse>,
@@ -33,9 +38,11 @@ export async function withAuth(
         }
 
         // Verificar usuario
-        const user = await prisma.user.findUnique({
-            where: { id: session.userId }
-        });
+        const user = await executeQuerySingle<UserRow>(`
+            SELECT id, email, role
+            FROM user_entity 
+            WHERE id = ?
+        `, [session.userId]);
 
         if (!user) {
             console.error('User not found:', session.userId);

@@ -33,19 +33,19 @@ interface DiagnosticSummary {
 
 async function checkFileExists(documentId: string, userDni: string): Promise<{ found: boolean; searchAttempted: string[] }> {
   const searchAttempted: string[] = [];
-  
+
   for (const basePath of DOCUMENT_BASE_PATHS) {
     try {
       const userDir = path.join(basePath, userDni);
       searchAttempted.push(userDir);
-      
+
       // Verificar si el directorio existe
       await fs.access(userDir);
-      
+
       // Buscar archivos que comiencen con el document ID
       const files = await fs.readdir(userDir);
       const matchingFile = files.find(file => file.startsWith(documentId));
-      
+
       if (matchingFile) {
         const filePath = path.join(userDir, matchingFile);
         const stats = await fs.stat(filePath);
@@ -58,7 +58,7 @@ async function checkFileExists(documentId: string, userDni: string): Promise<{ f
       continue;
     }
   }
-  
+
   return { found: false, searchAttempted };
 }
 
@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
     // Obtener todos los usuarios
     console.log(`👥 [DIAGNOSTICS] Fetching users from backend...`);
     const usersResponse = await backendClient.getUsers({ size: 1000 });
-    
+
     if (!usersResponse.success || !usersResponse.data?.content) {
       return NextResponse.json(
         { error: 'Failed to fetch users from backend' },
@@ -94,7 +94,7 @@ export async function GET(request: NextRequest) {
     for (const user of users.slice(0, limit)) {
       try {
         console.log(`👤 [DIAGNOSTICS] Checking user: ${user.fullName || user.name} (DNI: ${user.dni})`);
-        
+
         const userDocumentsResponse = await backendClient.getDocuments({
           usuarioId: user.id,
           size: 100
@@ -103,27 +103,32 @@ export async function GET(request: NextRequest) {
         if (userDocumentsResponse.success && userDocumentsResponse.data?.content) {
           const documents = userDocumentsResponse.data.content;
           totalDocuments += documents.length;
-          
+
           console.log(`📄 [DIAGNOSTICS] User has ${documents.length} documents in database`);
 
           for (const document of documents) {
+            if (!user.dni) {
+              console.log(`⚠️ [DIAGNOSTICS] User ${user.id} has no DNI, skipping document check`);
+              continue;
+            }
+
             const { found, searchAttempted } = await checkFileExists(document.id, user.dni);
-            
+
             if (!found) {
               console.log(`❌ [DIAGNOSTICS] ORPHANED: Document ${document.id} not found physically`);
-              
+
               orphanedDocuments.push({
                 documentId: document.id,
-                fileName: document.fileName || document.nombreArchivo || 'Unknown',
-                filePath: document.filePath || document.rutaArchivo || `${user.dni}/${document.fileName || 'unknown'}`,
+                fileName: document.fileName,
+                filePath: document.filePath,
                 userDni: user.dni,
-                userName: user.fullName || user.name,
-                documentType: document.documentType || document.tipoDocumento || 'Unknown',
-                uploadDate: document.uploadDate || document.fechaCarga || 'Unknown',
+                userName: user.name || 'Unknown',
+                documentType: document.documentTypeId,
+                uploadDate: document.validatedAt || new Date().toISOString(),
                 searchAttempted,
                 found: false
               });
-              
+
               affectedUserDnis.add(user.dni);
             } else {
               console.log(`✅ [DIAGNOSTICS] Document ${document.id} found physically`);

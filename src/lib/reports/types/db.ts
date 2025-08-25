@@ -1,5 +1,3 @@
-import { Prisma } from '@prisma/client';
-
 export interface Document {
     id: number;
     contestId: number | null;
