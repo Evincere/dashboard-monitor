@@ -1,3 +1,0 @@
--- Document backup placeholder
--- Created on: 2025-08-15T16:17:14.626Z
--- This would contain document files in production

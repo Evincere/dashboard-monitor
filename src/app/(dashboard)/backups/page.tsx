@@ -1,4 +1,7 @@
 'use client';
+
+import JobProgressModal from '@/components/jobs/JobProgressModal';
+import { initiateAsyncBackupDownload, triggerFileDownload } from '@/components/jobs/async-backup-handler';
 import { apiUrl } from '@/lib/utils';
 
 import { useState, useEffect } from 'react';
@@ -30,6 +33,14 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { 
   Table,
   TableBody,
@@ -48,7 +59,12 @@ import {
   CheckCircle,
   XCircle,
   Clock,
-  AlertTriangle
+  AlertTriangle,
+  RotateCcw,
+  ChevronDown,
+  FileText,
+  Archive,
+  Package
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -76,14 +92,20 @@ export default function BackupsPage() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [restoring, setRestoring] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createForm, setCreateForm] = useState<CreateBackupForm>({
+
     name: '',
     description: '',
     includeDocuments: true,
   });
   const { toast } = useToast();
+
+  // Async download states
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
+  const [jobModalOpen, setJobModalOpen] = useState(false);
 
   useEffect(() => {
     fetchBackups();
@@ -169,6 +191,42 @@ export default function BackupsPage() {
     } finally {
       setCreating(false);
     }
+  };
+
+  // New async download function
+  const downloadBackup = async (backupId: string, backupName: string, downloadType: string = 'auto') => {
+    try {
+      const jobId = await initiateAsyncBackupDownload(backupId, backupName, downloadType);
+      
+      setCurrentJobId(jobId);
+      setJobModalOpen(true);
+
+      toast({
+        title: 'Preparación iniciada',
+        description: `Iniciando preparación del backup: ${backupName}`,
+        duration: 3000,
+      });
+
+    } catch (error) {
+      console.error('Error initiating backup download:', error);
+      toast({
+        title: 'Error',
+        description: 'Error al iniciar la descarga del backup',
+        variant: 'destructive',
+        duration: 5000,
+      });
+    }
+  };
+
+  const handleJobDownload = (downloadUrl: string, fileName: string) => {
+    const fullUrl = apiUrl(downloadUrl.replace('/api/', ''));
+    triggerFileDownload(fullUrl, fileName);
+    
+    toast({
+      title: 'Descarga iniciada',
+      description: `Descargando: ${fileName}`,
+      duration: 3000,
+    });
   };
 
   const restoreBackup = async (backupId: string) => {
@@ -279,6 +337,16 @@ export default function BackupsPage() {
 
   return (
     <div className="space-y-6">
+      {/* Job Progress Modal */}
+      <JobProgressModal
+        jobId={currentJobId}
+        isOpen={jobModalOpen}
+        onClose={() => {
+          setJobModalOpen(false);
+          setCurrentJobId(null);
+        }}
+        onDownload={handleJobDownload}
+      />
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Gestión de Backups</h1>
@@ -387,7 +455,7 @@ export default function BackupsPage() {
             <div className="text-2xl font-bold">
               {backups.reduce((total, backup) => total + backup.sizeBytes, 0) > 0
                 ? (backups.reduce((total, backup) => total + backup.sizeBytes, 0) / (1024 * 1024 * 1024)).toFixed(2) + ' GB'
-                : '0 GB'
+                : '0.00 GB'
               }
             </div>
           </CardContent>
@@ -479,17 +547,79 @@ export default function BackupsPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
+                        {/* DOWNLOAD DROPDOWN - Enhanced functionality */}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={backup.integrity !== 'verified' || downloading === backup.id}
+                              title="Opciones de descarga"
+                            >
+                              {downloading === backup.id ? (
+                                <RefreshCw className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <>
+                                  <Download className="h-4 w-4" />
+                                  <ChevronDown className="h-3 w-3 ml-1" />
+                                </>
+                              )}
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Opciones de Descarga</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            
+                            {backup.includesDocuments && (
+                              <DropdownMenuItem 
+                                onClick={() => downloadBackup(backup.id, backup.name, 'combined')}
+                              >
+                                <Package className="h-4 w-4 mr-2" />
+                                Backup Completo (BD + Docs)
+                              </DropdownMenuItem>
+                            )}
+                            
+                            <DropdownMenuItem 
+                              onClick={() => downloadBackup(backup.id, backup.name, 'database')}
+                            >
+                              <FileText className="h-4 w-4 mr-2" />
+                              Solo Base de Datos
+                            </DropdownMenuItem>
+                            
+                            {backup.includesDocuments && (
+                              <DropdownMenuItem 
+                                onClick={() => downloadBackup(backup.id, backup.name, 'documents')}
+                              >
+                                <Archive className="h-4 w-4 mr-2" />
+                                Solo Documentos
+                              </DropdownMenuItem>
+                            )}
+                            
+                            {!backup.includesDocuments && (
+                              <DropdownMenuItem 
+                                disabled
+                                className="text-muted-foreground"
+                              >
+                                <Archive className="h-4 w-4 mr-2" />
+                                No incluye documentos
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+
+                        {/* RESTORE BUTTON - Separated functionality */}
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                             <Button
                               variant="outline"
                               size="sm"
                               disabled={backup.integrity !== 'verified' || restoring === backup.id}
+                              title="Restaurar backup"
                             >
                               {restoring === backup.id ? (
                                 <RefreshCw className="h-4 w-4 animate-spin" />
                               ) : (
-                                <Download className="h-4 w-4" />
+                                <RotateCcw className="h-4 w-4" />
                               )}
                             </Button>
                           </AlertDialogTrigger>
@@ -513,12 +643,14 @@ export default function BackupsPage() {
                           </AlertDialogContent>
                         </AlertDialog>
 
+                        {/* DELETE BUTTON */}
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                             <Button
                               variant="outline"
                               size="sm"
                               disabled={deleting === backup.id}
+                              title="Eliminar backup"
                             >
                               {deleting === backup.id ? (
                                 <RefreshCw className="h-4 w-4 animate-spin" />

@@ -13,6 +13,11 @@ const CreateBackupSchema = z.object({
   name: z.string().min(1, 'Backup name is required'),
   description: z.string().optional(),
   includeDocuments: z.boolean().default(true),
+  documentTypes: z.object({
+    documents: z.boolean().default(true),
+    cvDocuments: z.boolean().default(true),
+    profileImages: z.boolean().default(true),
+  }).optional(),
 });
 
 const RestoreBackupSchema = z.object({
@@ -31,14 +36,36 @@ interface BackupInfo {
   integrity: 'verified' | 'pending' | 'failed';
   type: 'full' | 'incremental';
   includesDocuments: boolean;
+  documentTypes?: string[];
   path: string;
 }
 
+// Document type mappings
+const DOCUMENT_TYPE_MAPPINGS = {
+  documents: {
+    path: 'documents',
+    label: 'Documentos de Postulación',
+    description: 'Documentos principales de las postulaciones'
+  },
+  cvDocuments: {
+    path: 'cv-documents',
+    label: 'Currículums Vitae', 
+    description: 'CVs y documentos profesionales'
+  },
+  profileImages: {
+    path: 'profile-images',
+    label: 'Imágenes de Perfil',
+    description: 'Fotos de perfil y documentos visuales'
+  }
+};
+
 // Constants
-// Use local directory for development, Docker path for production
 const BACKUP_VOLUME_PATH = process.env.NODE_ENV === 'production' 
   ? '/var/lib/docker/volumes/mpd_concursos_backup_data_prod/_data'
   : path.resolve('./database/backups');
+const DOCUMENTS_BASE_PATH = process.env.NODE_ENV === 'production'
+  ? '/var/lib/docker/volumes/mpd_concursos_storage_data_prod/_data'
+  : path.resolve('./storage');
 const BACKUP_METADATA_FILE = path.join(BACKUP_VOLUME_PATH, 'backup_metadata.json');
 
 // Helper functions
@@ -223,31 +250,92 @@ async function createDatabaseBackup(backupName: string): Promise<string> {
   }
 }
 
-async function createDocumentsBackup(backupName: string): Promise<string> {
+async function createDocumentsBackup(backupName: string, selectedTypes: string[]): Promise<{ path: string; totalSize: number; includedTypes: string[] }> {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const backupFileName = `${backupName}_documents_${timestamp}.tar.gz`;
   const backupPath = path.join(BACKUP_VOLUME_PATH, backupFileName);
 
-  if (process.env.NODE_ENV === 'production') {
-    // Production: use tar
-    const command = `tar -czf ${backupPath} -C /var/lib/docker/volumes/mpd_concursos_document_storage_prod/_data .`;
+  // Ensure backup directory exists
+  await fs.mkdir(BACKUP_VOLUME_PATH, { recursive: true });
+
+  const includedTypes: string[] = [];
+  let totalSize = 0;
+  const tempDir = path.join(BACKUP_VOLUME_PATH, `temp_${timestamp}`);
+  
+  try {
+    // Create temporary directory structure
+    await fs.mkdir(tempDir, { recursive: true });
     
-    try {
-      await execAsync(command);
-      return backupPath;
-    } catch (error) {
-      throw new Error(`Failed to create documents backup: ${error}`);
+    // Process each selected document type
+    for (const docType of selectedTypes) {
+      const mapping = DOCUMENT_TYPE_MAPPINGS[docType as keyof typeof DOCUMENT_TYPE_MAPPINGS];
+      if (!mapping) continue;
+
+      const sourcePath = path.join(DOCUMENTS_BASE_PATH, mapping.path);
+      const targetPath = path.join(tempDir, mapping.path);
+
+      // Check if source directory exists
+      try {
+        await fs.access(sourcePath);
+        const stats = await fs.stat(sourcePath);
+        
+        if (stats.isDirectory()) {
+          // Copy directory to temp location
+          await execAsync(`cp -r "${sourcePath}" "${targetPath}"`);
+          
+          // Calculate size
+          const { stdout } = await execAsync(`du -sb "${targetPath}"`);
+          const dirSize = parseInt(stdout.split('\t')[0]);
+          totalSize += dirSize;
+          
+          includedTypes.push(docType);
+          console.log(`✅ Included ${mapping.label} (${formatBytes(dirSize)})`);
+        }
+      } catch (error) {
+        console.warn(`⚠️  Skipped ${mapping.label}: Directory not found or empty`);
+        continue;
+      }
     }
-  } else {
-    // Development: create a placeholder file for now
-    // TODO: Implement proper document backup for development
-    const placeholderContent = `-- Document backup placeholder\n-- Created on: ${new Date().toISOString()}\n-- This would contain document files in production\n`;
+
+    if (includedTypes.length === 0) {
+      throw new Error('No valid document directories found for the selected types');
+    }
+
+    // Create tar.gz from temporary directory
+    const command = `tar -czf "${backupPath}" -C "${tempDir}" .`;
+    await execAsync(command);
     
-    // Create a simple text file instead of tar.gz for development
-    const devBackupPath = backupPath.replace('.tar.gz', '_placeholder.txt');
-    await fs.writeFile(devBackupPath, placeholderContent, 'utf-8');
+    // Verify backup was created
+    const backupStats = await fs.stat(backupPath);
+    if (backupStats.size === 0) {
+      throw new Error('Documents backup created but is empty');
+    }
+
+    console.log(`✅ Documents backup created: ${backupPath} (${formatBytes(backupStats.size)})`);
+    console.log(`📦 Included types: ${includedTypes.join(', ')}`);
+
+    return { 
+      path: backupPath, 
+      totalSize: backupStats.size, 
+      includedTypes 
+    };
+
+  } catch (error) {
+    // Clean up failed backup
+    try {
+      await fs.unlink(backupPath);
+    } catch (cleanupError) {
+      // Ignore cleanup errors
+    }
     
-    return devBackupPath;
+    throw new Error(`Failed to create documents backup: ${error}`);
+  } finally {
+    // Clean up temporary directory
+    try {
+      await execAsync(`rm -rf "${tempDir}"`);
+    } catch (cleanupError) {
+      console.warn('Could not cleanup temporary directory:', cleanupError);
+    }
   }
 }
 
@@ -261,14 +349,8 @@ async function verifyBackupIntegrity(backupPath: string): Promise<'verified' | '
       }
     } else if (backupPath.endsWith('.tar.gz')) {
       // Verify tar.gz backup by testing the archive
-      await execAsync(`tar -tzf ${backupPath} > /dev/null`);
+      await execAsync(`tar -tzf "${backupPath}" > /dev/null`);
       return 'verified';
-    } else if (backupPath.endsWith('_placeholder.txt')) {
-      // Development placeholder files are always considered verified
-      const content = await fs.readFile(backupPath, 'utf-8');
-      if (content.includes('-- Document backup placeholder')) {
-        return 'verified';
-      }
     }
     return 'failed';
   } catch (error) {
@@ -313,7 +395,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validatedData = CreateBackupSchema.parse(body);
 
-    const { name, description, includeDocuments } = validatedData;
+    const { name, description, includeDocuments, documentTypes } = validatedData;
     const timestamp = new Date().toISOString();
     const backupId = `backup_${Date.now()}`;
 
@@ -326,24 +408,29 @@ export async function POST(request: NextRequest) {
       throw new Error('Failed to create database backup file');
     }
 
-    let documentsBackupPath: string | null = null;
+    let documentsInfo: { path: string; totalSize: number; includedTypes: string[] } | null = null;
     let totalSize = dbStats.size;
 
     // Create documents backup if requested
-    if (includeDocuments) {
-      try {
-        documentsBackupPath = await createDocumentsBackup(name);
-        const docStats = await fs.stat(documentsBackupPath);
-        totalSize += docStats.size;
-      } catch (error) {
-        console.warn('Failed to create documents backup:', error);
-        // Continue without documents backup
+    if (includeDocuments && documentTypes) {
+      const selectedTypes = Object.entries(documentTypes)
+        .filter(([_, selected]) => selected)
+        .map(([type, _]) => type);
+
+      if (selectedTypes.length > 0) {
+        try {
+          documentsInfo = await createDocumentsBackup(name, selectedTypes);
+          totalSize += documentsInfo.totalSize;
+        } catch (error) {
+          console.warn('Failed to create documents backup:', error);
+          // Continue without documents backup but log the error
+        }
       }
     }
 
     // Verify backup integrity
     const dbIntegrity = await verifyBackupIntegrity(dbBackupPath);
-    const docIntegrity = documentsBackupPath ? await verifyBackupIntegrity(documentsBackupPath) : 'verified';
+    const docIntegrity = documentsInfo ? await verifyBackupIntegrity(documentsInfo.path) : 'verified';
     
     const overallIntegrity = dbIntegrity === 'verified' && docIntegrity === 'verified' ? 'verified' : 'failed';
 
@@ -357,7 +444,8 @@ export async function POST(request: NextRequest) {
       sizeBytes: totalSize,
       integrity: overallIntegrity,
       type: 'full',
-      includesDocuments: includeDocuments,
+      includesDocuments: !!documentsInfo,
+      documentTypes: documentsInfo?.includedTypes || [],
       path: dbBackupPath,
     };
 
@@ -382,7 +470,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(
-      { success: false, error: 'Failed to create backup' },
+      { success: false, error: 'Failed to create backup', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }
@@ -415,7 +503,7 @@ export async function PUT(request: NextRequest) {
 
     // Restore database
     if (backup.path.endsWith('.sql')) {
-      const restoreCommand = `docker exec -i mpd-concursos-mysql mysql -u root -proot1234 mpd_concursos < ${backup.path}`;
+      const restoreCommand = `docker exec -i mpd-concursos-mysql mysql -u root -proot1234 mpd_concursos < "${backup.path}"`;
       await execAsync(restoreCommand);
     }
 
@@ -475,11 +563,14 @@ export async function DELETE(request: NextRequest) {
       
       // Also delete documents backup if it exists
       if (backup.includesDocuments) {
-        const documentsBackupPath = backup.path.replace('.sql', '_documents.tar.gz');
+        const documentsBackupPath = backup.path.replace('.sql', '_documents_*.tar.gz');
         try {
-          await fs.unlink(documentsBackupPath);
+          const { stdout } = await execAsync(`ls ${documentsBackupPath} 2>/dev/null || echo ""`);
+          if (stdout.trim()) {
+            await execAsync(`rm -f ${documentsBackupPath}`);
+          }
         } catch (error) {
-          console.warn('Documents backup file not found or already deleted');
+          console.warn('Documents backup files not found or already deleted');
         }
       }
     } catch (error) {

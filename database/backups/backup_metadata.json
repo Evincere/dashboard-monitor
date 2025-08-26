@@ -7,7 +7,7 @@
     "sizeBytes": 3156261,
     "integrity": "pending",
     "type": "full",
-    "includesDocuments": false,
+    "includesDocuments": true,
     "path": "B:\\CODE\\PROYECTOS\\mpd-dashboard\\database\\backups\\backut-test_2025-08-15T16-17-13-336Z.sql"
   },
   {
@@ -18,7 +18,7 @@
     "sizeBytes": 45331,
     "integrity": "pending",
     "type": "full",
-    "includesDocuments": false,
+    "includesDocuments": true,
     "path": "B:\\CODE\\PROYECTOS\\mpd-dashboard\\database\\backups\\mpd_concursos_local_backup_20250815_082917.sql"
   }
 ]
