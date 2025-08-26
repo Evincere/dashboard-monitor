@@ -116,6 +116,15 @@ database/backups/
 *.sql
 *_backup_*.sql
 
+# Build archives (NO DEBEN ESTAR EN GIT)
+*.tar.gz
+*.tgz
+*.zip
+*-build-*.tar.gz
+*-build-*.zip
+dashboard-monitor-build*.tar.gz
+build-*.tar.gz
+
 # Temporary files
 tmp/
 temp/

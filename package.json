@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "npx next dev --turbopack -p 9002 -H 0.0.0.0",
+    "dev:local": "npx next dev --turbopack -p 3000 -H localhost",
     "dev:memory": "cross-env NODE_OPTIONS=--max-old-space-size=1024 npx next dev --turbopack -p 9002 -H 0.0.0.0",
     "dev:webpack": "npx next dev -p 9002 -H 0.0.0.0",
     "genkit:dev": "genkit start -- tsx src/ai/dev.ts",
