@@ -1,5 +1,0 @@
-{
-    "scripts": {
-        "test:reports": "cross-env NODE_ENV=development tsx src/lib/reports/__tests__/manual-test.ts"
-    }
-}
