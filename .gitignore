@@ -139,3 +139,54 @@ next.config.local.ts
 docker-compose.override.yml
 /src/generated/prisma
 backups
+
+# ===== CLEANUP & ORGANIZATION =====
+# Archive directory (backups, temp files, etc)
+.archive/
+*.backup
+*.backup.*
+
+# Temporary files
+temp_*
+*temp.*
+test-*
+documento_placeholder*
+
+# Configuration backups
+*.config.*.backup
+*.js.backup*
+*.ts.backup*
+
+# Build archives
+*.tar.gz
+*.zip
+
+# Local development
+.env.local
+.env.*.local
+
+# PM2 logs (keep main logs but ignore detailed ones)
+logs/*.log.*
+logs/pm2-*
+
+# Documentation drafts
+*-draft.*
+comparacion-*
+tiempo-*
+
+# Large files
+*.sql.gz
+*build*.tar.gz
+
+# VS Code specific (beyond standard)
+*.code-workspace
+.vscode/settings.json
+
+# Development tools temporary
+.next/trace
+.next/cache/trace
+
+# Testing artifacts
+test-results/
+coverage-report/
+

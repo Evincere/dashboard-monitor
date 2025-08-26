@@ -1,8 +1,0 @@
-    "dev:pm2": "pm2 start ecosystem.dev.config.js",
-    "dev:pm2:stop": "pm2 stop dashboard-monitor-dev",
-    "dev:pm2:restart": "pm2 restart dashboard-monitor-dev", 
-    "dev:pm2:logs": "pm2 logs dashboard-monitor-dev",
-    "dev:clean": "rm -rf .next && npm run dev",
-    "dev:debug": "NODE_OPTIONS='--inspect' npm run dev",
-    "prod:pm2": "npm run build && pm2 start ecosystem.config.js",
-    "prod:restart": "npm run build && pm2 restart dashboard-monitor",

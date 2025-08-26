@@ -1,7 +1,0 @@
-'use client';
-
-import React, { useState, useCallback, useEffect } from 'react';
-import dynamic from 'next/dynamic';
-import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCw, RefreshCw, AlertTriangle, Loader2 } from 'lucide-react';
-// Import the correct authFetch function from auth-fetch library
-import { authFetch } from "../../lib/auth-fetch";
