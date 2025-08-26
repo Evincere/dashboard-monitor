@@ -682,3 +682,171 @@ npm run build
 
 **Estado**: ✅ **COMPLETAMENTE RESUELTO** - Sistema listo para desarrollo y producción.
 
+
+## NUEVO WORKFLOW: Desarrollo vs Producción Separados
+
+### Fecha de Implementación: 26 de Agosto, 2025 - 00:14 UTC
+
+### Problema Resuelto
+**Desarrollo directo en servidor de producción** - Riesgo para estabilidad y datos de usuarios.
+
+### Solución Implementada: Separación de Entornos
+
+#### 1. **Configuraciones de Entorno**
+- **Producción**: `.env.production` → Puerto 9002, optimizado para estabilidad
+- **Desarrollo**: `.env.development` → Puerto 9003, optimizado para velocidad
+- **Local**: `.env.local` → Puerto 3000, desarrollo sin impacto en VPS
+
+#### 2. **Gestión de Ramas**
+```bash
+# Ramas especializadas
+production-stable          # Solo para producción, deploys controlados
+feature/reportes-administrativos  # Desarrollo activo
+feature/nueva-funcionalidad # Ramas de características específicas
+```
+
+#### 3. **Ecosistemas PM2 Separados**
+```bash
+# Producción (ecosystem.production.config.js)
+- dashboard-monitor: puerto 9002, 512MB memoria, logs producción
+- Auto-restart en 1GB, manejo robusto de errores
+
+# Desarrollo (ecosystem.development.config.js) 
+- dashboard-monitor-dev: puerto 9003, 1024MB memoria, logs desarrollo
+- Hot reload, reinicio rápido, logs verbosos
+```
+
+#### 4. **Environment Manager Script**
+```bash
+# Comandos unificados para gestión segura
+./environment-manager.sh prod     # Modo producción
+./environment-manager.sh dev      # Modo desarrollo
+./environment-manager.sh status   # Estado de servicios
+./environment-manager.sh deploy   # Deploy seguro con verificaciones
+```
+
+### Workflow de Desarrollo Actualizado
+
+#### **Desarrollo Local (Recomendado)**
+```bash
+# En tu máquina local
+git clone git@github.com:Evincere/dashboard-monitor.git dashboard-monitor-local
+cd dashboard-monitor-local
+git checkout feature/reportes-administrativos
+npm install
+cp .env.development .env.local
+npm run dev  # Puerto 3000, Turbopack habilitado
+```
+
+#### **Desarrollo en VPS (Cuando sea necesario)**
+```bash
+# Activar modo desarrollo en VPS
+./environment-manager.sh dev
+
+# Desarrollar en puerto 9003
+git checkout feature/reportes-administrativos
+# ... hacer cambios ...
+git commit -am "desarrollo: nueva funcionalidad"
+git push origin feature/reportes-administrativos
+```
+
+#### **Deploy a Producción (Controlado)**
+```bash
+# Solo desde rama production-stable
+git checkout production-stable
+git merge feature/reportes-administrativos
+git push origin production-stable
+
+# Deploy automático con verificaciones
+./environment-manager.sh deploy
+```
+
+### Estructura de Archivos de Configuración
+
+```
+dashboard-monitor/
+├── .env                           # Enlace simbólico al activo
+├── .env.production               # Configuración producción  
+├── .env.development              # Configuración desarrollo
+├── ecosystem.config.js           # PM2 legacy (mantenido para compatibilidad)
+├── ecosystem.production.config.js # PM2 producción optimizado
+├── ecosystem.development.config.js # PM2 desarrollo optimizado
+├── environment-manager.sh        # Gestión de entornos
+├── manage-dashboard-monitor.sh   # Script legacy (mantenido)
+└── LOCAL-SETUP.md               # Guía configuración local
+```
+
+### Comandos Esenciales Actualizados
+
+#### **Estado y Monitoreo**
+```bash
+./environment-manager.sh status   # Estado completo de servicios
+pm2 status                        # Estado PM2
+pm2 monit                        # Monitor tiempo real
+```
+
+#### **Cambio de Entornos**
+```bash
+# Producción (puerto 9002)
+./environment-manager.sh prod
+curl http://localhost:9002/dashboard-monitor/
+
+# Desarrollo (puerto 9003)  
+./environment-manager.sh dev
+curl http://localhost:9003/dashboard-monitor/
+```
+
+#### **Logs Separados**
+```bash
+# Logs de producción
+pm2 logs dashboard-monitor
+tail -f logs/combined.log
+
+# Logs de desarrollo
+pm2 logs dashboard-monitor-dev
+tail -f logs/dev-combined.log
+```
+
+### Beneficios del Nuevo Sistema
+
+#### **Seguridad**
+- ✅ **Producción aislada** - Cambios no afectan usuarios directamente
+- ✅ **Deploy controlado** - Solo desde rama `production-stable`
+- ✅ **Backup automático** - Pre-deploy backup de estado actual
+- ✅ **Health checks** - Verificación post-deploy automática
+
+#### **Desarrollo**
+- ✅ **Entorno local** - Desarrollo sin consumir recursos VPS
+- ✅ **Hot reload rápido** - Turbopack en desarrollo local
+- ✅ **Testing aislado** - Puerto 9003 para pruebas en VPS
+- ✅ **Logs separados** - Debug sin contaminar logs producción
+
+#### **Operaciones**
+- ✅ **Cambio fácil** - Un comando para cambiar entornos
+- ✅ **Estado claro** - Visualización de qué está activo
+- ✅ **Rollback rápido** - Backups automáticos pre-deploy
+- ✅ **Monitoreo separado** - Métricas por entorno
+
+### Migración Completada
+
+#### **Estado Antes**
+- ❌ Desarrollo directo en producción
+- ❌ Una sola configuración para todo
+- ❌ Riesgo de downtime por cambios
+- ❌ Logs mezclados
+
+#### **Estado Después**
+- ✅ **Producción estable** en puerto 9002 (rama `production-stable`)
+- ✅ **Desarrollo separado** en puerto 9003 (rama `feature/reportes-administrativos`)
+- ✅ **Configuración local** lista (puerto 3000)
+- ✅ **Deploy controlado** con verificaciones automáticas
+
+### Próximos Pasos Recomendados
+
+1. **Usar desarrollo local** para nuevas características
+2. **Separar base de datos** desarrollo vs producción  
+3. **Implementar CI/CD** con GitHub Actions
+4. **Testing automatizado** en pipeline de deploy
+
+**El sistema de desarrollo está ahora completamente organizado y separado de producción.**
+

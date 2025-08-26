@@ -435,3 +435,66 @@ cd "$PROJECT_DIR"
 
 # Run main function
 main "$@"
+
+# =====================================
+# PRODUCTION DEPLOY FUNCTIONS 
+# =====================================
+
+production_deploy() {
+    log "Iniciando deploy de producción desde rama production-stable..."
+    
+    # Verificar que estamos en la rama correcta
+    current_branch=$(git branch --show-current)
+    if [ "$current_branch" != "production-stable" ]; then
+        error "Deploy de producción solo permitido desde rama 'production-stable'"
+        error "Rama actual: $current_branch"
+        exit 1
+    fi
+    
+    # Backup del estado actual
+    log "Creando backup pre-deploy..."
+    backup_dir="backups/pre-deploy-$(date +%Y%m%d_%H%M%S)"
+    mkdir -p "$backup_dir"
+    
+    # Backup de archivos críticos
+    cp -r .next "$backup_dir/" 2>/dev/null || true
+    cp package.json "$backup_dir/"
+    cp .env "$backup_dir/"
+    
+    # Pull de cambios
+    log "Actualizando código desde repositorio..."
+    git pull origin production-stable
+    
+    # Build de producción
+    log "Ejecutando build de producción..."
+    npm run build
+    
+    # Restart del servicio
+    log "Reiniciando servicio de producción..."
+    pm2 restart dashboard-monitor
+    
+    # Health check
+    log "Ejecutando verificación de salud..."
+    ./manage-dashboard-monitor.sh health
+    
+    if [ $? -eq 0 ]; then
+        log "✅ Deploy de producción completado exitosamente"
+    else
+        error "❌ Deploy falló - revisar logs"
+        exit 1
+    fi
+}
+
+development_mode() {
+    log "Activando modo de desarrollo..."
+    
+    # Cambiar a rama de desarrollo
+    git checkout feature/reportes-administrativos
+    
+    # Usar configuración de desarrollo
+    log "Iniciando servidor de desarrollo..."
+    pm2 start ecosystem.dev.config.js
+    
+    log "✅ Modo de desarrollo activado en puerto 9002"
+}
+
