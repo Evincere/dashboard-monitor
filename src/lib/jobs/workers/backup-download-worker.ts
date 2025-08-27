@@ -3,7 +3,7 @@ import { updateJob } from '../queue/manager';
 
 // Import existing backup functionality
 const BACKUP_VOLUME_PATH = process.env.NODE_ENV === 'production' 
-  ? '/var/lib/docker/volumes/mpd_concursos_backup_data_prod/_data'
+  ? '/opt/mpd-monitor/backups' 
   : './database/backups';
 const DOCUMENTS_BASE_PATH = process.env.NODE_ENV === 'production'
   ? '/var/lib/docker/volumes/mpd_concursos_storage_data_prod/_data'
