@@ -990,3 +990,258 @@ pm2 logs dashboard-monitor | grep -i cache
 
 **El problema del sistema de cache duplicado ha sido completamente resuelto y documentado.**
 
+
+## INTEGRACIÓN BACKUPS AUTOMÁTICOS COMPLETADA - 27 de Agosto, 2025
+
+### Fecha de Implementación: 27 de Agosto, 2025 - 22:36 UTC
+
+### Unificación del Sistema de Backups
+Se ha integrado exitosamente el **sistema de backups automáticos** existente con la interfaz del dashboard-monitor, eliminando la desconexión entre ambos sistemas.
+
+#### 🔧 Arquitectura Unificada Implementada
+
+##### Antes de la Integración (Desconectado)
+```bash
+# Dashboard UI (aislado)
+/home/semper/dashboard-monitor/database/backups/  ← Solo backups manuales
+
+# Sistema automático (aislado)  
+/opt/mpd-monitor/backups/                         ← Solo backups automáticos
+```
+
+##### Después de la Integración (Unificado)
+```bash
+# Sistema unificado en producción
+BACKUP_VOLUME_PATH = '/opt/mpd-monitor/backups'   ← Directorio unificado
+
+# Contenido unificado:
+- db_backup_YYYYMMDD_HHMMSS.sql.gz               ← Backups automáticos BD
+- files_backup_YYYYMMDD_HHMMSS.tar.gz            ← Backups automáticos archivos  
+- backup_report_YYYYMMDD_HHMMSS.txt              ← Reportes automáticos
+- [backup_name]_YYYY-MM-DDTHH-MM-SS-sssZ.sql     ← Backups manuales del dashboard
+```
+
+#### 🚀 Nuevas Funcionalidades Implementadas
+
+##### 1. Auto-Detección de Backups Automáticos
+```typescript
+// src/lib/auto-backup-detection.ts
+detectAndRegisterAutoBackups(backupDir, metadataFile)
+```
+
+**Funcionalidades**:
+- ✅ **Detección automática** de backups de cron job existentes
+- ✅ **Registro en metadata** con información completa
+- ✅ **Parsing de reportes** para obtener duración y detalles
+- ✅ **Integración transparente** con API existente
+
+##### 2. API de Gestión de Backups Automáticos
+```bash
+# Nueva API para gestión de cron jobs
+GET  /api/backups/schedule      # Estado y configuración del cron job
+POST /api/backups/schedule      # Habilitar/deshabilitar/configurar backups automáticos
+```
+
+**Respuesta de ejemplo**:
+```json
+{
+  "success": true,
+  "data": {
+    "isActive": true,
+    "scheduleConfig": {
+      "expression": "0 2 * * *",
+      "description": "Diariamente a las 2:00"
+    },
+    "autoBackupStats": {
+      "totalSize": "3.5G",
+      "count": 3,
+      "lastBackupDate": "2025-08-27"
+    },
+    "recentLogs": [...],
+    "nextExecution": "2025-08-28T05:00:00.000Z"
+  }
+}
+```
+
+##### 3. Visualización Unificada en Dashboard
+**URL**: `https://vps-4778464-x.dattaweb.com/dashboard-monitor/backups`
+
+El dashboard ahora muestra:
+- ✅ **Backups automáticos** detectados automáticamente  
+- ✅ **Backups manuales** creados desde la interfaz
+- ✅ **Información completa** de cada backup (tamaño real, duración, tipos de documentos)
+- ✅ **Estado del cron job** y próxima ejecución
+
+#### 📊 Datos de Implementación Verificados
+
+##### Backups Automáticos Detectados
+```json
+[
+  {
+    "id": "auto_backup_20250827_020001",
+    "name": "Backup Automático 20250827 020001", 
+    "description": "Backup automático diario (179s)",
+    "size": "1.13 GB",
+    "sizeBytes": 1214033867,
+    "type": "full",
+    "includesDocuments": true,
+    "documentTypes": ["documents", "cvDocuments", "profileImages"]
+  },
+  {
+    "id": "auto_backup_20250826_020001", 
+    "size": "1.14 GB",
+    "description": "Backup automático diario (158s)"
+  },
+  {
+    "id": "auto_backup_20250825_020001",
+    "size": "1.14 GB", 
+    "description": "Backup automático diario (132s)"
+  }
+]
+```
+
+##### Configuración del Cron Job Detectada
+```bash
+# Cron job activo
+0 2 * * * /opt/mpd-monitor/backup-complete.sh >> /var/log/mpd-backup.log 2>&1
+
+# Próxima ejecución: 2025-08-28T05:00:00.000Z
+# Estadísticas: 3 backups, 3.5GB total
+```
+
+#### 🔄 Archivos Modificados
+
+##### APIs Actualizadas
+```bash
+src/app/api/backups/route.ts                    # API principal unificada  
+src/app/api/backups/download/route.ts           # API de descarga actualizada
+src/lib/jobs/workers/backup-download-worker.ts  # Worker actualizado
+```
+
+##### Nuevos Archivos
+```bash
+src/app/api/backups/schedule/route.ts           # Gestión de cron jobs
+src/lib/auto-backup-detection.ts               # Auto-detección de backups
+```
+
+##### Archivos de Respaldo Creados
+```bash
+src/app/api/backups/route.ts.backup.before_unification_*
+src/app/api/backups/download/route.ts.backup.before_unification_*  
+src/lib/jobs/workers/backup-download-worker.ts.backup.before_unification_*
+```
+
+#### ✅ Pruebas de Validación Exitosas
+
+##### 1. Build y Compilación
+```bash
+npm run build  # ✅ Exitoso sin errores
+pm2 reload dashboard-monitor  # ✅ Desplegado correctamente
+```
+
+##### 2. API de Backups Unificada
+```bash
+curl "http://localhost:9002/dashboard-monitor/api/backups"
+# ✅ Detecta automáticamente 3 backups automáticos + backups manuales existentes
+# ✅ Total: 6 backups mostrados en interfaz unificada
+```
+
+##### 3. API de Gestión de Cron Jobs
+```bash
+curl "http://localhost:9002/dashboard-monitor/api/backups/schedule" 
+# ✅ Detecta cron job activo: "0 2 * * *" 
+# ✅ Muestra logs recientes y próxima ejecución
+# ✅ Estadísticas precisas: 3.5GB, 3 backups
+```
+
+##### 4. Funcionalidad de Auto-Detección
+```bash
+# Al hacer GET a /api/backups, automáticamente:
+# ✅ Registra auto_backup_20250825_020001  
+# ✅ Registra auto_backup_20250826_020001
+# ✅ Registra auto_backup_20250827_020001
+# ✅ Actualiza metadata con información completa
+```
+
+#### 🎯 Beneficios Obtenidos
+
+##### Operacionales
+- ✅ **Visibilidad completa**: Todos los backups en una sola interfaz
+- ✅ **Gestión centralizada**: Control de backups automáticos desde dashboard  
+- ✅ **Información detallada**: Tamaños reales, duración, tipos de documentos
+- ✅ **Monitoreo en tiempo real**: Logs y estado del cron job
+
+##### Técnicos
+- ✅ **Eliminación de duplicación**: Un solo sistema de gestión de backups
+- ✅ **Auto-sincronización**: Detección automática de nuevos backups
+- ✅ **Consistencia**: Mismo directorio para todos los backups en producción
+- ✅ **Escalabilidad**: Patrón reutilizable para otros sistemas automáticos
+
+##### Administrativos
+- ✅ **Reducción de complejidad**: No más sistemas separados para administrar
+- ✅ **Mayor confiabilidad**: Visibilidad completa del sistema de respaldos
+- ✅ **Facilidad de uso**: Una sola URL para gestión completa de backups
+
+#### 📋 Comandos de Verificación para Troubleshooting
+
+##### Verificar Estado del Sistema
+```bash
+# Estado del dashboard
+pm2 status dashboard-monitor
+
+# API de backups unificada
+curl -s "http://localhost:9002/dashboard-monitor/api/backups" | jq '.total'
+
+# Gestión de backups automáticos  
+curl -s "http://localhost:9002/dashboard-monitor/api/backups/schedule" | jq '.data.isActive'
+```
+
+##### Verificar Directorio Unificado
+```bash
+# Contenido del directorio unificado
+ls -la /opt/mpd-monitor/backups/
+
+# Metadata actualizado
+cat /opt/mpd-monitor/backups/backup_metadata.json | jq '.[] | select(.id | startswith("auto_backup"))'
+```
+
+##### Verificar Cron Job
+```bash
+# Estado del cron job
+crontab -l | grep backup-complete.sh
+
+# Logs recientes
+tail -10 /var/log/mpd-backup.log
+```
+
+#### 🔧 Configuración de Producción Final
+
+##### Variables de Entorno Actualizadas
+```javascript
+// Producción - directorio unificado
+const BACKUP_VOLUME_PATH = '/opt/mpd-monitor/backups'
+const DOCUMENTS_BASE_PATH = '/var/lib/docker/volumes/mpd_concursos_storage_data_prod/_data'
+
+// Desarrollo - separado para no interferir
+const BACKUP_VOLUME_PATH = './database/backups'  
+```
+
+##### URLs de Acceso
+```bash
+# Dashboard de backups unificado
+https://vps-4778464-x.dattaweb.com/dashboard-monitor/backups
+
+# APIs disponibles
+https://vps-4778464-x.dattaweb.com/dashboard-monitor/api/backups          # Listado unificado
+https://vps-4778464-x.dattaweb.com/dashboard-monitor/api/backups/schedule # Gestión automáticos
+```
+
+### Estado Final
+- ✅ **Sistema de backups 100% integrado y unificado**
+- ✅ **Dashboard operativo** con gestión completa de backups
+- ✅ **Auto-detección funcionando** para futuros backups automáticos
+- ✅ **APIs robustas** para gestión programática
+- ✅ **Documentación completa** para mantenimiento futuro
+
+**La integración del sistema de backups automáticos ha sido implementada exitosamente, eliminando la desconexión entre sistemas y proporcionando una gestión unificada y completa de todos los backups del sistema.**
+
