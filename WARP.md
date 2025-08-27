@@ -682,3 +682,259 @@ npm run build
 
 **Estado**: ✅ **COMPLETAMENTE RESUELTO** - Sistema listo para desarrollo y producción.
 
+
+
+## PROBLEMA RESUELTO: Sistema de Cache Duplicado en Gestión de Usuarios
+
+### Fecha de Resolución: 26 de Agosto, 2025 - 23:24 UTC
+
+### Problema Identificado
+Los botones de acción en el listado de usuarios (desactivar, bloquear, activar) mostraban mensajes de éxito pero **los cambios de estado no se reflejaban visualmente** en el frontend hasta recargar la página, aunque la base de datos sí se actualizaba correctamente.
+
+### Diagnóstico Realizado
+
+#### Síntomas Observados
+- ✅ **Base de datos se actualiza correctamente**: Los cambios de `user_entity.status` se persistían
+- ✅ **Endpoint PATCH funciona**: Devolvía mensajes como "User blocked successfully"
+- ❌ **Frontend no se actualiza**: El listado seguía mostrando el estado anterior
+- ❌ **Cache no se invalida**: Los datos en cache permanecían desactualizados
+
+#### Causa Raíz Identificada
+**Conflicto de sistemas de cache independientes y no sincronizados:**
+
+```typescript
+// PROBLEMA: Dos sistemas de cache separados
+// src/app/api/users/route.ts (listado de usuarios)
+const cache = new Map<string, CacheEntry>();
+function getCachedData(key: string) { /* ... */ }
+function setCachedData(key: string, data: any) { /* ... */ }
+
+// src/app/api/users/[id]/route.ts (acciones individuales)  
+const cache = new Map<string, any>();  // ← Instancia DIFERENTE
+function clearUserCache() { /* Solo limpia SU cache local */ }
+```
+
+**Resultado**: Al ejecutar una acción PATCH, se limpiaba el cache del endpoint `[id]` pero **NO** el cache del endpoint principal de listado, causando que los usuarios siguieran viendo datos desactualizados.
+
+### Solución Implementada
+
+#### 1. Sistema de Cache Unificado
+**Creación de módulo centralizado** `src/lib/cache.ts`:
+
+```typescript
+// Sistema unificado que comparten TODOS los endpoints
+interface CacheEntry {
+  data: any;
+  timestamp: number;
+}
+
+// Instancia ÚNICA compartida
+const cache = new Map<string, CacheEntry>();
+const CACHE_DURATION = 30 * 1000; // 30 segundos
+
+// API unificada
+export function getCachedData(key: string): any | null
+export function setCachedData(key: string, data: any): void  
+export function clearUserCache(): void // Limpia TODOS los cache de usuarios
+export function clearCacheByPattern(pattern: string): void
+export function getCacheStats() // Para monitoreo y debugging
+```
+
+#### 2. Actualización de Endpoints
+**Endpoints actualizados para usar cache unificado:**
+
+```typescript
+// src/app/api/users/route.ts - Listado de usuarios
+import { getCachedData, setCachedData, clearUserCache } from '@/lib/cache';
+
+// src/app/api/users/[id]/route.ts - Acciones individuales  
+import { clearUserCache } from '@/lib/cache';
+
+// Ahora AMBOS usan la misma instancia de cache
+```
+
+#### 3. Flujo de Invalidación Automática
+**Proceso corregido para actualizaciones en tiempo real:**
+
+```bash
+# Flujo anterior (PROBLEMÁTICO)
+1. Usuario hace clic en "Bloquear" 
+2. PATCH /api/users/[id] → Actualiza DB + Limpia cache local del [id]
+3. GET /api/users → Usa SU PROPIO cache (no invalidado) → Datos antiguos ❌
+
+# Flujo actual (SOLUCIONADO)  
+1. Usuario hace clic en "Bloquear"
+2. PATCH /api/users/[id] → Actualiza DB + clearUserCache() unificado ✅
+3. GET /api/users → Cache invalidado → Consulta DB → Datos actualizados ✅
+```
+
+### Archivos Modificados
+
+#### Nuevos Archivos
+- **`src/lib/cache.ts`** - Sistema de cache unificado centralizado
+
+#### Archivos Actualizados  
+- **`src/app/api/users/route.ts`** - Removido cache local, integrado cache unificado
+- **`src/app/api/users/[id]/route.ts`** - Removido cache local, integrado cache unificado
+
+### Funcionalidades del Sistema Unificado
+
+#### API de Cache Centralizada
+```typescript
+// Obtener datos del cache (con expiración automática)
+const data = getCachedData('users-search-admin-1-10');
+
+// Guardar datos en cache  
+setCachedData('users-search-admin-1-10', usersData);
+
+// Invalidar cache de usuarios específicamente
+clearUserCache(); // Limpia todos los 'users-*' y 'dashboard-users'
+
+// Invalidar por patrón
+clearCacheByPattern('users-'); 
+
+// Monitoreo y debugging
+const stats = getCacheStats();
+// → { totalEntries: 5, validEntries: 3, expiredEntries: 2, cacheDurationMs: 30000 }
+```
+
+#### Estados de Usuario Documentados
+Aprovechando la corrección, se documentaron los estados oficiales del backend principal:
+
+```typescript
+// Estados disponibles (basados en backend Spring Boot)
+enum UserStatus {
+  ACTIVE,    // ✅ Usuario activo - acceso completo
+  INACTIVE,  // 🟡 Desactivado temporalmente - "contacte admin para activar"  
+  BLOCKED,   // 🔴 Bloqueado por violaciones - "cuenta bloqueada"
+  LOCKED,    // 🔒 Bloqueado temporalmente - por seguridad
+  EXPIRED    // 📅 Cuenta vencida - requiere renovación
+}
+
+// Diferencias clave en autenticación:
+// INACTIVE → DisabledException (situación administrativa)
+// BLOCKED  → LockedException (situación disciplinaria)
+```
+
+### Pruebas de Validación Exitosas
+
+#### Flujo Completo Verificado
+```bash
+# ✅ Test 1: Bloquear usuario  
+curl -X PATCH "/api/users/3391B8C8D55341FEB4F527857AA16D27" -d '{"action": "block"}'
+→ "User blocked successfully"
+
+curl "/api/users?search=testusuario" | jq '.users[0].status'  
+→ "BLOCKED" ✅ (Actualizado inmediatamente)
+
+# ✅ Test 2: Activar usuario
+curl -X PATCH "/api/users/3391B8C8D55341FEB4F527857AA16D27" -d '{"action": "activate"}'  
+→ "User activated successfully"
+
+curl "/api/users?search=testusuario" | jq '.users[0].status'
+→ "ACTIVE" ✅ (Actualizado inmediatamente)
+
+# ✅ Test 3: Desactivar usuario
+curl -X PATCH "/api/users/3391B8C8D55341FEB4F527857AA16D27" -d '{"action": "deactivate"}'
+→ "User deactivated successfully"  
+
+curl "/api/users?search=testusuario" | jq '.users[0].status'
+→ "INACTIVE" ✅ (Actualizado inmediatamente)
+```
+
+#### Verificación en Base de Datos
+```sql
+-- Estado se persiste correctamente en MySQL
+SELECT HEX(id) as id, CONCAT(first_name, ' ', last_name) as name, 
+       username, status 
+FROM user_entity 
+WHERE id = UNHEX('3391B8C8D55341FEB4F527857AA16D27');
+
+-- ✅ Resultado: status actualizado correctamente en tiempo real
+```
+
+### Arquitectura Final del Sistema
+
+```mermaid
+graph TD
+    A[Frontend - Botones de Acción] --> B[PATCH /api/users/[id]]
+    A --> C[GET /api/users - Listado]
+    
+    B --> D[1. Actualizar user_entity.status]
+    B --> E[2. clearUserCache() - Unificado]
+    
+    C --> F{Cache válido?}
+    F -->|Sí| G[Retornar datos en cache]
+    F -->|No| H[Consultar DB + setCachedData()]
+    
+    E --> I[src/lib/cache.ts - Instancia ÚNICA]
+    H --> I
+    G --> I
+    
+    style I fill:#e1f5fe,stroke:#01579b,stroke-width:3px
+    style E fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px  
+    style D fill:#c8e6c9,stroke:#2e7d32,stroke-width:2px
+```
+
+### Beneficios de la Solución
+
+#### Funcionales
+- ✅ **Tiempo Real**: Cambios visibles instantáneamente sin recargar página
+- ✅ **Consistencia**: Eliminación completa de desincronización de cache
+- ✅ **Fiabilidad**: Los usuarios ven siempre el estado correcto y actual
+
+#### Técnicos  
+- ✅ **Mantenibilidad**: Un solo sistema de cache fácil de mantener
+- ✅ **Escalabilidad**: Patrón reutilizable para otros módulos del sistema
+- ✅ **Debugging**: Función `getCacheStats()` para monitoreo y troubleshooting
+- ✅ **Performance**: Cache inteligente de 30 segundos optimiza consultas frecuentes
+
+#### Operacionales
+- ✅ **Experiencia de Usuario**: Eliminación de confusión por estados desactualizados
+- ✅ **Administración**: Los administradores ven el efecto inmediato de sus acciones
+- ✅ **Soporte**: Reducción de tickets por "el cambio no se aplicó"
+
+### Lecciones Aprendidas
+
+#### Para Futuras Implementaciones
+1. **Cache Centralizado**: Siempre usar un sistema de cache unificado desde el inicio
+2. **Validación de Invalidación**: Verificar que ALL los endpoints que consumen datos compartan el cache
+3. **Monitoreo**: Implementar funciones de debugging para cache desde el diseño inicial
+4. **Documentación**: Mantener registro de qué endpoints comparten qué cache
+
+#### Patrón Recomendado para Nuevos Módulos
+```typescript
+// ✅ CORRECTO: Importar cache unificado
+import { getCachedData, setCachedData, clearModuleCache } from '@/lib/cache';
+
+// ❌ EVITAR: Crear cache local en cada endpoint  
+const localCache = new Map(); // ← No hacer esto
+```
+
+### Estado Final
+- ✅ **Sistema de cache unificado** funcionando correctamente
+- ✅ **Botones de acción de usuarios** con actualización en tiempo real  
+- ✅ **Base de datos sincronizada** con frontend
+- ✅ **API robusta** con invalidación automática de cache
+- ✅ **Documentación actualizada** para futuras referencias
+- ✅ **Estados de usuario clarificados** según backend principal
+
+### Comandos de Verificación para Troubleshooting Futuro
+
+```bash
+# Verificar estado del cache (desde dentro del contenedor)
+curl -s "http://localhost:9002/dashboard-monitor/api/users?search=test" | jq '.cached'
+
+# Verificar que los cambios se persisten en DB
+docker exec -it mpd-concursos-mysql mysql -u root -proot1234 -e \
+  "USE mpd_concursos; SELECT status FROM user_entity WHERE username='testusuario2025';"
+
+# Test completo del flujo
+./manage-dashboard-monitor.sh health  # Verificar que todo funciona
+
+# Monitoreo de logs para cache
+pm2 logs dashboard-monitor | grep -i cache
+```
+
+**El problema del sistema de cache duplicado ha sido completamente resuelto y documentado.**
+

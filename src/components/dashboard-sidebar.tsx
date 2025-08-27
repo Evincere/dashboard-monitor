@@ -34,7 +34,10 @@ import {
   SidebarMenuButton,
   SidebarFooter,
 } from '@/components/ui/sidebar';
+import { Button } from '@/components/ui/button';
+import { useSidebarStore } from '@/stores/use-sidebar-store';
 import { cn } from '@/lib/utils';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 const menuItems = [
   {
@@ -102,16 +105,26 @@ const settingsItem = {
 
 export function DashboardSidebar() {
   const pathname = usePathname();
+  const { isCollapsed, toggle } = useSidebarStore();
 
   return (
-    <Sidebar>
+    <Sidebar className={cn("transition-all duration-300", isCollapsed ? "w-[60px]" : "w-[240px]")}>
       <SidebarHeader>
-        <div className="flex items-center gap-2 p-2">
-          <div className="p-2 rounded-lg bg-primary/20 text-primary">
-            <Flame className="w-6 h-6" />
-          </div>
-          <h1 className="text-xl font-semibold font-headline">MPD Insights</h1>
+        <div className={cn(
+          "flex items-center gap-2",
+          isCollapsed && "justify-center"
+        )}>
+          <Flame className="w-6 h-6 flex-shrink-0" />
+          {!isCollapsed && <span className="text-xl font-bold whitespace-nowrap">MPD Insights</span>}
         </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="absolute right-2 top-3 opacity-50 hover:opacity-100"
+          onClick={toggle}
+        >
+          {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+        </Button>
       </SidebarHeader>
       <SidebarContent className="p-2">
         <SidebarMenu>
@@ -121,9 +134,10 @@ export function DashboardSidebar() {
                 <SidebarMenuButton
                   isActive={pathname === item.href}
                   className="font-medium"
+                  title={isCollapsed ? item.label : undefined}
                 >
-                  <item.icon />
-                  <span>{item.label}</span>
+                  <item.icon className="w-5 h-5 flex-shrink-0" />
+                  {!isCollapsed && <span className="truncate">{item.label}</span>}
                 </SidebarMenuButton>
               </Link>
             </SidebarMenuItem>
@@ -137,9 +151,10 @@ export function DashboardSidebar() {
               <SidebarMenuButton
                 isActive={pathname === settingsItem.href}
                 className="font-medium"
+                title={isCollapsed ? settingsItem.label : undefined}
               >
-                <settingsItem.icon />
-                <span>{settingsItem.label}</span>
+                <settingsItem.icon className="w-5 h-5 flex-shrink-0" />
+                {!isCollapsed && <span className="truncate">{settingsItem.label}</span>}
               </SidebarMenuButton>
             </Link>
           </SidebarMenuItem>
