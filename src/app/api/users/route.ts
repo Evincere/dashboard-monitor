@@ -1,6 +1,7 @@
 // src/app/api/users/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { getDatabaseConnection } from '@/services/database';
+import { getCachedData, setCachedData, clearUserCache } from '@/lib/cache';
 import type { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { UserCreateSchema, buildUserQuery, formatUserForDisplay, type UserFilters } from '@/lib/user-validation';
 import { withAuth, withAdmin, withSecurityHeaders, withCORS, type AuthenticatedRequest } from '@/lib/middleware';
@@ -10,38 +11,6 @@ import { hashPassword } from '@/lib/auth';
 import { maskSensitiveData } from '@/lib/encryption';
 import { z } from 'zod';
 
-// Simple in-memory cache
-interface CacheEntry {
-  data: any;
-  timestamp: number;
-}
-
-const cache = new Map<string, CacheEntry>();
-const CACHE_DURATION = 30 * 1000; // 30 seconds
-
-function getCachedData(key: string): any | null {
-  const entry = cache.get(key);
-  if (entry && Date.now() - entry.timestamp < CACHE_DURATION) {
-    return entry.data;
-  }
-  cache.delete(key);
-  return null;
-}
-
-function setCachedData(key: string, data: any): void {
-  cache.set(key, {
-    data,
-    timestamp: Date.now()
-  });
-}
-
-function clearUserCache(): void {
-  const keysToDelete = Array.from(cache.keys()).filter(key => key.startsWith('users-'));
-  keysToDelete.forEach(key => cache.delete(key));
-  cache.delete('dashboard-users');
-}
-
-// GET - Fetch users with advanced search and filtering
 async function getUsersHandler(request: AuthenticatedRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -302,8 +271,14 @@ async function simpleGetUsers(request: NextRequest) {
       SELECT 
         HEX(id) as id,
         CONCAT(first_name, ' ', last_name) as name,
+        first_name as firstName,
+        last_name as lastName,
         username,
         email,
+        dni,
+        cuit,
+        telefono,
+        municipality as localidad,
         'ROLE_USER' as role,
         status,
         created_at as registrationDate,

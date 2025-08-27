@@ -190,3 +190,5 @@ tiempo-*
 test-results/
 coverage-report/
 
+# Environment files (added for security)
+.env
