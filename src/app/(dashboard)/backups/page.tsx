@@ -1,38 +1,31 @@
 'use client';
 
-import JobProgressModal from '@/components/jobs/JobProgressModal';
-import { initiateAsyncBackupDownload, triggerFileDownload } from '@/components/jobs/async-backup-handler';
-import { apiUrl } from '@/lib/utils';
-
 import { useState, useEffect } from 'react';
+import { cn, apiUrl } from '@/lib/utils';
+
+// UI Components
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogDescription, 
-  DialogFooter, 
-  DialogHeader, 
+
+// Dialog Components
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
   DialogTitle,
-  DialogTrigger 
+  DialogTrigger
 } from '@/components/ui/dialog';
-import { 
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
+
+// Dropdown Components
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,20 +34,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { 
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { 
-  Download, 
-  Trash2, 
-  RefreshCw, 
-  Plus, 
-  Database, 
+
+// Icons
+import {
+  Download,
+  Trash2,
+  RefreshCw,
+  Plus,
+  Database,
   FolderOpen,
   CheckCircle,
   XCircle,
@@ -66,6 +53,8 @@ import {
   Archive,
   Package
 } from 'lucide-react';
+
+// Hooks
 import { useToast } from '@/hooks/use-toast';
 
 interface BackupInfo {
@@ -81,11 +70,45 @@ interface BackupInfo {
   path: string;
 }
 
+interface DocumentTypeOption {
+  key: string;
+  label: string;
+  description: string;
+  estimatedSize: string;
+}
+
 interface CreateBackupForm {
   name: string;
   description: string;
   includeDocuments: boolean;
+  documentTypes: {
+    documents: boolean;
+    cvDocuments: boolean;
+    profileImages: boolean;
+  };
 }
+
+// Document type options with estimated sizes
+const DOCUMENT_TYPE_OPTIONS: DocumentTypeOption[] = [
+  {
+    key: 'documents',
+    label: 'Documentos de Postulación',
+    description: 'Documentos principales de las postulaciones (DNI, certificados, etc.)',
+    estimatedSize: '~1.1GB'
+  },
+  {
+    key: 'cvDocuments',
+    label: 'Currículums Vitae',
+    description: 'CVs y documentos profesionales',
+    estimatedSize: '~141MB'
+  },
+  {
+    key: 'profileImages',
+    label: 'Imágenes de Perfil',
+    description: 'Fotos de perfil y documentos visuales',
+    estimatedSize: '~1.6MB'
+  }
+];
 
 export default function BackupsPage() {
   const [backups, setBackups] = useState<BackupInfo[]>([]);
@@ -96,16 +119,18 @@ export default function BackupsPage() {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createForm, setCreateForm] = useState<CreateBackupForm>({
-
     name: '',
     description: '',
     includeDocuments: true,
+    documentTypes: {
+      documents: true,
+      cvDocuments: true,
+      profileImages: false
+    }
   });
   const { toast } = useToast();
 
   // Async download states
-  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
-  const [jobModalOpen, setJobModalOpen] = useState(false);
 
   useEffect(() => {
     fetchBackups();
@@ -151,6 +176,17 @@ export default function BackupsPage() {
       return;
     }
 
+    // Validate document types selection
+    if (createForm.includeDocuments && !Object.values(createForm.documentTypes).some(Boolean)) {
+      toast({
+        title: 'Error',
+        description: 'Debes seleccionar al menos un tipo de documento',
+        variant: 'destructive',
+        duration: 5000,
+      });
+      return;
+    }
+
     try {
       setCreating(true);
       const response = await fetch(apiUrl('backups'), {
@@ -170,7 +206,16 @@ export default function BackupsPage() {
           duration: 5000,
         });
         setCreateDialogOpen(false);
-        setCreateForm({ name: '', description: '', includeDocuments: true });
+        setCreateForm({
+          name: '',
+          description: '',
+          includeDocuments: true,
+          documentTypes: {
+            documents: true,
+            cvDocuments: true,
+            profileImages: false
+          }
+        });
         fetchBackups();
       } else {
         toast({
@@ -193,41 +238,43 @@ export default function BackupsPage() {
     }
   };
 
-  // New async download function
+  // Direct download function - Fixed for proper download
   const downloadBackup = async (backupId: string, backupName: string, downloadType: string = 'auto') => {
     try {
-      const jobId = await initiateAsyncBackupDownload(backupId, backupName, downloadType);
-      
-      setCurrentJobId(jobId);
-      setJobModalOpen(true);
+      setDownloading(backupId);
+
+      // Create download URL
+      const url = apiUrl(`backups/download?id=${backupId}&type=${downloadType}`);
+
+      // Create invisible download link
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${backupName}_${downloadType}_${new Date().toISOString().slice(0, 10)}.zip`;
+
+      // Trigger download
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
 
       toast({
-        title: 'Preparación iniciada',
-        description: `Iniciando preparación del backup: ${backupName}`,
+        title: 'Descarga iniciada',
+        description: `Descargando backup: ${backupName}`,
         duration: 3000,
       });
 
     } catch (error) {
-      console.error('Error initiating backup download:', error);
+      console.error('Error downloading backup:', error);
       toast({
         title: 'Error',
-        description: 'Error al iniciar la descarga del backup',
+        description: 'Error al descargar el backup',
         variant: 'destructive',
         duration: 5000,
       });
+    } finally {
+      setDownloading(null);
     }
   };
 
-  const handleJobDownload = (downloadUrl: string, fileName: string) => {
-    const fullUrl = apiUrl(downloadUrl.replace('/api/', ''));
-    triggerFileDownload(fullUrl, fileName);
-    
-    toast({
-      title: 'Descarga iniciada',
-      description: `Descargando: ${fileName}`,
-      duration: 3000,
-    });
-  };
 
   const restoreBackup = async (backupId: string) => {
     try {
@@ -336,366 +383,221 @@ export default function BackupsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Job Progress Modal */}
-      <JobProgressModal
-        jobId={currentJobId}
-        isOpen={jobModalOpen}
-        onClose={() => {
-          setJobModalOpen(false);
-          setCurrentJobId(null);
-        }}
-        onDownload={handleJobDownload}
-      />
-      <div className="flex items-center justify-between">
+    <div className="flex flex-col h-full p-4 md:p-8">
+      <header className="mb-8 flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Gestión de Backups</h1>
-          <p className="text-muted-foreground">
-            Administra backups de base de datos y documentos para el sistema MPD Concursos
+          <h1 className="text-3xl font-bold font-headline flex items-center gap-2">
+            <Database className="w-8 h-8 text-primary" />
+            Gestión de Backups
+          </h1>
+          <p className="text-muted-foreground mt-2">
+            Administra y gestiona las copias de seguridad del sistema.
           </p>
         </div>
         <div className="flex gap-2">
           <Button
+            onClick={() => fetchBackups()}
             variant="outline"
-            onClick={fetchBackups}
             disabled={loading}
           >
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={cn("w-4 h-4 mr-2", loading && "animate-spin")} />
             Actualizar
           </Button>
-          <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                Crear Backup
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Crear Nuevo Backup</DialogTitle>
-                <DialogDescription>
-                  Crea un nuevo backup de la base de datos y opcionalmente incluye documentos.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="name">Nombre del Backup</Label>
-                  <Input
-                    id="name"
-                    value={createForm.name}
-                    onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
-                    placeholder="Ingresa el nombre del backup"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="description">Descripción (Opcional)</Label>
-                  <Textarea
-                    id="description"
-                    value={createForm.description}
-                    onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
-                    placeholder="Ingresa la descripción del backup"
-                    rows={3}
-                  />
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="includeDocuments"
-                    checked={createForm.includeDocuments}
-                    onCheckedChange={(checked) => 
-                      setCreateForm({ ...createForm, includeDocuments: checked as boolean })
-                    }
-                  />
-                  <Label htmlFor="includeDocuments">Incluir documentos</Label>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => setCreateDialogOpen(false)}
-                  disabled={creating}
-                >
-                  Cancelar
-                </Button>
-                <Button onClick={createBackup} disabled={creating}>
-                  {creating ? (
-                    <>
-                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                      Creando...
-                    </>
-                  ) : (
-                    <>
-                      <Database className="h-4 w-4 mr-2" />
-                      Crear Backup
-                    </>
-                  )}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <Button onClick={() => setCreateDialogOpen(true)}>
+            <Plus className="w-4 h-4 mr-2" />
+            Crear Backup
+          </Button>
         </div>
-      </div>
+      </header>
 
-      {/* Backup Statistics */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Backups</CardTitle>
-            <Database className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{backups.length}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tamaño Total</CardTitle>
-            <FolderOpen className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {backups.reduce((total, backup) => total + backup.sizeBytes, 0) > 0
-                ? (backups.reduce((total, backup) => total + backup.sizeBytes, 0) / (1024 * 1024 * 1024)).toFixed(2) + ' GB'
-                : '0.00 GB'
-              }
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Backups Verificados</CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {backups.filter(b => b.integrity === 'verified').length}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Backups Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Historial de Backups</CardTitle>
-          <CardDescription>
-            Ver y administrar todos los backups del sistema almacenados en mpd_concursos_backup_data_prod
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="flex items-center justify-center py-8">
-              <RefreshCw className="h-6 w-6 animate-spin mr-2" />
-              Cargando backups...
+      <Card className="bg-card/60 backdrop-blur-sm border-white/10 shadow-lg flex-grow">
+        <CardContent className="p-6">
+          {loading && backups.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8">
+              <RefreshCw className="w-8 h-8 text-muted-foreground animate-spin mb-4" />
+              <p className="text-muted-foreground">Cargando backups...</p>
             </div>
           ) : backups.length === 0 ? (
-            <div className="text-center py-8">
-              <Database className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No se encontraron backups</h3>
-              <p className="text-muted-foreground mb-4">
-                Crea tu primer backup para comenzar
-              </p>
-              <Button onClick={() => setCreateDialogOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Crear Backup
-              </Button>
+            <div className="flex flex-col items-center justify-center py-8">
+              <Database className="w-8 h-8 text-muted-foreground mb-4" />
+              <p className="text-muted-foreground">No hay backups disponibles.</p>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nombre</TableHead>
-                  <TableHead>Fecha</TableHead>
-                  <TableHead>Tamaño</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Integridad</TableHead>
-                  <TableHead>Incluye Docs</TableHead>
-                  <TableHead>Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {backups.map((backup) => (
-                  <TableRow key={backup.id}>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">{backup.name}</div>
+            <div className="relative overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nombre</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Fecha</TableHead>
+                    <TableHead>Tamaño</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead>Documentos</TableHead>
+                    <TableHead className="w-[100px]">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {backups.map((backup) => (
+                    <TableRow key={backup.id}>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          {backup.type === 'full' ? (
+                            <Package className="w-4 h-4 text-muted-foreground" />
+                          ) : (
+                            <Archive className="w-4 h-4 text-muted-foreground" />
+                          )}
+                          {backup.name}
+                        </div>
                         {backup.description && (
-                          <div className="text-sm text-muted-foreground">
+                          <span className="text-xs text-muted-foreground block mt-1">
                             {backup.description}
-                          </div>
+                          </span>
                         )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {new Date(backup.date).toLocaleString('es-ES')}
-                    </TableCell>
-                    <TableCell>{backup.size}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{backup.type === 'full' ? 'Completo' : 'Incremental'}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        {getIntegrityIcon(backup.integrity)}
-                        {getIntegrityBadge(backup.integrity)}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {backup.includesDocuments ? (
-                        <CheckCircle className="h-4 w-4 text-green-500" />
-                      ) : (
-                        <XCircle className="h-4 w-4 text-gray-400" />
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        {/* DOWNLOAD DROPDOWN - Enhanced functionality */}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">
+                          {backup.type === 'full' ? 'Completo' : 'Incremental'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="font-mono">
+                        {new Date(backup.date).toLocaleString()}
+                      </TableCell>
+                      <TableCell className="font-mono">{backup.size}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {getIntegrityIcon(backup.integrity)}
+                          {getIntegrityBadge(backup.integrity)}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {backup.includesDocuments ? (
+                          <Badge variant="default" className="bg-blue-100 text-blue-800">
+                            Incluidos
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary">No incluidos</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled={backup.integrity !== 'verified' || downloading === backup.id}
-                              title="Opciones de descarga"
-                            >
-                              {downloading === backup.id ? (
-                                <RefreshCw className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <>
-                                  <Download className="h-4 w-4" />
-                                  <ChevronDown className="h-3 w-3 ml-1" />
-                                </>
-                              )}
+                            <Button variant="ghost" size="icon">
+                              <ChevronDown className="w-4 h-4" />
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>Opciones de Descarga</DropdownMenuLabel>
+                            <DropdownMenuLabel>Acciones</DropdownMenuLabel>
                             <DropdownMenuSeparator />
-                            
-                            {backup.includesDocuments && (
-                              <DropdownMenuItem 
-                                onClick={() => downloadBackup(backup.id, backup.name, 'combined')}
-                              >
-                                <Package className="h-4 w-4 mr-2" />
-                                Backup Completo (BD + Docs)
-                              </DropdownMenuItem>
-                            )}
-                            
-                            <DropdownMenuItem 
-                              onClick={() => downloadBackup(backup.id, backup.name, 'database')}
-                            >
-                              <FileText className="h-4 w-4 mr-2" />
-                              Solo Base de Datos
+                            <DropdownMenuItem onClick={() => downloadBackup(backup.id, backup.name)}>
+                              <Download className="w-4 h-4 mr-2" />
+                              Descargar
                             </DropdownMenuItem>
-                            
-                            {backup.includesDocuments && (
-                              <DropdownMenuItem 
-                                onClick={() => downloadBackup(backup.id, backup.name, 'documents')}
-                              >
-                                <Archive className="h-4 w-4 mr-2" />
-                                Solo Documentos
-                              </DropdownMenuItem>
-                            )}
-                            
-                            {!backup.includesDocuments && (
-                              <DropdownMenuItem 
-                                disabled
-                                className="text-muted-foreground"
-                              >
-                                <Archive className="h-4 w-4 mr-2" />
-                                No incluye documentos
-                              </DropdownMenuItem>
-                            )}
+                            <DropdownMenuItem onClick={() => restoreBackup(backup.id)}>
+                              <RotateCcw className="w-4 h-4 mr-2" />
+                              Restaurar
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => deleteBackup(backup.id)}
+                              className="text-red-600"
+                            >
+                              <Trash2 className="w-4 h-4 mr-2" />
+                              Eliminar
+                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
-
-                        {/* RESTORE BUTTON - Separated functionality */}
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled={backup.integrity !== 'verified' || restoring === backup.id}
-                              title="Restaurar backup"
-                            >
-                              {restoring === backup.id ? (
-                                <RefreshCw className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <RotateCcw className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Restaurar Backup</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                ¿Estás seguro de que quieres restaurar este backup? Esta acción reemplazará
-                                la base de datos actual con los datos del backup y no se puede deshacer.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => restoreBackup(backup.id)}
-                                className="bg-red-600 hover:bg-red-700"
-                              >
-                                Restaurar Backup
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-
-                        {/* DELETE BUTTON */}
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled={deleting === backup.id}
-                              title="Eliminar backup"
-                            >
-                              {deleting === backup.id ? (
-                                <RefreshCw className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <Trash2 className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Eliminar Backup</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                ¿Estás seguro de que quieres eliminar este backup? Esta acción no se puede deshacer.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => deleteBackup(backup.id)}
-                                className="bg-red-600 hover:bg-red-700"
-                              >
-                                Eliminar
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Important Notice */}
-      <Alert>
-        <AlertTriangle className="h-4 w-4" />
-        <AlertDescription>
-          <strong>Importante:</strong> Las operaciones de backup pueden tomar varios minutos en completarse dependiendo del tamaño de la base de datos. 
-          Los backups de documentos se almacenan por separado y requieren espacio de almacenamiento adicional. Siempre verifica la integridad del backup 
-          antes de confiar en ellos para propósitos de recuperación.
-        </AlertDescription>
-      </Alert>
+      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Crear Nuevo Backup</DialogTitle>
+            <DialogDescription>
+              Configura los detalles del nuevo backup a crear.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="name">Nombre</Label>
+              <Input
+                id="name"
+                placeholder="Nombre del backup"
+                value={createForm.name}
+                onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="description">Descripción (opcional)</Label>
+              <Textarea
+                id="description"
+                placeholder="Descripción o notas adicionales"
+                value={createForm.description}
+                onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="includeDocuments"
+                checked={createForm.includeDocuments}
+                onCheckedChange={(checked) =>
+                  setCreateForm({ ...createForm, includeDocuments: checked as boolean })
+                }
+              />
+              <Label htmlFor="includeDocuments">Incluir documentos</Label>
+            </div>
+            {createForm.includeDocuments && (
+              <div className="border rounded-lg p-4 space-y-4">
+                <h4 className="text-sm font-medium">Tipos de documentos a incluir:</h4>
+                {DOCUMENT_TYPE_OPTIONS.map((option) => (
+                  <div key={option.key} className="flex items-start gap-2">
+                    <Checkbox
+                      id={option.key}
+                      checked={createForm.documentTypes[option.key as keyof typeof createForm.documentTypes]}
+                      onCheckedChange={(checked) =>
+                        setCreateForm({
+                          ...createForm,
+                          documentTypes: {
+                            ...createForm.documentTypes,
+                            [option.key]: checked as boolean
+                          }
+                        })
+                      }
+                    />
+                    <div className="grid gap-1.5 leading-none">
+                      <Label htmlFor={option.key} className="text-sm">
+                        {option.label}
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          {option.estimatedSize}
+                        </span>
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        {option.description}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={createBackup} disabled={creating}>
+              {creating && <RefreshCw className="w-4 h-4 mr-2 animate-spin" />}
+              Crear Backup
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
