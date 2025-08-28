@@ -11,7 +11,7 @@
 
 import {ai} from '@/ai/unified';
 import { executeQuery, getDbSchema } from '@/services/database';
-import {z} from 'genkit';
+import {z} from 'zod';
 
 const GenerateSqlQueryInputSchema = z.object({
   question: z.string().describe('The natural language question to translate into a SQL query.'),

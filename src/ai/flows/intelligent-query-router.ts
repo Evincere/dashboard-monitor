@@ -9,7 +9,7 @@
 
 import { ai } from '@/ai/unified';
 import { executeQuery, getDbSchema } from '@/services/database';
-import { z } from 'genkit';
+import { z } from 'zod';
 import { summarizeQueryResults } from './summarize-query-results';
 import { 
   specializedPromptOrchestrator,

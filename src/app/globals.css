@@ -71,3 +71,43 @@ body {
     }
   }
 }
+
+/* Custom styles for sidebar trigger fix */
+[data-sidebar="trigger"] {
+  position: relative !important;
+  z-index: 100 !important;
+}
+
+/* Ensure the sidebar header has proper positioning context */
+[data-sidebar="header"] {
+  position: relative;
+}
+
+/* Make sure the main content doesn't overlap the trigger */
+.sidebar-inset-content {
+  z-index: 1;
+}
+
+/* Enhanced sidebar trigger positioning */
+[data-sidebar="trigger"] {
+  position: absolute !important;
+  right: 8px !important;
+  top: 12px !important;
+  z-index: 50 !important;
+}
+
+/* Ensure proper spacing in sidebar header */
+[data-sidebar="header"] {
+  position: relative;
+  padding-right: 40px; /* Space for trigger button */
+}
+
+/* Better visibility for the trigger in collapsed state */
+[data-state="collapsed"] [data-sidebar="trigger"] {
+  opacity: 0.7;
+  transition: opacity 0.2s ease-in-out;
+}
+
+[data-state="collapsed"] [data-sidebar="trigger"]:hover {
+  opacity: 1;
+}

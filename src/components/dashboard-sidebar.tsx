@@ -1,19 +1,12 @@
-
 'use client';
 
 import {
   BrainCircuit,
   Database,
-  LayoutDashboard,
-  MessageSquare,
   Settings,
   Flame,
-  FileArchive,
-  FolderKanban,
-  Users,
   BarChart3,
   FileText,
-  User,
   FileClock,
   BookUser,
   Library,
@@ -33,11 +26,9 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarFooter,
+  SidebarTrigger,
 } from '@/components/ui/sidebar';
-import { Button } from '@/components/ui/button';
-import { useSidebarStore } from '@/stores/use-sidebar-store';
 import { cn } from '@/lib/utils';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 const menuItems = [
   {
@@ -105,41 +96,30 @@ const settingsItem = {
 
 export function DashboardSidebar() {
   const pathname = usePathname();
-  const { isCollapsed, toggle } = useSidebarStore();
 
   return (
-    <Sidebar className={cn("transition-all duration-300", isCollapsed ? "w-[60px]" : "w-[240px]")}>
+    <Sidebar collapsible="icon">
       <SidebarHeader>
-        <div className={cn(
-          "flex items-center gap-2",
-          isCollapsed && "justify-center"
-        )}>
+        <div className="flex items-center gap-2 pr-12">
           <Flame className="w-6 h-6 flex-shrink-0" />
-          {!isCollapsed && <span className="text-xl font-bold whitespace-nowrap">MPD Insights</span>}
+          <span className="text-xl font-bold whitespace-nowrap">MPD Insights</span>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="absolute right-2 top-3 opacity-50 hover:opacity-100"
-          onClick={toggle}
-        >
-          {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-        </Button>
+        <SidebarTrigger />
       </SidebarHeader>
       <SidebarContent className="p-2">
         <SidebarMenu>
           {menuItems.map((item) => (
             <SidebarMenuItem key={item.href}>
-              <Link href={item.href}>
-                <SidebarMenuButton
-                  isActive={pathname === item.href}
-                  className="font-medium"
-                  title={isCollapsed ? item.label : undefined}
-                >
-                  <item.icon className="w-5 h-5 flex-shrink-0" />
-                  {!isCollapsed && <span className="truncate">{item.label}</span>}
-                </SidebarMenuButton>
-              </Link>
+              <SidebarMenuButton
+                asChild
+                isActive={pathname === item.href}
+                tooltip={item.label}
+              >
+                <Link href={item.href}>
+                  <item.icon className="w-5 h-5" />
+                  <span>{item.label}</span>
+                </Link>
+              </SidebarMenuButton>
             </SidebarMenuItem>
           ))}
         </SidebarMenu>
@@ -147,16 +127,16 @@ export function DashboardSidebar() {
       <SidebarFooter>
         <SidebarMenu>
           <SidebarMenuItem>
-            <Link href={settingsItem.href}>
-              <SidebarMenuButton
-                isActive={pathname === settingsItem.href}
-                className="font-medium"
-                title={isCollapsed ? settingsItem.label : undefined}
-              >
-                <settingsItem.icon className="w-5 h-5 flex-shrink-0" />
-                {!isCollapsed && <span className="truncate">{settingsItem.label}</span>}
-              </SidebarMenuButton>
-            </Link>
+            <SidebarMenuButton
+              asChild
+              isActive={pathname === settingsItem.href}
+              tooltip={settingsItem.label}
+            >
+              <Link href={settingsItem.href}>
+                <settingsItem.icon className="w-5 h-5" />
+                <span>{settingsItem.label}</span>
+              </Link>
+            </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>

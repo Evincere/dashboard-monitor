@@ -9,7 +9,7 @@
  */
 
 import {ai} from '@/ai/unified';
-import {z} from 'genkit';
+import {z} from 'zod';
 
 const GenerateQuerySuggestionsInputSchema = z.object({
   databaseSchema: z.string().describe('The schema of the database.'),

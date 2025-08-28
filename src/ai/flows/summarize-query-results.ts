@@ -9,7 +9,7 @@
  */
 
 import {ai} from '@/ai/unified';
-import {z} from 'genkit';
+import {z} from 'zod';
 
 const SummarizeQueryResultsInputSchema = z.object({
   query: z.string().describe('The original query in natural language.'),
