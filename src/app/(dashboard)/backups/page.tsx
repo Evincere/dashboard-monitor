@@ -238,13 +238,28 @@ export default function BackupsPage() {
     }
   };
 
-  // Direct download function - Fixed for proper download
+  // Direct download function - Enhanced for better UX
   const downloadBackup = async (backupId: string, backupName: string, downloadType: string = 'auto') => {
     try {
       setDownloading(backupId);
+      
+      // Obtener información del backup para mostrar tamaño
+      const backup = backups.find(b => b.id === backupId);
+      const estimatedTimeText = backup && backup.sizeBytes > 50 * 1024 * 1024 
+        ? `Tiempo estimado: ${Math.ceil(backup.sizeBytes / (5 * 1024 * 1024))}min aprox.` 
+        : '';
+
+      const fileSizeText = backup ? backup.size : 'calculando...';
+      
+      // Mostrar toast informativo mejorado
+      toast({
+        title: '🚀 Preparando descarga',
+        description: `Generando archivo de ${fileSizeText}. ${estimatedTimeText} Por favor espere...`,
+        duration: 8000,
+      });
 
       // Create download URL
-      const url = apiUrl(`backups/download?id=${backupId}&type=${downloadType}`);
+      const url = apiUrl(`backups/download?backup=${backupId}&type=${downloadType}`);
 
       // Create invisible download link
       const link = document.createElement('a');
@@ -255,12 +270,17 @@ export default function BackupsPage() {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-
-      toast({
-        title: 'Descarga iniciada',
-        description: `Descargando backup: ${backupName}`,
-        duration: 3000,
-      });
+      
+      // Mostrar mensaje de progreso adicional para archivos grandes
+      if (backup && backup.sizeBytes > 100 * 1024 * 1024) { // > 100MB
+        setTimeout(() => {
+          toast({
+            title: '⏱️  Archivo grande detectado',
+            description: 'El diálogo de descarga aparecerá en unos momentos para archivos grandes',
+            duration: 5000,
+          });
+        }, 2000);
+      }
 
     } catch (error) {
       console.error('Error downloading backup:', error);
@@ -271,7 +291,10 @@ export default function BackupsPage() {
         duration: 5000,
       });
     } finally {
-      setDownloading(null);
+      // Mantener el estado de descarga un poco más para UX
+      setTimeout(() => {
+        setDownloading(null);
+      }, 3000);
     }
   };
 
