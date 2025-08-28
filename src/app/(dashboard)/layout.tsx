@@ -14,7 +14,13 @@ export default function DashboardLayout({
   return (
     <div className="flex min-h-screen">
       <DashboardSidebar />
-      <main className="flex-1">
+      <main 
+        className={cn(
+          "flex-1 transition-all duration-300 ease-in-out",
+          // Margin-left dinámico para compensar el sidebar fijo
+          isCollapsed ? "ml-[60px]" : "ml-[240px]"
+        )}
+      >
         {children}
       </main>
     </div>
