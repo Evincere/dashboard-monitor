@@ -1,14 +1,15 @@
 // src/app/api/users/[id]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { getDatabaseConnection } from '@/services/database';
+import { clearUserCache } from '@/lib/cache';
 import type { RowDataPacket, ResultSetHeader } from 'mysql2';
 import { z } from 'zod';
-// Note: Using simplified validation since user-validation lib might not exist
+// Schema de validación actualizado para user_entity
 const UserUpdateSchema = z.object({
-  name: z.string().optional(),
-  username: z.string().optional(), 
+  first_name: z.string().min(1).optional(),
+  last_name: z.string().min(1).optional(),
+  username: z.string().min(1).optional(), 
   email: z.string().email().optional(),
-  role: z.enum(['ROLE_ADMIN', 'ROLE_USER']).optional(),
   status: z.enum(['ACTIVE', 'INACTIVE', 'BLOCKED']).optional()
 });
 
@@ -28,13 +29,8 @@ function getNewStatusFromAction(action: string): string {
 // Simple cache management
 const cache = new Map<string, any>();
 
-function clearUserCache(): void {
-  const keysToDelete = Array.from(cache.keys()).filter(key => key.startsWith('users-'));
-  keysToDelete.forEach(key => cache.delete(key));
-  cache.delete('dashboard-users');
-}
 
-// GET - Fetch single user by ID with documents count
+// GET - Fetch single user by ID
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -54,17 +50,19 @@ export async function GET(
     // Get user details from user_entity table
     const [userResult] = await connection.execute(
       `SELECT 
-        u.id,
-        u.name,
-        u.username,
-        u.email,
-        u.role,
-        u.status,
-        u.created_at,
-        u.updated_at,
-        u.last_login
-      FROM user_entity u
-      WHERE u.id = ?`,
+        HEX(id) as id,
+        CONCAT(first_name, ' ', last_name) as name,
+        first_name,
+        last_name,
+        username,
+        email,
+        status,
+        telefono,
+        municipality as localidad,
+        created_at,
+        created_at as updated_at
+      FROM user_entity
+      WHERE id = UNHEX(?)`,
       [id]
     ) as [RowDataPacket[], any];
 
@@ -112,7 +110,16 @@ export async function PUT(
       );
     }
 
-    const validatedData = UserUpdateSchema.parse(body);
+    // Convertir el campo 'name' del frontend a first_name/last_name si es necesario
+    let processedBody = { ...body };
+    if (body.name && !body.first_name && !body.last_name) {
+      const nameParts = body.name.trim().split(' ');
+      processedBody.first_name = nameParts[0];
+      processedBody.last_name = nameParts.slice(1).join(' ') || '';
+      delete processedBody.name;
+    }
+
+    const validatedData = UserUpdateSchema.parse(processedBody);
 
     if (Object.keys(validatedData).length === 0) {
       return NextResponse.json(
@@ -125,7 +132,7 @@ export async function PUT(
 
     // Check if user exists
     const [existingUser] = await connection.execute(
-      'SELECT id, name FROM user_entity WHERE id = ?',
+      'SELECT HEX(id) as id, CONCAT(first_name, " ", last_name) as name FROM user_entity WHERE id = UNHEX(?)',
       [id]
     ) as [RowDataPacket[], any];
 
@@ -139,7 +146,7 @@ export async function PUT(
 
     // Check for username/email conflicts if they're being updated
     if (validatedData.username || validatedData.email) {
-      let conflictQuery = 'SELECT id FROM user_entity WHERE (';
+      let conflictQuery = 'SELECT HEX(id) as id FROM user_entity WHERE (';
       const conflictParams: any[] = [];
       const conditions: string[] = [];
 
@@ -153,7 +160,7 @@ export async function PUT(
         conflictParams.push(validatedData.email);
       }
 
-      conflictQuery += conditions.join(' OR ') + ') AND id != ?';
+      conflictQuery += conditions.join(' OR ') + ') AND id != UNHEX(?)';
       conflictParams.push(id);
 
       const [conflictResult] = await connection.execute(conflictQuery, conflictParams) as [RowDataPacket[], any];
@@ -178,10 +185,9 @@ export async function PUT(
       }
     });
 
-    updateFields.push('updated_at = NOW()');
     updateParams.push(id);
 
-    const updateQuery = `UPDATE user_entity SET ${updateFields.join(', ')} WHERE id = ?`;
+    const updateQuery = `UPDATE user_entity SET ${updateFields.join(', ')} WHERE id = UNHEX(?)`;
 
     const [result] = await connection.execute(updateQuery, updateParams) as [ResultSetHeader, any];
 
@@ -243,11 +249,11 @@ export async function DELETE(
 
     const connection = await getDatabaseConnection();
 
-    // Check if user exists (simplified since user_entity doesn't have documents)
+    // Check if user exists
     const [existingUser] = await connection.execute(
-      `SELECT u.id, u.name
-       FROM user_entity u
-       WHERE u.id = ?`,
+      `SELECT HEX(id) as id, CONCAT(first_name, ' ', last_name) as name
+       FROM user_entity
+       WHERE id = UNHEX(?)`,
       [id]
     ) as [RowDataPacket[], any];
 
@@ -263,7 +269,7 @@ export async function DELETE(
     
     // Delete user (in production, consider soft delete)
     const [result] = await connection.execute(
-      'DELETE FROM user_entity WHERE id = ?',
+      'DELETE FROM user_entity WHERE id = UNHEX(?)',
       [id]
     ) as [ResultSetHeader, any];
 
@@ -324,7 +330,7 @@ export async function PATCH(
 
     // Check if user exists
     const [existingUser] = await connection.execute(
-      'SELECT id, name, status FROM user_entity WHERE id = ?',
+      'SELECT HEX(id) as id, CONCAT(first_name, " ", last_name) as name, status FROM user_entity WHERE id = UNHEX(?)',
       [id]
     ) as [RowDataPacket[], any];
 
@@ -351,7 +357,7 @@ export async function PATCH(
 
     // Update user status
     const [result] = await connection.execute(
-      'UPDATE user_entity SET status = ?, updated_at = NOW() WHERE id = ?',
+      'UPDATE user_entity SET status = ? WHERE id = UNHEX(?)',
       [newStatus, id]
     ) as [ResultSetHeader, any];
 

@@ -1,20 +1,22 @@
+'use client';
+
 import { DashboardSidebar } from '@/components/dashboard-sidebar';
-import { SidebarInset, SidebarRail } from '@/components/ui/sidebar';
+import { cn } from '@/lib/utils';
+import { useSidebarStore } from '@/stores/use-sidebar-store';
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const { isCollapsed } = useSidebarStore();
+
   return (
-    <>
+    <div className="flex min-h-screen">
       <DashboardSidebar />
-      <SidebarRail />
-      <SidebarInset>
-        <div className="min-h-screen">
-          {children}
-        </div>
-      </SidebarInset>
-    </>
+      <main className="flex-1">
+        {children}
+      </main>
+    </div>
   );
 }

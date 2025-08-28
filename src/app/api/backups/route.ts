@@ -5,6 +5,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 import mysql from 'mysql2/promise';
+import { detectAndRegisterAutoBackups } from "@/lib/auto-backup-detection";
 
 const execAsync = promisify(exec);
 
@@ -61,7 +62,7 @@ const DOCUMENT_TYPE_MAPPINGS = {
 
 // Constants
 const BACKUP_VOLUME_PATH = process.env.NODE_ENV === 'production' 
-  ? '/var/lib/docker/volumes/mpd_concursos_backup_data_prod/_data'
+  ? '/opt/mpd-monitor/backups' 
   : path.resolve('./database/backups');
 const DOCUMENTS_BASE_PATH = process.env.NODE_ENV === 'production'
   ? '/var/lib/docker/volumes/mpd_concursos_storage_data_prod/_data'
@@ -361,6 +362,8 @@ async function verifyBackupIntegrity(backupPath: string): Promise<'verified' | '
 // API Handlers
 export async function GET(request: NextRequest) {
   try {
+    // Auto-detectar y registrar backups automáticos
+    await detectAndRegisterAutoBackups(BACKUP_VOLUME_PATH, BACKUP_METADATA_FILE);
     const backups = await getBackupMetadata();
     
     // Sort by date (newest first)
