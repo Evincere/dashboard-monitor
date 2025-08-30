@@ -1,0 +1,1 @@
+scripts/simplified/switch-environment.sh

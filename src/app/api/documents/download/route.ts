@@ -1,9 +1,6 @@
 // src/app/api/documents/download/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { getDatabaseConnection } from '@/services/database';
-import type { RowDataPacket } from 'mysql2';
-import { readFile } from 'fs/promises';
-import { join } from 'path';
+import backendClient from '@/lib/backend-client';
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,91 +14,69 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const connection = await getDatabaseConnection();
+    console.log('📥 [API] Download request for document:', documentId);
 
-    try {
-      // Get document information
-      const query = `
-        SELECT 
-          d.name,
-          d.original_name,
-          d.file_path,
-          d.file_size,
-          d.mime_type,
-          u.name as user_name
-        FROM documents d
-        JOIN users u ON d.user_id = u.id
-        WHERE d.id = UNHEX(?)
-      `;
-
-      const [result] = await connection.execute(query, [documentId]) as [RowDataPacket[], any];
-
-      if (result.length === 0) {
-        return NextResponse.json(
-          { error: 'Document not found' },
-          { status: 404 }
-        );
-      }
-
-      const document = result[0];
-
-      // In a real implementation, you would read the file from the storage volume
-      // For now, we'll return the document metadata and indicate where the file should be
-      const documentStoragePath = process.env.DOCUMENT_STORAGE_PATH || '/var/lib/docker/volumes/mpd_concursos_document_storage_prod/_data';
-      const fullFilePath = join(documentStoragePath, document.file_path);
-
-      try {
-        // Attempt to read the file (this would work if the volume is mounted)
-        const fileBuffer = await readFile(fullFilePath);
-
-        // Set appropriate headers for file download
-        const headers = new Headers();
-        headers.set('Content-Type', document.mime_type || 'application/octet-stream');
-        headers.set('Content-Disposition', `attachment; filename="${document.original_name}"`);
-        headers.set('Content-Length', document.file_size.toString());
-        headers.set('X-Document-User', document.user_name);
-
-        // Convert Buffer to Uint8Array for NextResponse
-        const uint8Array = new Uint8Array(fileBuffer);
-
-        return new NextResponse(uint8Array, {
-          status: 200,
-          headers
-        });
-
-      } catch (fileError) {
-        // If file cannot be read, return metadata with download instructions
-        console.error('File read error:', fileError);
-
-        return NextResponse.json({
-          error: 'File not accessible',
-          message: 'Document exists in database but file cannot be accessed',
-          document: {
-            id: documentId,
-            name: document.name,
-            originalName: document.original_name,
-            filePath: document.file_path,
-            fullPath: fullFilePath,
-            fileSize: document.file_size,
-            mimeType: document.mime_type,
-            userName: document.user_name
-          },
-          instructions: 'To enable file downloads, ensure the document storage volume is properly mounted',
-          timestamp: new Date().toISOString()
-        }, { status: 503 });
-      }
-
-    } finally {
-      connection.release();
+    // ✨ NUEVA IMPLEMENTACIÓN: Usar BackendClient para descarga real
+    const result = await backendClient.downloadDocument(documentId);
+    
+    if (!result.success) {
+      console.error('❌ [API] Error al descargar documento:', result.error);
+      return NextResponse.json({ 
+        error: result.error || 'Document not available for download' 
+      }, { status: 404 });
     }
 
+    if (!result.blob) {
+      console.error('❌ [API] No se recibió contenido del documento');
+      return NextResponse.json({ 
+        error: 'No file content received from backend' 
+      }, { status: 500 });
+    }
+
+    console.log(`✅ [API] Documento obtenido exitosamente: ${result.fileName}, ${result.blob.size} bytes`);
+
+    // Convertir el blob a buffer para NextResponse
+    const arrayBuffer = await result.blob.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    // Determinar el tipo MIME basado en la extensión del archivo
+    const fileName = result.fileName || `documento_${documentId}`;
+    let mimeType = 'application/octet-stream';
+    
+    const lowerFileName = fileName.toLowerCase();
+    if (lowerFileName.endsWith('.pdf')) {
+      mimeType = 'application/pdf';
+    } else if (lowerFileName.endsWith('.jpg') || lowerFileName.endsWith('.jpeg')) {
+      mimeType = 'image/jpeg';
+    } else if (lowerFileName.endsWith('.png')) {
+      mimeType = 'image/png';
+    } else if (lowerFileName.endsWith('.gif')) {
+      mimeType = 'image/gif';
+    } else if (lowerFileName.endsWith('.doc')) {
+      mimeType = 'application/msword';
+    } else if (lowerFileName.endsWith('.docx')) {
+      mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    }
+
+    // Crear la respuesta con el archivo
+    return new NextResponse(buffer, {
+      status: 200,
+      headers: {
+        'Content-Type': mimeType,
+        'Content-Disposition': `attachment; filename="${fileName}"`,
+        'Content-Length': buffer.length.toString(),
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
+    });
+
   } catch (error) {
-    console.error('Error downloading document:', error);
+    console.error('❌ [API] Error in download endpoint:', error);
     return NextResponse.json(
       {
-        error: 'Failed to download document',
-        details: error instanceof Error ? error.message : 'Unknown error',
-        timestamp: new Date().toISOString()
+        error: 'Failed to process download request',
+        details: error instanceof Error ? error.message : 'Unknown error'
       },
       { status: 500 }
     );

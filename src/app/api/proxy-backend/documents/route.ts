@@ -118,3 +118,48 @@ export async function PATCH(request: NextRequest) {
     }, { status: 500 });
   }
 }
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const documentId = searchParams.get('id');
+
+    if (!documentId) {
+      return NextResponse.json({
+        success: false,
+        error: 'Document ID is required',
+        timestamp: new Date().toISOString()
+      }, { status: 400 });
+    }
+
+    console.log('🗑️ [Proxy] Eliminando documento:', documentId);
+
+    const response = await backendClient.deleteDocument(documentId);
+    
+    if (!response.success) {
+      console.error('Error deleting document:', response.error);
+      return NextResponse.json({
+        success: false,
+        error: response.error,
+        timestamp: new Date().toISOString()
+      }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: response.data,
+      message: 'Document deleted successfully',
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('Document deletion error:', error);
+    
+    return NextResponse.json({
+      success: false,
+      error: 'Failed to delete document',
+      details: error instanceof Error ? error.message : 'Unknown error',
+      timestamp: new Date().toISOString()
+    }, { status: 500 });
+  }
+}

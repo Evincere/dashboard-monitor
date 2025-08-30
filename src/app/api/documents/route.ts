@@ -232,10 +232,80 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// ✅ CORREGIDO: Implementar método PUT para cambios de estado
 export async function PUT(request: NextRequest) {
-  return NextResponse.json({ error: 'Method not implemented' }, { status: 501 });
+  try {
+    const { searchParams } = new URL(request.url);
+    const documentId = searchParams.get('id');
+    
+    if (!documentId) {
+      return NextResponse.json({ error: 'Document ID is required' }, { status: 400 });
+    }
+
+    const body = await request.json();
+    const { validation_status } = body;
+
+    if (!validation_status || !['PENDING', 'APPROVED', 'REJECTED'].includes(validation_status)) {
+      return NextResponse.json({ error: 'Valid validation_status is required' }, { status: 400 });
+    }
+
+    console.log('🔄 [API] Updating document status:', documentId, 'to:', validation_status);
+
+    let response;
+    
+    // Mapear al método correspondiente del BackendClient
+    switch (validation_status) {
+      case 'APPROVED':
+        response = await backendClient.approveDocument(documentId);
+        break;
+      case 'REJECTED':
+        response = await backendClient.rejectDocument(documentId, 'Rechazado por el administrador');
+        break;
+      case 'PENDING':
+        response = await backendClient.revertDocument(documentId);
+        break;
+      default:
+        return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
+    }
+
+    if (!response.success) {
+      console.error('🔄 [API] Backend error:', response.error);
+      return NextResponse.json({ error: response.error || 'Failed to update document status' }, { status: 500 });
+    }
+
+    console.log('✅ [API] Document status updated successfully');
+    return NextResponse.json({ success: true, data: response.data });
+
+  } catch (error) {
+    console.error('🔄 [API] Error updating document status:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
 }
 
+// ✅ CORREGIDO: Implementar método DELETE
 export async function DELETE(request: NextRequest) {
-  return NextResponse.json({ error: 'Method not implemented' }, { status: 501 });
+  try {
+    const { searchParams } = new URL(request.url);
+    const documentId = searchParams.get('id');
+    
+    if (!documentId) {
+      return NextResponse.json({ error: 'Document ID is required' }, { status: 400 });
+    }
+
+    console.log('🗑️ [API] Deleting document:', documentId);
+
+    const response = await backendClient.deleteDocument(documentId);
+
+    if (!response.success) {
+      console.error('🗑️ [API] Backend error:', response.error);
+      return NextResponse.json({ error: response.error || 'Failed to delete document' }, { status: 500 });
+    }
+
+    console.log('✅ [API] Document deleted successfully');
+    return NextResponse.json({ success: true, message: 'Document deleted successfully' });
+
+  } catch (error) {
+    console.error('🗑️ [API] Error deleting document:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
 }

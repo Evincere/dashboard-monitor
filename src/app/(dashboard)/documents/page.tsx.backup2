@@ -290,9 +290,9 @@ function DocumentsPageContent() {
     try {
       console.log(`📥 [Frontend] Iniciando descarga de documento: ${id}`);
       // 🔍 Log para debug del nuevo endpoint inteligente
-      console.log(`🔍 [Frontend] Usando endpoint directo de descarga para documento: ${id}`);
+      console.log(`🔍 [Frontend] Usando endpoint inteligente de descarga para documento: ${id}`);
       
-      const response = await fetch(apiUrl(`documents/direct-download?id=${id}&userId=${documents.find(doc => doc.id === id)?.user?.id || ""}`));
+      const response = await fetch(apiUrl(`documents/smart-download?id=${id}&userId=${documents.find(doc => doc.id === id)?.user?.id || ""}`));
 
       if (response.ok) {
         // Verificar si la respuesta es un archivo binario (descarga directa)

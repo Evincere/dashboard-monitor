@@ -211,24 +211,18 @@ function DocumentsPageContent() {
   useEffect(() => {
     fetchDocuments();
   }, [currentPage, debouncedSearchTerm, typeFilter, statusFilter]);
-  // ✅ CORREGIDO: Usar endpoint API proxy del microservicio
+  // ✅ CORREGIDO: Usar endpoint API del microservicio en lugar de BackendClient directamente
   const handleDelete = async (id: string, name: string) => {
     try {
       console.log('🗑️ [Frontend] Iniciando eliminación de documento:', id);
       
-      const response = await fetch(apiUrl(`proxy-backend/documents?id=${id}`), {
+      const response = await fetch(apiUrl(`documents?id=${id}`), {
         method: 'DELETE',
       });
       
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to delete document');
-      }
-
-      const result = await response.json();
-      
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to delete document');
       }
 
       toast({
@@ -290,9 +284,9 @@ function DocumentsPageContent() {
     try {
       console.log(`📥 [Frontend] Iniciando descarga de documento: ${id}`);
       // 🔍 Log para debug del nuevo endpoint inteligente
-      console.log(`🔍 [Frontend] Usando endpoint directo de descarga para documento: ${id}`);
+      console.log(`🔍 [Frontend] Usando endpoint inteligente de descarga para documento: ${id}`);
       
-      const response = await fetch(apiUrl(`documents/direct-download?id=${id}&userId=${documents.find(doc => doc.id === id)?.user?.id || ""}`));
+      const response = await fetch(apiUrl(`documents/smart-download?id=${id}&userId=${documents.find(doc => doc.id === id)?.user?.id || ""}`));
 
       if (response.ok) {
         // Verificar si la respuesta es un archivo binario (descarga directa)
@@ -364,28 +358,9 @@ function DocumentsPageContent() {
       } else {
         const errorData = await response.json();
         console.error(`❌ [Frontend] Error en descarga:`, errorData);
-        
-        // ✅ MEJORADO: Manejo específico de errores sin fallbacks
-        const isNotFound = errorData.error?.includes("no encontrado") || 
-                          errorData.error?.includes("not found") || 
-                          response.status === 404;
-        const isStorageError = errorData.error?.includes("storage") || 
-                              errorData.error?.includes("almacenamiento");
-        
-        let errorTitle = "Descarga No Disponible";
-        let errorDescription = errorData.error || `Error al descargar el documento "${name}"`;
-        
-        if (isNotFound) {
-          errorTitle = "Documento No Encontrado";
-          errorDescription = `El documento "${name}" (ID: ${id}) no existe en el sistema. Verifique que el documento no haya sido eliminado.`;
-        } else if (isStorageError) {
-          errorTitle = "Error de Almacenamiento";
-          errorDescription = `No se puede acceder al archivo "${name}". Contacte al administrador del sistema.`;
-        }
-        
         toast({
-          title: errorTitle,
-          description: errorDescription,
+          title: `Descarga No Disponible`,
+          description: errorData.error || `Error al descargar el documento "${name}"`,
           variant: `destructive`,
         });
       }

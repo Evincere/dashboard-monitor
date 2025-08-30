@@ -303,17 +303,101 @@ class BackendClient {
   }
 
   /**
+   * Realiza petición HTTP al backend para descarga de archivos binarios
+   */
+  private async requestFile(
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<{ success: boolean; blob?: Blob; fileName?: string; error?: string }> {
+    if (!this.isEnabled()) {
+      return {
+        success: false,
+        error: 'Backend integration is disabled'
+      };
+    }
+
+    const url = `${this.config.apiUrl}${endpoint}`;
+
+    // Obtener token válido
+    const token = await this.getValidToken();
+
+    if (!token) {
+      return {
+        success: false,
+        error: 'Could not authenticate with backend'
+      };
+    }
+
+    const headers: HeadersInit = {
+      'Authorization': `Bearer ${token}`,
+      ...options.headers
+    };
+
+    try {
+      console.log(`📡 Backend file request: ${options.method || 'GET'} ${url}`);
+
+      const response = await fetch(url, {
+        ...options,
+        headers
+      });
+
+      if (!response.ok) {
+        if (response.headers.get('Content-Type')?.includes('application/json')) {
+          const errorData = await response.json();
+          return {
+            success: false,
+            error: errorData.message || errorData.error || `HTTP ${response.status}`
+          };
+        } else {
+          return {
+            success: false,
+            error: `HTTP ${response.status}: ${response.statusText}`
+          };
+        }
+      }
+
+      // Obtener el nombre del archivo desde el header Content-Disposition
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let fileName = 'documento';
+      
+      if (contentDisposition) {
+        const fileNameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+        if (fileNameMatch) {
+          fileName = fileNameMatch[1].replace(/['"]/g, '');
+        }
+      }
+
+      const blob = await response.blob();
+
+      console.log(`✅ File download successful: ${blob.size} bytes, fileName: ${fileName}`);
+
+      return {
+        success: true,
+        blob,
+        fileName
+      };
+
+    } catch (error) {
+      console.error('❌ Backend file request error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  /**
    * Test de conectividad con el backend
    */
   async testConnection(): Promise<ApiResponse<any>> {
-    return this.request('/admin/documentos/estadisticas');
+    return this.request('/admin/documents/stats');
   }
 
   /**
    * Obtiene estadísticas de documentos
    */
   async getDocumentStatistics(): Promise<ApiResponse<DocumentStatistics>> {
-    return this.request<DocumentStatistics>('/admin/documentos/estadisticas');
+    return this.request<DocumentStatistics>('/admin/documents/stats');
   }
 
   /**
@@ -342,7 +426,7 @@ class BackendClient {
     }
 
     const query = searchParams.toString();
-    const endpoint = `/admin/documentos${query ? `?${query}` : ''}`;
+    const endpoint = `/admin/documents${query ? `?${query}` : ''}`;
 
     return this.request<PagedResponse<BackendDocument>>(endpoint);
   }
@@ -434,8 +518,8 @@ class BackendClient {
 
   // ... resto de métodos sin cambios
   async approveDocument(documentId: string): Promise<ApiResponse<BackendDocument>> {
-    return this.request<BackendDocument>(`/admin/documentos/${documentId}/aprobar`, {
-      method: 'PATCH'
+    return this.request<BackendDocument>(`/admin/documents/${documentId}/approve`, {
+      method: 'POST'
     });
   }
 
@@ -443,23 +527,27 @@ class BackendClient {
     documentId: string,
     motivo: string
   ): Promise<ApiResponse<BackendDocument>> {
-    return this.request<BackendDocument>(`/admin/documentos/${documentId}/rechazar`, {
-      method: 'PATCH',
+    return this.request<BackendDocument>(`/admin/documents/${documentId}/reject`, {
+      method: 'POST',
       body: JSON.stringify({ motivo })
     });
   }
 
   async revertDocument(documentId: string): Promise<ApiResponse<BackendDocument>> {
-    return this.request<BackendDocument>(`/admin/documentos/${documentId}/revertir`, {
-      method: 'PATCH'
-    });
+    // ⚠️ IMPLEMENTACIÓN TEMPORAL: El backend no tiene endpoint para revertir a PENDING
+    // Retornamos un error informativo en lugar de fallar silenciosamente
+    return {
+      success: false,
+      error: 'La función de revertir a PENDING no está implementada en el backend',
+      message: 'El backend Spring Boot no proporciona un endpoint para revertir documentos a estado PENDING'
+    };
   }
 
   /**
    * Elimina un documento del sistema
    */
   async deleteDocument(documentId: string): Promise<ApiResponse<{ message: string }>> {
-    return this.request<{ message: string }>(`/admin/documentos/${documentId}`, {
+    return this.request<{ message: string }>(`/admin/documents/${documentId}`, {
       method: 'DELETE'
     });
   }
@@ -522,7 +610,7 @@ class BackendClient {
 
   async approveInscription(inscriptionId: string, note?: string): Promise<ApiResponse<BackendInscription>> {
     return this.request<BackendInscription>(`/admin/inscriptions/${inscriptionId}/state`, {
-      method: 'PATCH',
+      method: 'POST',
       body: JSON.stringify({
         inscriptionId,
         newState: 'APPROVED',
@@ -533,7 +621,7 @@ class BackendClient {
 
   async rejectInscription(inscriptionId: string, note?: string): Promise<ApiResponse<BackendInscription>> {
     return this.request<BackendInscription>(`/admin/inscriptions/${inscriptionId}/state`, {
-      method: 'PATCH',
+      method: 'POST',
       body: JSON.stringify({
         inscriptionId,
         newState: 'REJECTED',
@@ -544,7 +632,7 @@ class BackendClient {
 
   async startValidation(inscriptionId: string, note?: string): Promise<ApiResponse<BackendInscription>> {
     return this.request<BackendInscription>(`/admin/inscriptions/${inscriptionId}/state`, {
-      method: 'PATCH',
+      method: 'POST',
       body: JSON.stringify({
         inscriptionId,
         newState: 'PENDING',
@@ -568,8 +656,255 @@ class BackendClient {
     this.authToken = null;
     this.tokenExpiry = 0;
   }
+
+  /**
+   * Descarga un documento del sistema usando el endpoint real del backend principal
+   * 
+   * ✨ NUEVA IMPLEMENTACIÓN REAL - NO SIMULADA
+   */
+  async downloadDocument(documentId: string): Promise<{ 
+    success: boolean; 
+    downloadUrl?: string; 
+    fileName?: string;
+    blob?: Blob;
+    error?: string;
+  }> {
+    try {
+      console.log(`📥 [BackendClient] Iniciando descarga real de documento: ${documentId}`);
+      
+      // Usar el endpoint real del backend Spring Boot: GET /api/documents/{id}/file
+      const fileResult = await this.requestFile(`/documents/${documentId}/file`);
+      
+      if (!fileResult.success) {
+        console.error('❌ [BackendClient] Error al descargar documento:', fileResult.error);
+        return {
+          success: false,
+          error: fileResult.error || 'No se pudo descargar el documento'
+        };
+      }
+      
+      if (!fileResult.blob) {
+        return {
+          success: false,
+          error: 'No se recibió contenido del documento'
+        };
+      }
+      
+      console.log(`✅ [BackendClient] Documento descargado exitosamente: ${fileResult.fileName}, ${fileResult.blob.size} bytes`);
+      
+      return {
+        success: true,
+        blob: fileResult.blob,
+        fileName: fileResult.fileName || `documento_${documentId}`
+      };
+      
+    } catch (error) {
+      console.error('❌ [BackendClient] Error inesperado en downloadDocument:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Error desconocido al descargar documento'
+      };
+    }
+  }
+
+  /**
+   * Realiza petición HTTP al backend para subir archivos multipart/form-data
+   */
+  private async requestFormData<T>(
+    endpoint: string,
+    formData: FormData,
+    options: RequestInit = {}
+  ): Promise<ApiResponse<T>> {
+    if (!this.isEnabled()) {
+      return {
+        success: false,
+        error: "Backend integration is disabled"
+      };
+    }
+
+    const url = `${this.config.apiUrl}${endpoint}`;
+
+    // Obtener token válido
+    const token = await this.getValidToken();
+
+    if (!token) {
+      return {
+        success: false,
+        error: "Could not authenticate with backend"
+      };
+    }
+
+    const headers: HeadersInit = {
+      "Authorization": `Bearer ${token}`,
+      // NO incluir Content-Type para FormData - el browser lo establece automáticamente
+      ...options.headers
+    };
+
+    try {
+      console.log(`📡 Backend FormData request: ${options.method || "POST"} ${url}`);
+
+      const response = await fetch(url, {
+        ...options,
+        method: options.method || "POST",
+        headers,
+        body: formData
+      });
+
+      let responseData: any;
+      const contentType = response.headers.get("Content-Type") || "";
+
+      if (contentType.includes("application/json")) {
+        responseData = await response.json();
+      } else {
+        responseData = { message: await response.text() };
+      }
+
+      if (!response.ok) {
+        console.error("❌ Backend FormData request failed:", {
+          url,
+          status: response.status,
+          statusText: response.statusText,
+          responseData
+        });
+
+        // Si es 401, limpiar token para forzar re-autenticación en próxima llamada
+        if (response.status === 401) {
+          console.log("🔄 Token inválido, limpiando para re-autenticación...");
+          this.authToken = null;
+          this.tokenExpiry = 0;
+        }
+
+        return {
+          success: false,
+          error: responseData.message || responseData.error || `HTTP ${response.status}`,
+          data: responseData
+        };
+      }
+
+      console.log(`✅ Backend FormData request successful: ${Object.keys(responseData).length} keys in response`);
+
+      return {
+        success: true,
+        data: responseData,
+        timestamp: new Date().toISOString()
+      };
+
+    } catch (error) {
+      console.error("❌ Backend FormData request error:", error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+        timestamp: new Date().toISOString()
+      };
+    }
+  }
+
+  /**
+   * Verifica el reemplazo de un documento sin ejecutarlo
+   * 
+   * ✨ NUEVA IMPLEMENTACIÓN REAL - CONECTA CON BACKEND SPRING BOOT
+   */
+  async checkReplaceDocument(
+    documentId: string,
+    file: File,
+    comments?: string
+  ): Promise<ApiResponse<any>> {
+    try {
+      console.log(`🔍 [BackendClient] Verificando reemplazo de documento: ${documentId}`);
+      
+      const formData = new FormData();
+      formData.append("file", file);
+      if (comments) {
+        formData.append("comentarios", comments);
+      }
+      
+      const result = await this.requestFormData<any>(
+        `/documentos/${documentId}/replace/check`,
+        formData,
+        { method: "POST" }
+      );
+      
+      if (result.success) {
+        console.log(`✅ [BackendClient] Verificación de reemplazo exitosa para documento: ${documentId}`);
+      } else {
+        console.error(`❌ [BackendClient] Error en verificación de reemplazo:`, result.error);
+      }
+      
+      return result;
+      
+    } catch (error) {
+      console.error(`❌ [BackendClient] Error inesperado en checkReplaceDocument:`, error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Error desconocido en verificación de reemplazo"
+      };
+    }
+  }
+
+  /**
+   * Reemplaza un documento del sistema usando el endpoint real del backend principal
+   * 
+   * ✨ NUEVA IMPLEMENTACIÓN REAL - NO SIMULADA
+   */
+  async replaceDocument(
+    documentId: string,
+    file: File,
+    comments?: string,
+    forceReplace: boolean = false
+  ): Promise<ApiResponse<any>> {
+    try {
+      console.log(`🔄 [BackendClient] Iniciando reemplazo real de documento: ${documentId}`);
+      
+      const formData = new FormData();
+      formData.append("file", file);
+      if (comments) {
+        formData.append("comentarios", comments);
+      }
+      formData.append("forceReplace", forceReplace.toString());
+      
+      const result = await this.requestFormData<any>(
+        `/documentos/${documentId}/replace`,
+        formData,
+        { method: "POST" }
+      );
+      
+      if (result.success) {
+        console.log(`✅ [BackendClient] Reemplazo de documento exitoso: ${documentId}`);
+        if (result.data?.warning) {
+          console.warn(`⚠️ [BackendClient] Advertencia en reemplazo: ${result.data.warning}`);
+        }
+      } else {
+        console.error(`❌ [BackendClient] Error en reemplazo de documento:`, result.error);
+      }
+      
+      return result;
+      
+    } catch (error) {
+      console.error(`❌ [BackendClient] Error inesperado en replaceDocument:`, error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Error desconocido al reemplazar documento"
+      };
+    }
+  }
 }
 
+
+// Interfaces para reemplazo de documentos
+export interface DocumentReplaceRequest {
+  fileName: string;
+  contentType: string;
+  comments?: string;
+  forceReplace: boolean;
+}
+
+export interface DocumentReplaceResponse {
+  newDocument: BackendDocument;
+  previousDocument: BackendDocument;
+  warning?: string;
+  message?: string;
+  impactedEntities?: string[];
+}
 // Singleton instance
 const backendClient = new BackendClient();
 

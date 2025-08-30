@@ -8,7 +8,7 @@ module.exports = {
       env_file: '.env.development',
       env: {
         NODE_ENV: 'development',
-        PORT: 9003,
+        PORT: 3003,
         HOSTNAME: '0.0.0.0'
       },
       instances: 1,

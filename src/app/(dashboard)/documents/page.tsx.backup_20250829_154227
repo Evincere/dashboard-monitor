@@ -211,24 +211,18 @@ function DocumentsPageContent() {
   useEffect(() => {
     fetchDocuments();
   }, [currentPage, debouncedSearchTerm, typeFilter, statusFilter]);
-  // ✅ CORREGIDO: Usar endpoint API proxy del microservicio
+  // ✅ CORREGIDO: Usar endpoint API del microservicio en lugar de BackendClient directamente
   const handleDelete = async (id: string, name: string) => {
     try {
       console.log('🗑️ [Frontend] Iniciando eliminación de documento:', id);
       
-      const response = await fetch(apiUrl(`proxy-backend/documents?id=${id}`), {
+      const response = await fetch(apiUrl(`documents?id=${id}`), {
         method: 'DELETE',
       });
       
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to delete document');
-      }
-
-      const result = await response.json();
-      
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to delete document');
       }
 
       toast({
@@ -289,10 +283,8 @@ function DocumentsPageContent() {
   const handleDownload = async (id: string, name: string) => {
     try {
       console.log(`📥 [Frontend] Iniciando descarga de documento: ${id}`);
-      // 🔍 Log para debug del nuevo endpoint inteligente
-      console.log(`🔍 [Frontend] Usando endpoint directo de descarga para documento: ${id}`);
       
-      const response = await fetch(apiUrl(`documents/direct-download?id=${id}&userId=${documents.find(doc => doc.id === id)?.user?.id || ""}`));
+      const response = await fetch(apiUrl(`documents/download?id=${id}`));
 
       if (response.ok) {
         // Verificar si la respuesta es un archivo binario (descarga directa)
@@ -313,15 +305,6 @@ function DocumentsPageContent() {
             }
           }
           
-          
-          // 🔍 Verificar si fue un reemplazo resuelto
-          const documentResolved = response.headers.get(`X-Document-Resolved`);
-          const originalDocument = response.headers.get(`X-Original-Document`);
-          const resolvedDocument = response.headers.get(`X-Resolved-Document`);
-          
-          if (documentResolved === `true`) {
-            console.log(`ℹ️ [Frontend] Descarga resuelta de documento reemplazado: ${originalDocument} -> ${resolvedDocument}`);
-          }
           // Crear URL temporal y descargar
           const url = window.URL.createObjectURL(blob);
           const a = document.createElement(`a`);
@@ -334,19 +317,10 @@ function DocumentsPageContent() {
           
           console.log(`✅ [Frontend] Documento descargado exitosamente: ${fileName}`);
           
-          
-          // Mostrar mensaje específico si fue una descarga resuelta
-          if (documentResolved === `true`) {
-            toast({
-              title: `Descarga Completada (Documento Actualizado)`,
-              description: `Se descargó la versión más reciente del documento "${fileName}". El documento original fue reemplazado.`,
-            });
-          } else {
-            toast({
-              title: `Descarga Completada`,
-              description: `El documento "${fileName}" se ha descargado exitosamente`,
-            });
-          }
+          toast({
+            title: `Descarga Completada`,
+            description: `El documento "${fileName}" se ha descargado exitosamente`,
+          });
         } else {
           // Respuesta JSON - puede tener downloadUrl o error
           const data = await response.json();
@@ -364,28 +338,9 @@ function DocumentsPageContent() {
       } else {
         const errorData = await response.json();
         console.error(`❌ [Frontend] Error en descarga:`, errorData);
-        
-        // ✅ MEJORADO: Manejo específico de errores sin fallbacks
-        const isNotFound = errorData.error?.includes("no encontrado") || 
-                          errorData.error?.includes("not found") || 
-                          response.status === 404;
-        const isStorageError = errorData.error?.includes("storage") || 
-                              errorData.error?.includes("almacenamiento");
-        
-        let errorTitle = "Descarga No Disponible";
-        let errorDescription = errorData.error || `Error al descargar el documento "${name}"`;
-        
-        if (isNotFound) {
-          errorTitle = "Documento No Encontrado";
-          errorDescription = `El documento "${name}" (ID: ${id}) no existe en el sistema. Verifique que el documento no haya sido eliminado.`;
-        } else if (isStorageError) {
-          errorTitle = "Error de Almacenamiento";
-          errorDescription = `No se puede acceder al archivo "${name}". Contacte al administrador del sistema.`;
-        }
-        
         toast({
-          title: errorTitle,
-          description: errorDescription,
+          title: `Descarga No Disponible`,
+          description: errorData.error || `Error al descargar el documento "${name}"`,
           variant: `destructive`,
         });
       }

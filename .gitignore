@@ -201,3 +201,15 @@ coverage-report/
 
 # Environment files (added for security)
 .env
+
+# === CONFIGURACIÓN ADICIONAL SIMPLIFICADA ===
+# Logs de PM2 y sistema
+logs/*.log
+*.log
+
+# Cache de Next.js
+.next/cache/
+
+# Archivos temporales de scripts
+scripts/temp/
+scripts/backup/
