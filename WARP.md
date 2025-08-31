@@ -261,7 +261,7 @@ git stash push -m "backup antes de cambio"
 
 2. **🔄 Cambio de Estado de Documentos**
    - **Estado**: ✅ **IMPLEMENTADA Y FUNCIONAL**
-   - **Endpoints**: `/admin/documentos/{id}/aprobar`, `/admin/documentos/{id}/rechazar`, `/admin/documentos/{id}/revertir`
+   - **Endpoints**: `/api/admin/documents/{id}/approve`, `/api/admin/documents/{id}/reject`, `/api/admin/documents/{id}/revert`
    - **Funciones**: Aprobar, Rechazar, Revertir documentos con autenticación JWT
    - **UI**: Botones de acción integrados en tabla de documentos
 
@@ -368,4 +368,254 @@ ENABLE_BACKEND_INTEGRATION=true
 - ✅ Error de frontend eliminado
 
 **Estado**: 🟢 **RESUELTO Y OPERATIVO**
+
+
+### ✅ **Corrección: Endpoint Revert Document a PENDING (Aug 31, 2025)**
+
+#### **Problema Identificado**
+- **Síntoma**: Error "Recurso no encontrado" al intentar cambiar documentos a estado PENDING
+- **Causa**: Backend Spring Boot ejecutándose con versión anterior del código sin endpoint `/revert`
+- **Manifestación**: Frontend llamaba a `/api/admin/documents/{id}/revert` pero el endpoint no existía
+- **Impacto**: Imposibilidad de revertir documentos APPROVED/REJECTED a PENDING desde la UI
+
+#### **Análisis de Flujo de Ejecución**
+```
+Frontend (page.tsx) → API Route (/api/documents PUT) → BackendClient.revertDocument() 
+                                     ↓
+                   POST /admin/documents/{id}/revert → Spring Boot Backend
+                                     ↓
+                              404 "Recurso no encontrado"
+```
+
+#### **Diagnóstico Técnico**
+1. **Código vs Contenedor**: 
+   - Código modificado: 31/08/2025 01:00 (contenía método `revertDocument`)
+   - Contenedor Docker: 30/08/2025 14:13 (NO contenía el método)
+2. **Autenticación JWT**: ✅ Funcionando correctamente
+3. **Endpoints relacionados**: ✅ `/approve` y `/reject` operativos
+4. **Solo `/revert`**: ❌ Faltante por desincronización de código
+
+#### **Solución Implementada**
+
+1. **Rebuild Selectivo del Backend**:
+   ```bash
+   cd /root/concursos/mpd_concursos
+   docker compose -f docker-compose.ssl.yml up -d --build --no-deps backend
+   ```
+
+2. **Código Agregado** (`AdminDocumentController.java`):
+   ```java
+   @PostMapping("/{id}/revert")
+   @PreAuthorize("hasRole('ADMIN')")
+   @Operation(summary = "Revertir documento a PENDING")
+   public ResponseEntity<Map<String, String>> revertDocument(@PathVariable UUID id) {
+       // Implementación del endpoint faltante
+   }
+   ```
+
+3. **Configuración CORS Actualizada**:
+   ```java
+   @CrossOrigin(origins = {
+       "http://localhost:4200", 
+       "https://vps-4778464-x.dattaweb.com", 
+       "https://vps-4778464-x.dattaweb.com:9003"  // ← AGREGADO
+   })
+   ```
+
+#### **Procedimiento de Verificación Post-Fix**
+```bash
+# 1. Verificar endpoint con autenticación
+TOKEN=$(curl -s http://localhost:8080/api/auth/login -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}' | jq -r .token)
+
+# 2. Probar endpoint /revert
+curl -s http://localhost:8080/api/admin/documents/{id}/revert \
+  -X POST -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Respuesta esperada: {"message": "Documento revertido a PENDING exitosamente"}
+```
+
+#### **Lecciones Aprendidas - Troubleshooting**
+
+1. **Sincronización Código-Contenedor**:
+   - ⚠️ **Verificar siempre** fecha de modificación vs fecha de imagen Docker
+   - 🔍 **Comparar timestamps**: `ls -la archivo.java` vs `docker inspect container`
+
+2. **Diagnóstico de Endpoints Faltantes**:
+   ```bash
+   # Verificar logs del backend para errores específicos
+   docker logs mpd-concursos-backend | grep -i "revert"
+   
+   # Buscar patrón "No static resource" = endpoint no registrado
+   docker logs mpd-concursos-backend | grep "No static resource"
+   ```
+
+3. **Flujo de Diagnóstico Recomendado**:
+   ```
+   Error Frontend → Verificar API Route → Verificar BackendClient → Verificar Backend Logs
+                                                                          ↓
+                                                             Verificar endpoint existe
+                                                                          ↓
+                                                               Verificar autenticación JWT
+                                                                          ↓
+                                                           Verificar sincronización código
+   ```
+
+#### **Prevención de Problemas Similares**
+
+1. **Checklist Pre-Deployment**:
+   - [ ] Verificar que todos los endpoints del código estén en el contenedor
+   - [ ] Confirmar que la imagen Docker incluye los últimos cambios
+   - [ ] Probar endpoints críticos post-deployment
+
+2. **Monitoreo Proactivo**:
+   ```bash
+   # Script para verificar sincronización (ejecutar después de cambios de código)
+   echo "Código modificado: $(stat -c %y AdminDocumentController.java)"
+   echo "Contenedor creado: $(docker inspect mpd-concursos-backend | jq -r '.[0].Created')"
+   ```
+
+#### **Resultado**
+- ✅ Endpoint `/revert` completamente operativo
+- ✅ Funcionalidad PENDING restaurada en UI
+- ✅ Base de datos y volúmenes preservados
+- ✅ Sin pérdida de datos de usuario
+- ✅ Proceso de rebuild sin afectación de servicios
+
+**Estado**: 🟢 **RESUELTO Y DOCUMENTADO**
+
+---
+
+## 🚨 **Alertas para Desarrolladores**
+
+### **⚠️ Problema Recurrente: Desincronización Código-Contenedor**
+
+**Síntomas Comunes**:
+- Error "Recurso no encontrado" para endpoints recién agregados
+- Funcionalidad nueva no disponible aunque el código esté correcto
+- Logs del backend muestran "No static resource" para rutas válidas
+
+**Verificación Rápida**:
+```bash
+# En directorio del proyecto backend
+git log -1 --format="%cd" --date=iso
+docker inspect <backend-container> | jq -r '.[0].Created'
+# Si el código es más reciente que el contenedor = problema de sincronización
+```
+
+**Solución Inmediata**:
+```bash
+# Solo rebuild del backend (preserva datos)
+docker compose -f docker-compose.ssl.yml up -d --build --no-deps backend
+```
+
+### **🔧 Comandos de Diagnóstico Esenciales**
+
+```bash
+# 1. Estado completo del sistema
+docker compose -f docker-compose.ssl.yml ps
+
+# 2. Logs específicos del backend
+docker logs mpd-concursos-backend --tail 100
+
+# 3. Verificar endpoints disponibles (health check)
+curl -s http://localhost:8080/api/health
+
+# 4. Test de autenticación JWT
+curl -s http://localhost:8080/api/auth/login -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}'
+
+# 5. Verificar connectividad Dashboard → Backend
+# Desde el dashboard monitor, revisar logs de Network en DevTools
+```
+
+
+---
+
+## 📚 **Arquitectura de Integración Completa**
+
+### **🔗 Flujo de Comunicación Dashboard ↔ Backend**
+
+```mermaid
+graph TD
+    A[Dashboard Monitor UI] --> B[Next.js API Routes]
+    B --> C[BackendClient.ts]
+    C --> D[Spring Boot Backend]
+    D --> E[MySQL Database]
+    D --> F[Docker Volumes]
+    
+    B --> G[JWT Authentication]
+    G --> C
+    
+    style A fill:#e1f5fe
+    style D fill:#f3e5f5
+    style E fill:#e8f5e8
+```
+
+#### **Endpoints Críticos Verificados**
+
+| Funcionalidad | Frontend Route | Backend Client Method | Spring Boot Endpoint |
+|---------------|----------------|----------------------|---------------------|
+| Listar docs | `/api/documents` | `getDocuments()` | `GET /api/admin/documents` |
+| Aprobar doc | `/api/documents PUT` | `approveDocument()` | `POST /api/admin/documents/{id}/approve` |
+| Rechazar doc | `/api/documents PUT` | `rejectDocument()` | `POST /api/admin/documents/{id}/reject` |
+| **Revertir doc** | `/api/documents PUT` | `revertDocument()` | `POST /api/admin/documents/{id}/revert` |
+| Descargar doc | `/api/documents/direct-download` | `downloadDocument()` | `GET /api/documentos/{id}/file` |
+
+#### **Configuración de CORS Requerida**
+```java
+@CrossOrigin(origins = {
+    "http://localhost:4200",                           // Angular dev
+    "https://vps-4778464-x.dattaweb.com",            // Frontend prod
+    "https://vps-4778464-x.dattaweb.com:9003"        // Dashboard dev ← CRÍTICO
+}, allowCredentials = "true")
+```
+
+### **🔐 Autenticación JWT - Flujo Completo**
+
+1. **Auto-login del Dashboard**:
+   ```typescript
+   // En BackendClient.ts
+   credentials: { username: "admin", password: "admin123" }
+   → POST /api/auth/login
+   → JWT token (válido 24h)
+   ```
+
+2. **Headers de Autenticación**:
+   ```http
+   Authorization: Bearer eyJhbGciOiJIUzUxMiJ9...
+   Content-Type: application/json
+   ```
+
+3. **Renovación Automática**:
+   ```typescript
+   if (!this.isTokenValid()) {
+       return await this.authenticateWithBackend();
+   }
+   ```
+
+### **💾 Persistencia de Datos**
+
+#### **Estructura de Volúmenes Docker**
+```
+mpd_concursos_storage_data_prod:/app/storage
+├── documents/              # Documentos de usuarios
+├── contest-bases/         # Bases de concursos
+└── contest-descriptions/  # Descripciones
+```
+
+#### **Mapeo Base de Datos**
+- **Host**: `mpd-concursos-mysql` (contenedor)
+- **Puerto**: `3307:3306` (host:contenedor) 
+- **Esquema**: `mpd_concursos`
+- **Tablas críticas**: `documents`, `users`, `document_types`
+
+---
+
+**Última actualización WARP.md**: 31 de agosto 2025
+**Versión Dashboard**: v2.2 (Fix Revert + Documentación Completa)
+**Estado Sistema**: 🟢 Completamente Operativo
 
