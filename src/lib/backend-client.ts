@@ -534,13 +534,9 @@ class BackendClient {
   }
 
   async revertDocument(documentId: string): Promise<ApiResponse<BackendDocument>> {
-    // ⚠️ IMPLEMENTACIÓN TEMPORAL: El backend no tiene endpoint para revertir a PENDING
-    // Retornamos un error informativo en lugar de fallar silenciosamente
-    return {
-      success: false,
-      error: 'La función de revertir a PENDING no está implementada en el backend',
-      message: 'El backend Spring Boot no proporciona un endpoint para revertir documentos a estado PENDING'
-    };
+    return this.request<BackendDocument>(`/admin/documents/${documentId}/revert`, {
+      method: 'POST'
+    });
   }
 
   /**

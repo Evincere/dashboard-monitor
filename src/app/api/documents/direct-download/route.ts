@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
       const mimeType = targetFile.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'application/octet-stream';
 
       // Crear respuesta con el archivo
-      return new NextResponse(fileBuffer, {
+      return new NextResponse(new Uint8Array(fileBuffer), {
         status: 200,
         headers: {
           'Content-Type': mimeType,

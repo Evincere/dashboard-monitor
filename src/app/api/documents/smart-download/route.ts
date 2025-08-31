@@ -43,12 +43,12 @@ export async function GET(request: NextRequest) {
           
           // Intentar encontrar el documento solicitado para obtener su tipo
           const requestedDoc = documentsResponse.data.content.find(doc => doc.id === documentId);
-          let documentType = requestedDoc?.documentType;
+          let documentType = requestedDoc?.tipoDocumento;
           
           if (documentType) {
             // Buscar el documento más reciente del mismo tipo (activo)
             const activeDoc = documentsResponse.data.content
-              .filter(doc => doc.documentType === documentType)
+              .filter(doc => doc.tipoDocumento === documentType)
               .sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime())[0];
             
             if (activeDoc && activeDoc.id !== documentId) {
