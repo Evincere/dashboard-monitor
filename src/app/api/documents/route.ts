@@ -80,9 +80,9 @@ export async function GET(request: NextRequest) {
       
       if (/^\d+$/.test(searchTerm)) {
         // DNI search - try multiple backend parameters
-        backendParams.usuarioId = searchTerm;
-        backendParams.userId = searchTerm; // Fallback parameter name
-        console.log('🔍 Backend DNI search with usuarioId and userId:', searchTerm);
+        backendParams.usuario = searchTerm;
+        // backendParams.userId = searchTerm; // Removido - usar usuario // Fallback parameter name
+        console.log('🔍 Backend DNI search with usuario parameter:', searchTerm);
       } else {
         // Text search - get more data for frontend filtering
         backendParams.size = Math.max(2500, backendParams.size);

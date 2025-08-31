@@ -406,7 +406,7 @@ export async function GET(
 
     // Obtener documentos del usuario
     const documentsResponse = await backendClient.getDocuments({
-      usuarioId: user.id,
+      usuario: user.id,
       size: 100
     });
 
@@ -420,7 +420,49 @@ export async function GET(
     }
 
     const backendDocuments = documentsResponse.data?.content || [];
-    console.log(`📄 Found ${backendDocuments.length} documents for user`);
+    // Filtrar solo documentos que pertenecen al usuario específico
+    console.log(`🔍 FILTRO CRÍTICO: Filtrando ${backendDocuments.length} documentos del backend por usuario ${user.id}`);
+    const userDocuments = backendDocuments.filter((doc: any) => {
+      // Filtro 1: Por dniUsuario (campo del backend)
+      if (doc.dniUsuario) {
+        const userDni = user.dni || user.username;
+        const matches = doc.dniUsuario === userDni;
+        if (!matches) {
+          console.log(`🚫 FILTRO: Descartando documento ${doc.id} - dniUsuario ${doc.dniUsuario} no coincide con ${userDni}`);
+        }
+        return matches;
+      }
+      
+      // Filtro 2: Por usuarioId si está disponible (fallback)
+      if (doc.usuarioId || doc.userId) {
+        const docUserId = doc.usuarioId || doc.userId;
+        const matches = docUserId === user.id;
+        if (!matches) {
+          console.log(`🚫 FILTRO: Descartando documento ${doc.id} - usuarioId ${docUserId} no coincide con ${user.id}`);
+        }
+        return matches;
+      }
+      
+      // Filtro 2: Por filePath que debe contener el DNI del usuario
+      if (doc.filePath || doc.rutaArchivo) {
+        const filePath = doc.filePath || doc.rutaArchivo;
+        const userDni = user.dni || user.username;
+        const pathContainsDni = filePath.includes(userDni);
+        if (!pathContainsDni) {
+          console.log(`🚫 FILTRO: Descartando documento ${doc.id} - filePath "${filePath}" no contiene DNI ${userDni}`);
+        }
+        return pathContainsDni;
+      }
+      
+      // Filtro 3: Si no hay información de usuario, descartar por seguridad
+      console.log(`🚫 FILTRO: Descartando documento ${doc.id} - sin información de usuario`);
+      return false;
+    });
+    console.log(`✅ FILTRO APLICADO: ${backendDocuments.length} -> ${userDocuments.length} documentos después del filtrado`);
+    
+    const backendDocuments_filtered = userDocuments;
+    console.log(`📄 FILTRADO EXITOSO: ${backendDocuments.length} documentos originales -> ${backendDocuments_filtered.length} documentos del usuario ${user.dni || user.username}`);
+    const backendDocuments_original = backendDocuments;
 
     // Función para determinar el tipo de documento basado en el nombre del archivo
     const getDocumentTypeFromName = (fileName: string): string => {
@@ -460,7 +502,7 @@ export async function GET(
     };
 
     // Mapear documentos al formato requerido
-    const documents: Document[] = backendDocuments.map((doc: any) => {
+    const documents: Document[] = backendDocuments_filtered.map((doc: any) => {
       const fileName = doc.fileName || doc.nombreArchivo;
       const originalName = doc.originalName || doc.nombreOriginal || fileName;
       const documentTypeFromBackend = doc.documentTypeId || doc.tipoDocumentoId || doc.documentType;

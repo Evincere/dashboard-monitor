@@ -108,7 +108,7 @@ export async function GET(
 
         if (targetUser) {
           const userDocumentsResponse = await backendClient.getDocuments({
-            usuarioId: targetUser.id,
+            usuario: targetUser.id,
             size: 100
           });
 
@@ -140,7 +140,7 @@ export async function GET(
       for (const user of usersResponse.data.content) {
         try {
           const userDocumentsResponse = await backendClient.getDocuments({
-            usuarioId: user.id,
+            usuario: user.id,
             size: 100
           });
 

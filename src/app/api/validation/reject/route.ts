@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
 
     // Obtener documentos del usuario
     const documentsResponse = await backendClient.getDocuments({
-      usuarioId: targetUserId,
+      usuario: targetUserId,
       size: 100
     });
 

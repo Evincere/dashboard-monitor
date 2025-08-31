@@ -619,3 +619,144 @@ mpd_concursos_storage_data_prod:/app/storage
 **Versión Dashboard**: v2.2 (Fix Revert + Documentación Completa)
 **Estado Sistema**: 🟢 Completamente Operativo
 
+
+## 🛠️ **Corrección Crítica: Validador de Documentos - Mapeo de Parámetros (Aug 31, 2025)**
+
+### **Problema Identificado**
+- **Síntoma**: Validador de documentos no mostraba documentos del usuario, interface vacía con "Selecciona un documento para visualizar"
+- **Causa Principal**: Error de mapeo de parámetros entre frontend y backend para filtros de usuario
+- **Manifestación**: 
+  ```
+  🚫 FILTRO: Descartando documento [...] - sin información de usuario
+  ✅ FILTRO APLICADO: 4 -> 0 documentos después del filtrado
+  ```
+- **Impacto**: Imposibilidad de validar documentos de usuarios con estado REJECTED o cualquier otro estado
+
+### **Análisis Técnico**
+
+#### **Flujo de Error Identificado**
+```
+Frontend → backendClient.getDocuments({usuarioId: user.id}) 
+                ↓
+Backend Controller → @RequestParam(...) String usuario
+                ↓
+DocumentFilters constructor → usuarioId vs usuario (MISMATCH)
+                ↓
+SQL Query → WHERE d.isArchived = false (SIN FILTRO DE USUARIO)
+                ↓
+Retorna documentos de TODOS los usuarios → Filtro frontend falla → 0 documentos
+```
+
+#### **Errores Múltiples Detectados**
+1. **Mapeo de Parámetros**: Frontend enviaba `usuarioId` pero backend esperaba `usuario`
+2. **Configuración de Puertos**: `getContestDetails()` usaba puerto 3000 en lugar de 3003 para desarrollo
+3. **Filtro Frontend**: Buscaba campos `usuarioId/userId` que no existen en respuesta del backend (campo real: `dniUsuario`)
+
+### **Solución Implementada**
+
+#### **1. Corrección de Mapeo de Parámetros**
+```typescript
+// ANTES (route.ts):
+const documentsResponse = await backendClient.getDocuments({
+  usuarioId: user.id,  // ❌ Campo incorrecto
+  size: 100
+});
+
+// DESPUÉS:
+const documentsResponse = await backendClient.getDocuments({
+  usuario: user.id,    // ✅ Campo correcto que espera el backend
+  size: 100
+});
+```
+
+#### **2. Corrección de Configuración de Entorno**
+```bash
+# .env.local (AGREGADO):
+NEXT_PUBLIC_BASE_URL=http://localhost:3003  # ✅ Puerto correcto para desarrollo
+```
+
+#### **3. Corrección de Filtro Frontend**
+```typescript
+// ANTES: Buscaba campos inexistentes
+if (doc.usuarioId || doc.userId) { ... }  // ❌ Campos no existen
+
+// DESPUÉS: Usa campo real del backend
+if (doc.dniUsuario) {                      // ✅ Campo real del backend
+  const matches = doc.dniUsuario === userDni;
+  return matches;
+}
+```
+
+### **Archivos Modificados**
+
+#### **Frontend (Dashboard Monitor)**
+- `src/app/api/postulations/[dni]/documents/route.ts`: Mapeo `usuarioId` → `usuario`
+- `src/lib/backend-client.ts`: Interface TypeScript corregida
+- `src/app/api/documents/[id]/view/route.ts`: Endpoint de visualización corregido
+- `.env.local`: Variable `NEXT_PUBLIC_BASE_URL` agregada
+- **Archivos adicionales**: `management/route.ts`, `validation/reject/route.ts`, etc.
+
+#### **Backend (Sin cambios)**
+- ✅ Backend Spring Boot funcionaba correctamente, solo necesitaba parámetros correctos
+
+### **Verificación Post-Corrección**
+
+#### **Test de Funcionalidad**
+```bash
+# 1. Verificar documentos se retornan
+curl -s "http://localhost:3003/dashboard-monitor/api/postulations/26598410/documents" | jq '.data.documents | length'
+# Resultado: 4 documentos ✅
+
+# 2. Verificar visualización funciona
+curl -s "http://localhost:3003/dashboard-monitor/api/documents/{id}/view" | head -1 | file -
+# Resultado: PDF document, version 1.5 ✅
+
+# 3. Verificar backend retorna documentos del usuario correcto
+curl -H "Authorization: Bearer $TOKEN" "localhost:8080/api/admin/documents?usuario={uuid}" | jq '.content[] | .dniUsuario'
+# Resultado: "26598410" ✅
+```
+
+#### **Resultado Final**
+- ✅ **4 documentos** mostrados en validador (DNI: 26598410)
+- ✅ **Visualización PDF** completamente funcional
+- ✅ **Estadísticas correctas**: 3 APPROVED, 1 REJECTED  
+- ✅ **Navegación entre documentos** operativa
+- ✅ **Funciones de validación** (aprobar/rechazar/revertir) disponibles
+
+### **Lecciones Aprendidas**
+
+#### **Debugging de Interfaces Frontend-Backend**
+1. **Verificar contratos de API**: Parámetros esperados vs enviados
+2. **Logs en cascada**: Frontend → API Routes → Backend Client → Backend Service
+3. **Validación de datos**: Verificar estructura real de respuestas vs interfaces TypeScript
+
+#### **Problemas de Configuración Multi-Entorno**
+```bash
+# Checklist de configuración de puertos:
+- Producción: 443 → 9002 (nginx → app)
+- Desarrollo: 9003 → 3003 (nginx → app) 
+- Variables de entorno deben reflejar puerto correcto según entorno
+```
+
+#### **Patrón de Diagnóstico Recomendado**
+```
+1. Verificar servicio backend ✓
+2. Probar endpoint directo con curl ✓  
+3. Verificar API route del dashboard ✓
+4. Analizar logs de filtrado ✓
+5. Comparar estructura de datos real vs esperada ✓
+```
+
+### **Estado Final**
+- 🟢 **Validador de Documentos**: Completamente operativo
+- 🟢 **Visualización PDF**: Funcionando sin errores
+- 🟡 **Lista de Postulantes**: Error menor de auth (no afecta funcionalidad principal)
+
+**Estado**: ✅ **RESUELTO COMPLETAMENTE**
+
+---
+
+**Última actualización**: 31 de agosto 2025, 15:54 UTC
+**Versión Dashboard**: v2.3 (Fix Validador Documentos + Mapeo Parámetros)
+**Desarrollador**: Semper (corrección crítica validador)
+

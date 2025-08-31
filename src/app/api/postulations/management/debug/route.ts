@@ -105,7 +105,7 @@ export async function GET(request: NextRequest) {
         console.log(`🔍 DIAGNÓSTICO - Nivel 5: Testing documents for user: ${testUser.id}`);
         
         const documentsResponse = await backendClient.getDocuments({
-          usuarioId: testUser.id,
+          usuario: testUser.id,
           size: 5
         });
         

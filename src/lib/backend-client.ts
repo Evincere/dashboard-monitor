@@ -406,7 +406,7 @@ class BackendClient {
   async getDocuments(params?: {
     estado?: string;
     tipoDocumentoId?: string;
-    usuarioId?: string;
+    usuario?: string;
     fechaDesde?: string;
     fechaHasta?: string;
     busqueda?: string;
@@ -589,7 +589,7 @@ class BackendClient {
 
     const [inscriptionResponse, documentsResponse] = await Promise.all([
       this.getInscriptions({ userId: user.id }),
-      this.getDocuments({ usuarioId: user.id })
+      this.getDocuments({ usuario: user.id })
     ]);
 
     return {

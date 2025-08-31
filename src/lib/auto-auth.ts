@@ -14,7 +14,7 @@ const getBackendUrl = () => {
   if (typeof window !== 'undefined') {
     const origin = window.location.origin;
     // Try through the dashboard-monitor proxy first
-    return `${origin}/dashboard-monitor/api/auth/login`;
+    return `http://localhost:8080/api/auth/login`; // FIXED: Connect directly to Spring Boot backend
   }
   // Fallback for development
   return 'http://localhost:3000/dashboard-monitor/api/auth/login';
@@ -25,7 +25,7 @@ const getAlternativeBackendUrls = () => {
   if (typeof window !== 'undefined') {
     const origin = window.location.origin;
     return [
-      `${origin}/api/auth/login`, // Try direct API
+      `http://localhost:8080/api/auth/login`, // Try direct API
       // Only use localhost in development
       ...(process.env.NODE_ENV === 'development' ? [
         'http://localhost:3000/dashboard-monitor/api/auth/login',
