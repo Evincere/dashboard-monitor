@@ -13,7 +13,9 @@ import {
   Search,
   Activity,
   FileCheck,
-  FileBarChart
+  FileBarChart,
+  LogOut,
+  User
 } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
@@ -28,6 +30,8 @@ import {
   SidebarFooter,
   SidebarTrigger,
 } from '@/components/ui/sidebar';
+import { Button } from '@/components/ui/button';
+import { useAuth } from '@/lib/auth-context';
 import { cn } from '@/lib/utils';
 
 const menuItems = [
@@ -96,6 +100,11 @@ const settingsItem = {
 
 export function DashboardSidebar() {
   const pathname = usePathname();
+  const { user, logout } = useAuth();
+
+  const handleLogout = async () => {
+    await logout();
+  };
 
   return (
     <Sidebar collapsible="icon">
@@ -106,6 +115,7 @@ export function DashboardSidebar() {
         </div>
         <SidebarTrigger />
       </SidebarHeader>
+      
       <SidebarContent className="p-2">
         <SidebarMenu>
           {menuItems.map((item) => (
@@ -124,8 +134,20 @@ export function DashboardSidebar() {
           ))}
         </SidebarMenu>
       </SidebarContent>
+      
       <SidebarFooter>
         <SidebarMenu>
+          {/* User Info Section */}
+          {user && (
+            <SidebarMenuItem>
+              <div className="flex items-center gap-2 px-2 py-1 text-sm text-muted-foreground">
+                <User className="w-4 h-4" />
+                <span className="truncate">{user.username}</span>
+              </div>
+            </SidebarMenuItem>
+          )}
+          
+          {/* Settings */}
           <SidebarMenuItem>
             <SidebarMenuButton
               asChild
@@ -136,6 +158,20 @@ export function DashboardSidebar() {
                 <settingsItem.icon className="w-5 h-5" />
                 <span>{settingsItem.label}</span>
               </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          
+          {/* Logout Button */}
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild tooltip="Cerrar Sesión">
+              <Button
+                variant="ghost"
+                className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10"
+                onClick={handleLogout}
+              >
+                <LogOut className="w-5 h-5" />
+                <span>Cerrar Sesión</span>
+              </Button>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

@@ -129,7 +129,7 @@ async function calculateDocumentsStatsOptimized(userId: string): Promise<{
 
   try {
     const documentsResponse = await Promise.race([
-      backendClient.getDocuments({ usuarioId: userId, size: 100 }),
+      backendClient.getDocuments({ usuario: userId, size: 100 }),
       new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 10000))
     ]) as any;
 

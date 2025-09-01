@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import backendClient from '@/lib/backend-client';
 
 /**
- * API simplificada para gestión de postulaciones
- * Usa backendClient para obtener datos consistentes con el endpoint individual
+ * API de búsqueda específica para postulaciones
+ * Busca en toda la base de datos por DNI, nombre o email
  */
 
 // Función para obtener centro de vida desde base de datos MySQL
@@ -27,7 +27,6 @@ async function getRealCentroDeVida(inscriptionId: string): Promise<string> {
 
         const result = stdout.trim();
         if (!result) {
-          console.warn(`No centro_de_vida found for ${cleanUUID}`);
           resolve('');
           return;
         }
@@ -45,7 +44,6 @@ async function getRealCentroDeVida(inscriptionId: string): Promise<string> {
           .replace(/�/g, 'á')
           .replace(/Â°/g, '°');
 
-        console.log(`✅ Centro de vida obtenido para ${cleanUUID}: "${cleanResult}"`);
         resolve(cleanResult);
       });
     });
@@ -55,7 +53,7 @@ async function getRealCentroDeVida(inscriptionId: string): Promise<string> {
   }
 }
 
-// Función para calcular estadísticas de documentos usando backendClient
+// Función para calcular estadísticas de documentos
 async function calculateDocumentsStats(userId: string): Promise<{
   total: number;
   pending: number;
@@ -72,7 +70,6 @@ async function calculateDocumentsStats(userId: string): Promise<{
     });
 
     if (!documentsResponse.success) {
-      console.warn(`Failed to fetch documents for user ${userId}`);
       return {
         total: 0,
         pending: 0,
@@ -115,12 +112,11 @@ async function calculateDocumentsStats(userId: string): Promise<{
 
     stats.required = requiredDocs.length;
 
-    // Calcular progreso basado en TODOS los documentos (obligatorios + opcionales)
-    // Progreso = documentos validados (APPROVED + REJECTED) / total documentos
+    // Calcular progreso basado en TODOS los documentos
     const validatedDocs = documents.filter(doc => doc.estado !== 'PENDING').length;
     stats.completionPercentage = documents.length > 0 ? Math.round((validatedDocs / documents.length) * 100) : 0;
 
-    // Para determinar el STATUS, usar solo documentos requeridos
+    // Determinar estado de validación
     if (requiredDocs.length > 0) {
       const approvedRequired = requiredDocs.filter(doc => doc.estado === 'APPROVED').length;
       const rejectedRequired = requiredDocs.filter(doc => doc.estado === 'REJECTED').length;
@@ -135,7 +131,6 @@ async function calculateDocumentsStats(userId: string): Promise<{
         stats.validationStatus = 'PENDING';
       }
     } else {
-      // Si no hay documentos obligatorios, basarse en todos los documentos
       const approved = documents.filter(doc => doc.estado === 'APPROVED').length;
       const rejected = documents.filter(doc => doc.estado === 'REJECTED').length;
 
@@ -144,8 +139,6 @@ async function calculateDocumentsStats(userId: string): Promise<{
       else if (approved > 0) stats.validationStatus = 'PARTIAL';
       else stats.validationStatus = 'PENDING';
     }
-
-    console.log(`📊 Documents stats for user ${userId}: ${stats.approved}/${stats.required} approved (${stats.completionPercentage}%)`);
 
     return stats;
   } catch (error) {
@@ -165,75 +158,91 @@ async function calculateDocumentsStats(userId: string): Promise<{
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get('page') || '0');
-    const pageSize = parseInt(searchParams.get("pageSize") || "300");
-    const onlyStats = searchParams.get('onlyStats') === 'true';
+    const searchTerm = searchParams.get('search') || '';
+    const statusFilter = searchParams.get('statusFilter') || '';
+    const validationFilter = searchParams.get('validationFilter') || '';
+    const sortBy = searchParams.get('sortBy') || 'PRIORITY';
 
-    console.log(`🔄 Postulations management - Page ${page}, Size ${pageSize}`);
+    console.log(`🔍 SEARCH API - Term: "${searchTerm}", Status: "${statusFilter}", Validation: "${validationFilter}"`);
 
-    // Obtener inscripciones usando backendClient
-    const inscriptionsResponse = await backendClient.getInscriptions({ size: 1000 });
+    if (!searchTerm.trim()) {
+      return NextResponse.json({
+        success: false,
+        error: 'Search term is required',
+        postulations: []
+      }, { status: 400 });
+    }
+
+    const searchTermLower = searchTerm.toLowerCase().trim();
+
+    // Obtener TODAS las inscripciones para búsqueda completa
+    const inscriptionsResponse = await backendClient.getInscriptions({ 
+      size: 1000 // Obtener todas las inscripciones
+    });
 
     if (!inscriptionsResponse.success) {
       throw new Error('Failed to fetch inscriptions from backend');
     }
 
     const allInscriptions = inscriptionsResponse.data?.content || [];
+    console.log(`📋 Got ${allInscriptions.length} total inscriptions for search`);
 
+    // Filtrar inscripciones ACTIVAS (excluirlas del resultado)
+    let filteredInscriptions = allInscriptions.filter(inscription => 
+      inscription.state !== 'ACTIVE'
+    );
 
-    // Filtrar usuarios ACTIVE
-    const filteredInscriptions = allInscriptions.filter(inscription => inscription.state !== 'ACTIVE');
-    console.log(`🔍 Filtradas ${allInscriptions.length - filteredInscriptions.length} inscripciones ACTIVE`);
-    const allInscriptions_filtered = filteredInscriptions;
+    // 🔍 BÚSQUEDA: Filtrar por término de búsqueda
+    const matchingInscriptions = filteredInscriptions.filter(inscription => {
+      if (!inscription.userInfo) return false;
 
-    console.log(`📋 Got ${allInscriptions_filtered.length} inscriptions from backend`);
+      const dni = (inscription.userInfo.dni || '').toLowerCase();
+      const fullName = (inscription.userInfo.fullName || '').toLowerCase();
+      const email = (inscription.userInfo.email || '').toLowerCase();
 
-    // Estadísticas
-    const stats = {
-      total: allInscriptions.length,
-      completedWithDocs: allInscriptions_filtered.filter(i => i.state === 'COMPLETED_WITH_DOCS').length,
-      validationPending: allInscriptions_filtered.filter(i => i.state && ['ACTIVE', 'COMPLETED_WITH_DOCS', 'PENDING'].includes(i.state)).length,
-      validationCompleted: allInscriptions_filtered.filter(i => i.state === 'APPROVED').length,
-      validationRejected: allInscriptions_filtered.filter(i => i.state === 'REJECTED').length
-    };
+      return dni.includes(searchTermLower) || 
+             fullName.includes(searchTermLower) || 
+             email.includes(searchTermLower);
+    });
 
-    if (onlyStats) {
-      return NextResponse.json({
-        success: true,
-        postulations: [],
-        stats,
-        pagination: { page: 0, pageSize: 0, totalItems: stats.total, totalPages: 0, hasNextPage: false, hasPreviousPage: false },
-        timestamp: new Date().toISOString(),
-        source: 'simplified-stats'
-      });
+    console.log(`🎯 Found ${matchingInscriptions.length} matching inscriptions for term "${searchTerm}"`);
+
+    // Aplicar filtros adicionales si se proporcionan
+    let finalInscriptions = matchingInscriptions;
+
+    if (statusFilter && statusFilter !== 'ALL') {
+      finalInscriptions = finalInscriptions.filter(inscription => 
+        inscription.state === statusFilter
+      );
+      console.log(`📝 After status filter (${statusFilter}): ${finalInscriptions.length} results`);
     }
 
-    // Paginación
-    const totalPages = Math.ceil(allInscriptions_filtered.length / pageSize);
-    const startIndex = page * pageSize;
-    const endIndex = startIndex + pageSize;
-    const paginatedInscriptions = allInscriptions_filtered.slice(startIndex, endIndex);
+    // Para el filtro de validación, necesitaremos procesar los documentos
+    // Por ahora, limitamos a primeros 20 resultados para performance
+    const limitedResults = finalInscriptions.slice(0, 20);
+    console.log(`⚡ Processing first ${limitedResults.length} results for performance`);
 
-    console.log(`📄 Processing ${paginatedInscriptions.length} inscriptions for page ${page}`);
-
-    // Procesar postulaciones
+    // Procesar postulaciones encontradas
     const postulations = [];
 
-    for (const inscription of paginatedInscriptions) {
+    for (const inscription of limitedResults) {
       try {
-        if (!inscription.userInfo?.dni) {
-          console.warn(`Skipping inscription ${inscription.id} - no DNI`);
-          continue;
-        }
+        if (!inscription.userInfo?.dni) continue;
 
         const dni = inscription.userInfo.dni;
-        console.log(`📄 Processing ${dni}...`);
 
         // Obtener centro de vida real
         const realCentroDeVida = await getRealCentroDeVida(inscription.id);
 
         // Obtener estadísticas reales de documentos
         const documentsStats = await calculateDocumentsStats(inscription.userId);
+
+        // Aplicar filtro de validación si se especifica
+        if (validationFilter && validationFilter !== 'ALL') {
+          if (documentsStats.validationStatus !== validationFilter) {
+            continue; // Saltar esta postulación
+          }
+        }
 
         const postulation = {
           id: inscription.id,
@@ -267,37 +276,53 @@ export async function GET(request: NextRequest) {
         };
 
         postulations.push(postulation);
-        console.log(`✅ Added postulation for ${dni} with ${documentsStats.completionPercentage}% completion`);
 
       } catch (error) {
-        console.error(`Error processing inscription ${inscription.id}:`, error);
+        console.error(`Error processing inscription ${inscription.id} in search:`, error);
       }
     }
 
-    console.log(`✅ Successfully processed ${postulations.length} postulations`);
+    // Ordenar resultados
+    switch (sortBy) {
+      case 'PRIORITY':
+        const priorityOrder = { 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1 };
+        postulations.sort((a, b) => priorityOrder[b.priority as keyof typeof priorityOrder] - priorityOrder[a.priority as keyof typeof priorityOrder]);
+        break;
+      case 'COMPLETION':
+        postulations.sort((a, b) => a.completionPercentage - b.completionPercentage);
+        break;
+      case 'NAME':
+        postulations.sort((a, b) => a.user.fullName.localeCompare(b.user.fullName));
+        break;
+      case 'DATE':
+        postulations.sort((a, b) => new Date(b.inscription.createdAt || new Date()).getTime() - new Date(a.inscription.createdAt || new Date()).getTime());
+        break;
+    }
+
+    console.log(`✅ Search completed: ${postulations.length} postulations found for "${searchTerm}"`);
 
     return NextResponse.json({
       success: true,
       postulations,
-      stats,
-      pagination: {
-        page,
-        pageSize,
-        totalItems: allInscriptions.length,
-        totalPages,
-        hasNextPage: page < totalPages - 1,
-        hasPreviousPage: page > 0
+      searchTerm,
+      totalMatches: matchingInscriptions.length,
+      processedResults: postulations.length,
+      filters: {
+        statusFilter: statusFilter || 'ALL',
+        validationFilter: validationFilter || 'ALL',
+        sortBy
       },
       timestamp: new Date().toISOString(),
-      source: 'backend-client-with-real-progress'
+      source: 'search-api'
     });
 
   } catch (error) {
-    console.error('❌ Postulations management API error:', error);
+    console.error('❌ Search API error:', error);
 
     return NextResponse.json({
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: error instanceof Error ? error.message : 'Unknown search error',
+      postulations: [],
       timestamp: new Date().toISOString()
     }, { status: 500 });
   }

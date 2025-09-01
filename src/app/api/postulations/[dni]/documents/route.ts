@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import backendClient from '@/lib/backend-client';
+import sessionBackendClient from "@/lib/session-backend-client";
 
 import { mapDocumentStatus } from '@/lib/document-status-utils';
 import fs from 'fs';
@@ -82,7 +82,7 @@ const DOCUMENTS_DIR = process.env.APP_STORAGE_DOCUMENTS_DIR || 'documents';
 const PRIMARY_DOCS_PATH = process.env.DOCUMENTS_PATH;
 const LOCAL_DOCS_PATH = process.env.LOCAL_DOCUMENTS_PATH || (IS_PRODUCTION
   ? '/opt/mpd/documents'
-  : 'B:\\concursos_situacion_post_gracia\\descarga_administracion_20250814_191745\\documentos'
+  : 'B:\\\\concursos_situacion_post_gracia\\\\descarga_administracion_20250814_191745\\\\documentos'
 );
 const BACKEND_STORAGE_PATH = process.env.DOCUMENT_STORAGE_PATH || (IS_PRODUCTION
   ? "/var/lib/docker/volumes/mpd_concursos_storage_data_prod/_data/documents"
@@ -277,8 +277,8 @@ async function getContestDetails(contestId: number): Promise<any> {
     console.log(`🏆 Getting contest details for ID: ${contestId}`);
 
     // Usar endpoint local en lugar del backend externo
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-    const response = await fetch(`${baseUrl}/api/contests/${contestId}`, {
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3003';
+    const response = await fetch(`${baseUrl}/dashboard-monitor/api/contests/${contestId}`, {
       headers: {
         'Accept': 'application/json',
       }
@@ -367,45 +367,60 @@ export async function GET(
     const { dni } = await params;
     console.log(`🔍 Fetching documents for postulant with DNI: ${dni}`);
 
-    // Buscar usuario por DNI - obtener todos los usuarios como en la API de gestión
-    const usersResponse = await backendClient.getUsers({ size: 1000 });
-
-    if (!usersResponse.success || !usersResponse.data?.content?.length) {
+    // Cambio principal: Buscar usuario en las inscripciones en lugar de la tabla de usuarios
+    console.log(`📡 Buscando usuario con DNI ${dni} en inscripciones...`);
+    
+    // Obtener todas las inscripciones
+    const inscriptionsResponse = await sessionBackendClient.getInscriptions({ size: 1000 });
+    
+    if (!inscriptionsResponse.success || !inscriptionsResponse.data?.content?.length) {
+      console.error('❌ No se pudieron obtener inscripciones o están vacías');
       return NextResponse.json({
         success: false,
-        error: 'Postulant not found',
+        error: 'No inscriptions found',
         timestamp: new Date().toISOString()
       }, { status: 404 });
     }
 
-    // Buscar el usuario exacto por DNI en la lista completa
-    const user = usersResponse.data.content.find((u: any) =>
-      (u.dni === dni) || (u.username === dni)
+    // Buscar la inscripción que tenga el DNI solicitado
+    const targetInscription = inscriptionsResponse.data.content.find((inscription: any) =>
+      inscription.userInfo?.dni === dni
     );
 
-    if (!user) {
+    if (!targetInscription) {
+      console.error(`❌ No se encontró inscripción para DNI: ${dni}`);
       return NextResponse.json({
         success: false,
-        error: 'Postulant not found with exact DNI match',
+        error: 'Postulant not found with that DNI',
         timestamp: new Date().toISOString()
       }, { status: 404 });
     }
 
-    console.log(`👤 Found user: ${user.fullName || user.name} (ID: ${user.id})`);
-
-    // Obtener inscripción del usuario
-    const inscriptionsResponse = await backendClient.getInscriptions({
-      userId: user.id,
-      size: 10
-    });
-
-    let inscription = null;
-    if (inscriptionsResponse.success && inscriptionsResponse.data?.content?.length) {
-      inscription = inscriptionsResponse.data.content[0]; // Tomar la primera inscripción
+    if (!targetInscription.userInfo) {
+      console.error(`❌ No se encontró información de usuario para DNI: ${dni}`);
+      return NextResponse.json({
+        success: false,
+        error: 'User information not found for this postulant',
+        timestamp: new Date().toISOString()
+      }, { status: 404 });
     }
 
-    // Obtener documentos del usuario
-    const documentsResponse = await backendClient.getDocuments({
+    console.log(`👤 Found user from inscription: ${targetInscription.userInfo.fullName} (DNI: ${targetInscription.userInfo.dni})`);
+
+    // Crear objeto user compatible con el resto del código
+    const user = {
+      id: targetInscription.userId,
+      dni: targetInscription.userInfo.dni,
+      fullName: targetInscription.userInfo.fullName,
+      email: targetInscription.userInfo.email,
+      username: targetInscription.userInfo.dni
+    };
+
+    // Usar la inscripción que encontramos
+    const inscription = targetInscription;
+
+    // Obtener documentos del usuario usando su ID
+    const documentsResponse = await sessionBackendClient.getDocuments({
       usuario: user.id,
       size: 100
     });
@@ -604,7 +619,7 @@ export async function GET(
       return composedName || user.name || 'Usuario sin nombre';
     };
 
-    // Usar los datos del backend y manejar posibles valores undefined
+    // Usar los datos de la inscripción y manejar posibles valores undefined
     const postulantInfo: PostulantInfo = {
       user: {
         dni: user.dni || user.username || 'Sin DNI',
@@ -613,8 +628,8 @@ export async function GET(
       },
       inscription: {
         id: inscription?.id || 'unknown',
-        state: (inscription as any)?.state || (inscription as any)?.status || 'ACTIVE', // Type assertion para evitar error
-        centroDeVida: (inscription as any)?.centroDeVida || 'No especificada',
+        state: inscription?.state || inscription?.status || 'ACTIVE',
+        centroDeVida: inscription?.centroDeVida || 'No especificada',
         createdAt: inscription?.createdAt?.toString() || new Date().toISOString()
       },
       contest: {

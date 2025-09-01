@@ -11,12 +11,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CalendarIcon, FileText, Download } from 'lucide-react';
-import { authFetch } from '@/lib/auth-fetch';
+import { useAuthenticatedFetch } from '@/lib/auth-fetch';
 
 export function ReportGeneratorComplete() {
   const [reportType, setReportType] = useState('');
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
   const [isGenerating, setIsGenerating] = useState(false);
+  const authFetch = useAuthenticatedFetch();
 
   const handleGenerateReport = async () => {
     if (!reportType) return;

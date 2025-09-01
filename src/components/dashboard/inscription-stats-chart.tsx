@@ -1,5 +1,6 @@
 'use client';
 
+import { useAuthenticatedApi } from "@/lib/auth-fetch";
 import { apiUrl } from "@/lib/utils";
 
 import { useState, useEffect, useRef } from 'react';
@@ -95,6 +96,7 @@ const chartConfig = {
 };
 
 export function InscriptionStatsChart() {
+  const api = useAuthenticatedApi();
   const [data, setData] = useState<InscriptionStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -106,8 +108,7 @@ export function InscriptionStatsChart() {
   const fetchContests = async () => {
     try {
       setContestsLoading(true);
-      const response = await fetch(apiUrl('dashboard/contests-list'));
-      const result = await response.json();
+      const result = await api(apiUrl('dashboard/contests-list'));
 
       if (result.success) {
         setContests(result.data);
@@ -128,8 +129,7 @@ export function InscriptionStatsChart() {
       const url = contestId && contestId !== 'all' 
         ? apiUrl(`dashboard/inscriptions-stats?contestId=${contestId}`)
         : apiUrl('dashboard/inscriptions-stats');
-      const response = await fetch(url);
-      const result = await response.json();
+      const result = await api(url);
 
       if (result.success) {
         setData(result.data);

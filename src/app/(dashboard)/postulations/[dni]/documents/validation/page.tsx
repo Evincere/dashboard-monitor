@@ -173,7 +173,7 @@ export default function DocumentValidationPage() {
   const [isProcessingApproval, setIsProcessingApproval] = useState(false);
 
   // Fetch all postulants list for navigation
-  const fetchAllPostulantsList = async () => {
+  const fetchAllPostulantsList = useCallback(async () => {
     console.log("🔄 fetchAllPostulantsList - Iniciando carga de lista de postulantes...");
     try {
       console.log("📡 Haciendo fetch a /api/proxy-backend/inscriptions con tamaño=1000");
@@ -235,10 +235,10 @@ export default function DocumentValidationPage() {
     } catch (error) {
       console.error("💥 Error fetching postulants list:", error);
     }
-  };
+  }, []);
 
   // Fetch validation data
-  const fetchValidationData = async () => {
+  const fetchValidationData = useCallback(async () => {
     setLoading(true);
     try {
       const response = await fetch(apiUrl(`postulations/${dni}/documents`));
@@ -278,7 +278,7 @@ export default function DocumentValidationPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [dni, setLoading, setDocuments, setPostulant, setStats, setCurrentDocument]);
 
   useEffect(() => {
     console.log("🔄 useEffect ejecutándose con DNI:", dni);
@@ -299,10 +299,9 @@ export default function DocumentValidationPage() {
     // Cleanup on unmount
     return () => {
       console.log("🧹 Limpiando componente...");
-      reset();
+      // reset(); // REMOVED: Causaba bucle infinito de re-renders
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dni]);
+  }, [dni, fetchValidationData, fetchAllPostulantsList]);
 
   // Handle download
   const handleDownload = useCallback(() => {

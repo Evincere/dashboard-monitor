@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic';
 import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCw, RefreshCw, AlertTriangle, Loader2 } from 'lucide-react';
 
 // Import the correct authFetch function from auth-fetch library
-import { authFetch } from "../../lib/auth-fetch";
+import { useAuthenticatedFetch } from "../../lib/auth-fetch";
 
 // Create wrapped PDFDocument component to ensure type safety
 const Document = dynamic(
@@ -87,6 +87,7 @@ const BlobViewer: React.FC<{
   onBlobReady: (blobUrl: string) => void;
   onError: (error: string) => void;
 }> = ({ url, onBlobReady, onError }) => {
+  const authFetch = useAuthenticatedFetch();
   useEffect(() => {
     if (typeof window === 'undefined' || !url) return;
 

@@ -1,4 +1,5 @@
 'use client';
+import { useAuthenticatedApi } from "@/lib/auth-fetch";
 
 import { apiUrl } from "@/lib/utils";
 
@@ -59,6 +60,7 @@ const chartConfig = {
 }
 
 export function ContestStatusChart() {
+  const api = useAuthenticatedApi();
   const [data, setData] = useState<ContestStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -68,8 +70,8 @@ export function ContestStatusChart() {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(apiUrl('dashboard/contests-status'));
-      const result = await response.json();
+      const result = await api(apiUrl('dashboard/contests-status'));
+      
 
       if (result.success) {
         setData(result.data);

@@ -1,4 +1,5 @@
 
+import { useAuthenticatedApi } from "@/lib/auth-fetch";
 'use client';
 
 import {
@@ -31,6 +32,7 @@ const chartConfig = {
 };
 
 export function InscriptionsChart() {
+  const api = useAuthenticatedApi();
   return (
     <Card className="bg-card/60 backdrop-blur-sm border-white/10 shadow-lg">
       <CardHeader>

@@ -1,4 +1,5 @@
 'use client';
+import { useAuthenticatedApi } from "@/lib/auth-fetch";
 
 import { apiUrl } from "@/lib/utils";
 
@@ -34,6 +35,7 @@ const chartConfig = {
 }
 
 export function DocumentTypeChart() {
+  const api = useAuthenticatedApi();
   const [data, setData] = useState<DocumentCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -42,8 +44,8 @@ export function DocumentTypeChart() {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(apiUrl('dashboard/documents-by-category'));
-      const result = await response.json();
+      const result = await api(apiUrl('dashboard/documents-by-category'));
+      
 
       if (result.success) {
         setData(result.data);

@@ -96,7 +96,7 @@ export async function GET(request: NextRequest) {
         console.log(`👤 [DIAGNOSTICS] Checking user: ${user.fullName || user.name} (DNI: ${user.dni})`);
 
         const userDocumentsResponse = await backendClient.getDocuments({
-          usuarioId: user.id,
+          usuario: user.id,
           size: 100
         });
 

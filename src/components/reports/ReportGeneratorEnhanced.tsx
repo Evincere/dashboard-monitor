@@ -29,7 +29,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 
 import { ReportTypesEnhanced, type ReportType } from './ReportTypesEnhanced';
 import { ReportViewer } from './ReportViewer';
-import { authFetch } from '@/lib/auth-fetch';
+import { useAuthenticatedFetch } from '@/lib/auth-fetch';
 import { generateStableId } from '@/lib/utils/stable-id';
 
 // Utility function for generating UUIDs
@@ -73,6 +73,7 @@ export function ReportGeneratorEnhanced() {
     category: 'all',
     priority: 'all'
   });
+  const authFetch = useAuthenticatedFetch();
   const [generatedReports, setGeneratedReports] = usePersistentState<GeneratedReport[]>("dashboard-generated-reports", []);
   const [isGenerating, setIsGenerating] = useState(false);
   const [viewerReport, setViewerReport] = useState<GeneratedReport | null>(null);
