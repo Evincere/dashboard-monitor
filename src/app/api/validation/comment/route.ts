@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
     // Si se especifica un documento, verificar que existe
     if (documentId) {
       const documentsResponse = await backendClient.getDocuments({
-        usuarioId: targetUserId,
+        usuario: targetUserId,
         size: 100
       });
 

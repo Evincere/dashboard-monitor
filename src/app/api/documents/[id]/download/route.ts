@@ -31,7 +31,7 @@ export async function GET(
     for (const user of usersResponse.data.content) {
       try {
         const userDocumentsResponse = await backendClient.getDocuments({
-          usuarioId: user.id,
+          usuario: user.id,
           size: 100
         });
 

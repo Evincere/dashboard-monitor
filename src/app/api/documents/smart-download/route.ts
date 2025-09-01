@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
       
       try {
         // Obtener todos los documentos del usuario
-        const documentsResponse = await backendClient.getDocuments({ usuarioId: userId });
+        const documentsResponse = await backendClient.getDocuments({ usuario: userId });
         
         if (documentsResponse.success && documentsResponse.data?.content) {
           console.log(`📋 [SmartDownload] Encontrados ${documentsResponse.data.content.length} documentos del usuario`);

@@ -67,7 +67,7 @@ async function calculateDocumentsStats(userId: string): Promise<{
 }> {
   try {
     const documentsResponse = await backendClient.getDocuments({
-      usuarioId: userId,
+      usuario: userId,
       size: 100
     });
 
