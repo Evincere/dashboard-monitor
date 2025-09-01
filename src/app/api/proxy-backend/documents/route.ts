@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
     const params = {
       estado: searchParams.get('estado') || undefined,
       tipoDocumentoId: searchParams.get('tipoDocumentoId') || undefined,
-      usuario: searchParams.get('usuarioId') || undefined,
+      usuario: searchParams.get('usuario') || undefined,
       fechaDesde: searchParams.get('fechaDesde') || undefined,
       fechaHasta: searchParams.get('fechaHasta') || undefined,
       busqueda: searchParams.get('busqueda') || undefined,

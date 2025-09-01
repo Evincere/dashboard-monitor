@@ -4,7 +4,7 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, useCallback } from 'react';
-import { authFetch } from '@/lib/auth-fetch'; // ✅ Importar authFetch
+import { useAuthenticatedFetch } from '@/lib/auth-fetch'; // ✅ Importar authFetch
 import type { DashboardMetrics, TechnicalIssue, ReportFilter } from '../types/index';
 
 // =====================================
@@ -13,6 +13,7 @@ import type { DashboardMetrics, TechnicalIssue, ReportFilter } from '../types/in
 
 export function useReportData() {
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const authFetch = useAuthenticatedFetch();
 
   const { data: metrics, isLoading, error, refetch } = useQuery({
     queryKey: ['dashboard-metrics'],
@@ -70,6 +71,7 @@ export function useReportData() {
 // =====================================
 
 export function useTechnicalIssues(filters?: ReportFilter) {
+  const authFetch = useAuthenticatedFetch();
   const queryKey = ['technical-issues', filters];
 
   const { data: issues, isLoading, error } = useQuery({
@@ -111,6 +113,7 @@ export function useTechnicalIssues(filters?: ReportFilter) {
 
 export function useReportCache() {
   const queryClient = useQueryClient();
+  const authFetch = useAuthenticatedFetch();
 
   const invalidateMetrics = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['dashboard-metrics'] });
@@ -135,7 +138,7 @@ export function useReportCache() {
       },
       staleTime: 5 * 60 * 1000,
     });
-  }, [queryClient]);
+  }, [queryClient, authFetch]);
 
   return {
     invalidateMetrics,

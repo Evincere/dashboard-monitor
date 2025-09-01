@@ -1,6 +1,6 @@
-
 'use client';
 import { apiUrl } from '@/lib/utils';
+import { useAuthenticatedApi } from '@/lib/auth-fetch';
 
 import { useState, useEffect } from 'react';
 import { Users, FileText, Library, UserCheck, HardDrive, RefreshCw } from 'lucide-react';
@@ -45,12 +45,12 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const { toast } = useToast();
+  const api = useAuthenticatedApi();
 
   const fetchDashboardStats = async () => {
     try {
       setLoading(true);
-      const response = await fetch(apiUrl('dashboard/stats'));
-      const result = await response.json();
+      const result = await api(apiUrl('dashboard/stats'));
 
       if (result.success) {
         setMetrics(result.data);
@@ -151,4 +151,3 @@ export default function DashboardPage() {
     </main>
   );
 }
-

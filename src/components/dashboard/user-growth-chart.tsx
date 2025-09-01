@@ -1,4 +1,5 @@
 'use client';
+import { useAuthenticatedApi } from "@/lib/auth-fetch";
 
 import {
   Card,
@@ -31,6 +32,7 @@ const chartConfig = {
 };
 
 export function UserGrowthChart() {
+  const api = useAuthenticatedApi();
   return (
     <Card className="bg-card/60 backdrop-blur-sm border-white/10 shadow-lg">
       <CardHeader>

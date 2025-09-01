@@ -1,4 +1,5 @@
 'use client';
+import { useAuthenticatedApi } from "@/lib/auth-fetch";
 
 
 import { apiUrl } from '@/lib/utils';
@@ -99,6 +100,7 @@ interface PerformanceData {
 }
 
 export function PerformanceMonitor() {
+  const api = useAuthenticatedApi();
   const [data, setData] = useState<PerformanceData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -108,11 +110,11 @@ export function PerformanceMonitor() {
   const fetchPerformanceData = async () => {
     try {
       setLoading(true);
-      const response = await fetch(apiUrl('performance?recommendations=false'));
-      if (!response.ok) {
+      const result = await api(apiUrl('performance?recommendations=false'));
+      if (!result.success) {
         throw new Error('Failed to fetch performance data');
       }
-      const result = await response.json();
+      
       setData(result);
       setError(null);
     } catch (err) {
@@ -124,13 +126,13 @@ export function PerformanceMonitor() {
 
   const clearMetrics = async (action: string) => {
     try {
-      const response = await fetch(apiUrl('performance'), {
+      const result = await api(apiUrl('performance'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action })
       });
       
-      if (response.ok) {
+      if (result.success) {
         await fetchPerformanceData();
       }
     } catch (err) {

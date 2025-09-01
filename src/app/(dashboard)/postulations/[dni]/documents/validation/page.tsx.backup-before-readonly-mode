@@ -187,13 +187,12 @@ export default function DocumentValidationPage() {
       });
 
       if (result.success && result.data && result.data.content) {
-        // 🔍 INCLUIR TODOS los postulantes para permitir navegación desde búsqueda
-        // Si necesita validación O es el postulante actual que estamos viendo
+        // SOLO incluir postulantes que necesiten validación (COMPLETED_WITH_DOCS o PENDING)
         const needsValidation = result.data.content.filter((p: any) => {
           const hasName = p.userInfo?.fullName;
           const hasDni = p.userInfo?.dni;
           const needsValidation =
-            p.state === "COMPLETED_WITH_DOCS" || p.state === "PENDING" || p.userInfo?.dni === dni;
+            p.state === "COMPLETED_WITH_DOCS" || p.state === "PENDING";
 
           console.log(
             `📝 Postulante ${p.userInfo?.fullName || "N/A"} (${p.userInfo?.dni || "N/A"
@@ -203,11 +202,11 @@ export default function DocumentValidationPage() {
           return hasName && hasDni && needsValidation;
         });
 
-        console.log("🔍 Postulantes incluidos (pendientes + actual):", needsValidation.length);
+        console.log("🔍 Postulantes que necesitan validación:", needsValidation.length);
 
         // Solo usar los que necesitan validación para la navegación
         if (needsValidation.length === 0) {
-          console.log("⚠️ No se encontraron postulantes");
+          console.log("⚠️ No se encontraron postulantes pendientes de validación");
           setAllPostulantsList([]);
           return;
         }
@@ -228,7 +227,7 @@ export default function DocumentValidationPage() {
         console.log(
           "✅ Lista de postulantes cargada exitosamente:",
           postulants.length,
-          "postulantes incluidos"
+          "postulantes pendientes"
         );
       } else {
         console.log("❌ API no devolvió datos válidos:", result);
@@ -484,7 +483,7 @@ export default function DocumentValidationPage() {
           return (
             p.userInfo?.fullName &&
             p.userInfo?.dni &&
-            (p.state === "COMPLETED_WITH_DOCS" || p.state === "PENDING" || p.userInfo?.dni === dni)
+            (p.state === "COMPLETED_WITH_DOCS" || p.state === "PENDING")
           );
         });
 
@@ -716,7 +715,7 @@ export default function DocumentValidationPage() {
               return (
                 p.userInfo?.fullName &&
                 p.userInfo?.dni &&
-                (p.state === "COMPLETED_WITH_DOCS" || p.state === "PENDING" || p.userInfo?.dni === dni)
+                (p.state === "COMPLETED_WITH_DOCS" || p.state === "PENDING")
               );
             });
 
