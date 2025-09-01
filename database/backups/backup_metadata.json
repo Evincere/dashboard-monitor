@@ -22,16 +22,18 @@
     "path": "B:\\CODE\\PROYECTOS\\mpd-dashboard\\database\\backups\\mpd_concursos_local_backup_20250815_082917.sql"
   },
   {
-    "id": "backup_1756327571699",
-    "name": "test_dynamic_small",
-    "description": "Prueba solo CVs e imágenes",
-    "date": "2025-08-27T20:46:11.698Z",
-    "size": "3.14 MB",
-    "sizeBytes": 3295628,
+    "id": "backup_1756760645588",
+    "name": "backup_ultimo",
+    "description": "backup durante creacion de login",
+    "date": "2025-09-01T21:04:05.588Z",
+    "size": "10.05 MB",
+    "sizeBytes": 10541839,
     "integrity": "verified",
     "type": "full",
-    "includesDocuments": false,
-    "documentTypes": [],
-    "path": "/home/semper/dashboard-monitor/database/backups/test_dynamic_small_2025-08-27T20-46-11-699Z.sql"
+    "includesDocuments": true,
+    "documentTypes": [
+      "documents"
+    ],
+    "path": "/home/semper/dashboard-monitor/database/backups/backup_ultimo_2025-09-01T21-04-05-588Z.sql"
   }
 ]

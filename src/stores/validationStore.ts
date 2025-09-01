@@ -105,11 +105,15 @@ export const useValidationStore = create<ValidationState>()(
       setDocuments: (documents) => set({ documents }),
       setCurrentDocument: (document) => set({ currentDocument: document }),
       setPostulant: (postulant: PostulantInfo) => {
+        if (!postulant) {
+          console.warn("⚠️ setPostulant llamado con postulant undefined");
+          return;
+        }
         // Ensure all required fields are present with default values if needed
         const enhancedPostulant: PostulantInfo = {
           user: {
-            ...postulant.user,
-            telefono: postulant.user.telefono || undefined,
+            ...(postulant?.user || {}),
+            telefono: postulant?.user?.telefono || undefined,
           },
           inscription: {
             ...postulant.inscription,

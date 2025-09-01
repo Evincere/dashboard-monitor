@@ -1,7 +1,7 @@
 'use client';
 
 import { apiUrl, fullRouteUrl } from "@/lib/utils";
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Users,
   Search,
@@ -75,9 +75,6 @@ interface PostulationsStats {
   validationRejected: number;
 }
 
-// Variables globales para control de estado
-let hasInitialized = false;
-let isLoadingData = false;
 
 export default function PostulationsManagementPage() {
   const [postulations, setPostulations] = useState<Postulation[]>([]);
@@ -91,6 +88,9 @@ export default function PostulationsManagementPage() {
   const { toast } = useToast();
 
   const [currentPage, setCurrentPage] = useState(1);
+
+  // 🔧 Referencias para control de estado persistente durante Hot Reload
+  const isLoadingDataRef = useRef(false);
   const [totalPages, setTotalPages] = useState(1);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const pageSize = 25; // Tamaño pequeño para cargas rápidas
@@ -303,13 +303,13 @@ export default function PostulationsManagementPage() {
 
   // Fetch postulations
   const fetchPostulations = async (page = 1, append = false) => {
-    if (isLoadingData) {
+    if (isLoadingDataRef.current) {
       console.log('⚠️ Ya se están cargando datos, omitiendo...');
       return;
     }
 
     try {
-      isLoadingData = true;
+      isLoadingDataRef.current = true;
       console.log(`📡 Cargando postulaciones - página ${page}...`);
       
       const params = new URLSearchParams({
@@ -366,13 +366,13 @@ export default function PostulationsManagementPage() {
         });
       }
     } finally {
-      isLoadingData = false;
+      isLoadingDataRef.current = false;
     }
   };
 
   // Load more postulations
   const loadMorePostulations = async () => {
-    if (currentPage < totalPages && !isLoadingMore && !isLoadingData && searchMode === 'local') {
+    if (currentPage < totalPages && !isLoadingMore && !isLoadingDataRef.current && searchMode === 'local') {
       setIsLoadingMore(true);
       await fetchPostulations(currentPage + 1, true);
       setIsLoadingMore(false);
@@ -389,24 +389,30 @@ export default function PostulationsManagementPage() {
 
   // Initial load
   useEffect(() => {
-    if (hasInitialized) {
+    if (postulations.length > 0 || stats !== null) {
       console.log('⚠️ Ya inicializado, omitiendo...');
       return;
     }
 
     console.log('🚀 Iniciando carga inicial...');
-    hasInitialized = true;
 
     const loadInitialData = async () => {
-      setLoading(true);
-      
-      // Cargar estadísticas primero
-      await fetchStats();
-      
-      // Luego cargar postulaciones
-      await fetchPostulations(1, false);
-      
-      setLoading(false);
+      try {
+        setLoading(true);
+        
+        console.log("📊 Cargando estadísticas...");
+        await fetchStats();
+        
+        console.log("📡 Cargando postulaciones...");
+        await fetchPostulations(1, false);
+        
+        console.log("✅ Carga inicial completada");
+        setLoading(false);
+      } catch (error) {
+        console.error("❌ Error en carga inicial:", error);
+        setLoading(false);
+        // No resetear hasInitializedRef para que se pueda reintentar
+      }
     };
 
     loadInitialData();
@@ -441,8 +447,7 @@ export default function PostulationsManagementPage() {
   };
 
   const handleRefresh = () => {
-    hasInitialized = false;
-    isLoadingData = false;
+    isLoadingDataRef.current = false;
     setPostulations([]);
     setFilteredPostulations([]);
     setSearchResults([]);
@@ -508,8 +513,8 @@ export default function PostulationsManagementPage() {
               Administre y valide las postulaciones al concurso de manera organizada
             </p>
           </div>
-          <Button variant="outline" onClick={handleRefresh} disabled={loading || isLoadingData}>
-            <RefreshCw className={`w-4 h-4 mr-2 ${(loading || isLoadingData) ? 'animate-spin' : ''}`} />
+          <Button variant="outline" onClick={handleRefresh} disabled={loading || isLoadingDataRef.current}>
+            <RefreshCw className={`w-4 h-4 mr-2 ${(loading || isLoadingDataRef.current) ? 'animate-spin' : ''}`} />
             Actualizar
           </Button>
         </div>
@@ -769,7 +774,7 @@ export default function PostulationsManagementPage() {
                 <div className="text-center py-6">
                   <Button
                     onClick={loadMorePostulations}
-                    disabled={isLoadingMore || isLoadingData}
+                    disabled={isLoadingMore || isLoadingDataRef.current}
                     variant="outline"
                     size="lg"
                   >
