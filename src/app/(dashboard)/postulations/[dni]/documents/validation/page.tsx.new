@@ -1,0 +1,182 @@
+"use client";
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
+import { useValidationStore } from "@/stores/validations/validation-store";
+import { useValidationShortcuts } from "@/hooks/useKeyboardShortcuts";
+import { usePostulantsData } from "./hooks/usePostulantsData";
+import { usePostulantNavigation } from "./hooks/usePostulantNavigation";
+import { useToast } from "@/hooks/use-toast";
+import ValidationCompletionModal from "@/components/validation/ValidationCompletionModal";
+import { DocumentList } from "./components/DocumentList";
+import { DocumentViewer } from "./components/DocumentViewer";
+import { ValidationPanel } from "./components/ValidationPanel";
+import { LoadingOverlay } from "@/components/ui/loading";
+
+export default function DocumentValidationPage() {
+  const params = useParams();
+  const { toast } = useToast();
+  const dni = params?.dni as string;
+
+  // Custom hooks for data and navigation
+  const { loading: loadingPostulants, pendingDNIs, refetch: refetchPostulants } = usePostulantsData(dni);
+  const { navigateToNextPostulant, navigating } = usePostulantNavigation();
+
+  // Validation store
+  const {
+    documents,
+    currentDocument,
+    postulant,
+    stats,
+    loading,
+    submitting,
+    fetchDocuments,
+    setCurrentDocument,
+    approveDocument,
+    rejectDocument,
+    goToNextPending,
+    goToPreviousPending,
+    reset,
+  } = useValidationStore();
+
+  // Local state
+  const [comments, setComments] = useState("");
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [showRejectionForm, setShowRejectionForm] = useState(false);
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Initial data fetch
+  useEffect(() => {
+    if (!dni) return;
+
+    const loadData = async () => {
+      try {
+        await fetchDocuments(dni);
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "No se pudieron cargar los documentos",
+          variant: "destructive",
+        });
+      }
+    };
+
+    loadData();
+    return () => reset();
+  }, [dni, fetchDocuments, reset, toast]);
+
+  // Handle document approval
+  const handleApprove = async () => {
+    if (!currentDocument) return;
+
+    try {
+      await approveDocument(currentDocument.id, comments);
+      setComments("");
+      toast({
+        title: "Documento Aprobado",
+        description: "El documento ha sido aprobado exitosamente",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "No se pudo aprobar el documento",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Handle document rejection
+  const handleReject = async () => {
+    if (!currentDocument || !rejectionReason) return;
+
+    try {
+      const fullReason = comments ? `${rejectionReason}. ${comments}` : rejectionReason;
+      await rejectDocument(currentDocument.id, fullReason);
+      
+      setComments("");
+      setRejectionReason("");
+      setShowRejectionForm(false);
+      
+      toast({
+        title: "Documento Rechazado",
+        description: "El documento ha sido rechazado",
+        variant: "destructive",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "No se pudo rechazar el documento",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Handle next postulant navigation
+  const handleNextPostulant = async () => {
+    if (navigating || !dni) return;
+    await navigateToNextPostulant(dni);
+  };
+
+  // Keyboard shortcuts
+  useValidationShortcuts({
+    onApprove: currentDocument?.validationStatus === "PENDING" ? handleApprove : undefined,
+    onReject: currentDocument?.validationStatus === "PENDING" ? () => setShowRejectionForm(true) : undefined,
+    onNext: goToNextPending,
+    onPrevious: goToPreviousPending,
+    onCancel: () => setShowRejectionForm(false),
+    enabled: !submitting,
+  });
+
+  // Loading state
+  if (loading || loadingPostulants) {
+    return <LoadingOverlay />;
+  }
+
+  return (
+    <div className="h-screen flex flex-col">
+      <div className="flex-1 grid grid-cols-[300px_1fr_300px] divide-x">
+        <DocumentList
+          documents={documents}
+          currentDocument={currentDocument}
+          onDocumentSelect={setCurrentDocument}
+          stats={stats}
+        />
+
+        <DocumentViewer
+          document={currentDocument}
+          onNext={goToNextPending}
+          onPrevious={goToPreviousPending}
+          documents={documents}
+          stats={stats}
+          postulant={postulant}
+          isFullscreen={isFullscreen}
+          onFullscreenToggle={setIsFullscreen}
+          onNextPostulation={handleNextPostulant}
+        />
+
+        <ValidationPanel
+          document={currentDocument}
+          onApprove={handleApprove}
+          onReject={handleReject}
+          onRevertStatus={() => {}}
+          submitting={submitting}
+          comments={comments}
+          onCommentsChange={setComments}
+          showRejectionForm={showRejectionForm}
+          rejectionReason={rejectionReason}
+          onRejectionReasonChange={setRejectionReason}
+          onConfirmReject={handleReject}
+          onCancelReject={() => setShowRejectionForm(false)}
+        />
+      </div>
+
+      {showCompletionModal && (
+        <ValidationCompletionModal
+          open={showCompletionModal}
+          onClose={() => setShowCompletionModal(false)}
+          onConfirm={handleNextPostulant}
+        />
+      )}
+    </div>
+  );
+}

@@ -45,43 +45,19 @@ export function DocumentListSkeleton() {
 
 export function ValidationPanelSkeleton() {
   return (
-    <div className="h-full p-6 space-y-6">
-      <div className="space-y-4">
-        <Skeleton className="h-6 w-48" />
-        <div className="space-y-3">
-          <div>
-            <Skeleton className="h-4 w-16 mb-1" />
-            <Skeleton className="h-4 w-full" />
-          </div>
-          <div>
-            <Skeleton className="h-4 w-12 mb-1" />
-            <Skeleton className="h-6 w-24" />
-          </div>
-          <div>
-            <Skeleton className="h-4 w-20 mb-1" />
-            <Skeleton className="h-4 w-32" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
+      <div className="relative w-full max-w-4xl mx-auto p-6">
+        <div className="space-y-4">
+          <Skeleton className="h-6 w-48" />
+          <div className="grid grid-cols-3 gap-4">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
           </div>
         </div>
-      </div>
-      
-      <div className="space-y-4">
-        <Skeleton className="h-6 w-40" />
-        <div className="space-y-3">
-          <div>
-            <Skeleton className="h-4 w-16 mb-1" />
-            <Skeleton className="h-4 w-full" />
-          </div>
-          <div>
-            <Skeleton className="h-4 w-12 mb-1" />
-            <Skeleton className="h-4 w-24" />
-          </div>
+        <div className="mt-8">
+          <Skeleton className="h-64 w-full" />
         </div>
-      </div>
-      
-      <div className="space-y-3">
-        <Skeleton className="h-20 w-full" />
-        <Skeleton className="h-12 w-full" />
-        <Skeleton className="h-12 w-full" />
       </div>
     </div>
   );

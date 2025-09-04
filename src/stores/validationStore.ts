@@ -1,8 +1,8 @@
-import { apiUrl } from "@/lib/utils";
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 
-interface Document {
+// Interfaces
+export interface Document {
   id: string;
   fileName: string;
   originalName: string;
@@ -19,36 +19,13 @@ interface Document {
   thumbnailUrl?: string;
 }
 
-interface PostulantInfo {
-  user: {
-    dni: string;
-    fullName: string;
-    email: string;
-    telefono?: string;
-  };
-  inscription: {
-    id: string;
-    state: string;
-    centroDeVida: string;
-    createdAt: string;
-  };
-  contest: {
-    id: number;
-    title: string;
-    category: string;
-    position: string;
-    department: string;
-    contestClass: string;
-    status: string;
-    statusDescription: string;
-    inscriptionStartDate: string;
-    inscriptionEndDate: string;
-    dependency?: string;
-    location?: string;
-  };
+export interface PostulantInfo {
+  dni: string;
+  name: string;
+  status: string;
 }
 
-interface ValidationStats {
+export interface ValidationStats {
   total: number;
   pending: number;
   approved: number;
@@ -58,284 +35,247 @@ interface ValidationStats {
 }
 
 interface ValidationState {
-  // State
   documents: Document[];
   currentDocument: Document | null;
   postulant: PostulantInfo | null;
-  stats: ValidationStats | null;
+  stats: ValidationStats;
   loading: boolean;
+  error: Error | null;
+  initialized: boolean;
   submitting: boolean;
-
-  // Actions
+  
+  // Acciones
   setDocuments: (documents: Document[]) => void;
   setCurrentDocument: (document: Document | null) => void;
-  setPostulant: (postulant: PostulantInfo) => void;
+  setPostulant: (postulant: PostulantInfo | null) => void;
   setStats: (stats: ValidationStats) => void;
   setLoading: (loading: boolean) => void;
   setSubmitting: (submitting: boolean) => void;
-
-  // Document operations
-  approveDocument: (documentId: string, comments?: string) => Promise<void>;
-  rejectDocument: (documentId: string, reason: string) => Promise<void>;
-  goToNextPending: () => void;
-  goToPreviousPending: () => void;
-
-  // Utility functions
+  setError: (error: Error | null) => void;
+  
+  // Operaciones
+  fetchDocuments: (dni: string) => Promise<void>;
+  updateDocument: (documentId: string, status: Document['validationStatus'], comments?: string) => void;
+  moveToNextDocument: () => void;
+  moveToPreviousDocument: () => void;
   getPendingDocuments: () => Document[];
-  getApprovedDocuments: () => Document[];
-  getRejectedDocuments: () => Document[];
-  updateStats: () => void;
-
-  // Reset
-  reset: () => void;
 }
+
+const calculateStats = (documents: Document[]): ValidationStats => {
+  const stats = {
+    total: 0,
+    pending: 0,
+    approved: 0,
+    rejected: 0,
+    required: 0,
+    completionPercentage: 0
+  };
+
+  documents.forEach(doc => {
+    stats.total++;
+    if (doc.isRequired) {
+      stats.required++;
+    }
+    
+    switch (doc.validationStatus) {
+      case 'PENDING':
+        stats.pending++;
+        break;
+      case 'APPROVED':
+        stats.approved++;
+        break;
+      case 'REJECTED':
+        stats.rejected++;
+        break;
+    }
+  });
+
+  stats.completionPercentage = stats.total ? ((stats.approved + stats.rejected) / stats.total) * 100 : 0;
+
+  return stats;
+};
+
+const DEFAULT_STATS: ValidationStats = {
+  total: 0,
+  pending: 0,
+  approved: 0,
+  rejected: 0,
+  required: 0,
+  completionPercentage: 0
+};
+
+type SetState = (
+  partial: ValidationState | Partial<ValidationState> | ((state: ValidationState) => ValidationState | Partial<ValidationState>),
+  replace?: boolean
+) => void;
+
+type GetState = () => ValidationState;
+
+const createValidationStore = (set: SetState, get: GetState) => ({
+  // Estado inicial
+  documents: [] as Document[],
+  currentDocument: null as Document | null,
+  postulant: null as PostulantInfo | null,
+  stats: DEFAULT_STATS,
+  loading: false,
+  error: null as Error | null,
+  initialized: false,
+  submitting: false,
+
+  // Setters
+  setDocuments: (documents: Document[]) => set({ 
+    documents,
+    stats: calculateStats(documents)
+  }),
+  
+  setCurrentDocument: (document: Document | null) => set({ currentDocument: document }),
+  
+  setPostulant: (postulant: PostulantInfo | null) => set({ postulant }),
+  
+  setStats: (stats: ValidationStats) => set({ stats }),
+  
+  setLoading: (loading: boolean) => set({ loading }),
+  
+  setSubmitting: (submitting: boolean) => set({ submitting }),
+  
+  setError: (error: Error | null) => set({ error }),
+
+  // Operaciones
+  fetchDocuments: async (dni: string) => {
+    try {
+      set({ loading: true, error: null });
+      
+      const response = await fetch(`/api/postulations/${dni}/documents`, {
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error HTTP: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Error al obtener documentos');
+      }
+
+      const documents = (data.data || []).map((doc: Partial<Document>) => ({
+        id: doc.id || '',
+        fileName: doc.fileName || '',
+        originalName: doc.originalName || '',
+        filePath: doc.filePath || '',
+        fileSize: doc.fileSize || 0,
+        documentType: doc.documentType || '',
+        validationStatus: doc.validationStatus || 'PENDING',
+        isRequired: doc.isRequired || false,
+        uploadDate: doc.uploadDate || new Date().toISOString(),
+        validatedAt: doc.validatedAt,
+        validatedBy: doc.validatedBy,
+        comments: doc.comments,
+        rejectionReason: doc.rejectionReason,
+        thumbnailUrl: doc.thumbnailUrl,
+      }));
+
+      set({ 
+        documents,
+        stats: calculateStats(documents),
+        initialized: true 
+      });
+
+      // Establecer el primer documento pendiente como actual si no hay uno seleccionado
+      const { currentDocument } = get();
+      if (!currentDocument) {
+        const firstPending = documents.find((doc: Document) => doc.validationStatus === 'PENDING');
+        if (firstPending) {
+          set({ currentDocument: firstPending });
+        }
+      }
+
+    } catch (error) {
+      console.error('Error fetching documents:', error);
+      set({ error: error as Error });
+    } finally {
+      set({ loading: false });
+    }
+  },
+
+  updateDocument: (documentId: string, status: Document['validationStatus'], comments?: string) => {
+    set((state: ValidationState) => {
+      const updatedDocuments = state.documents.map((doc: Document) =>
+        doc.id === documentId
+          ? {
+              ...doc,
+              validationStatus: status,
+              validatedAt: new Date().toISOString(),
+              comments: comments || doc.comments
+            }
+          : doc
+      );
+
+      return {
+        documents: updatedDocuments,
+        stats: calculateStats(updatedDocuments)
+      };
+    });
+  },
+
+  moveToNextDocument: () => {
+    const { documents, currentDocument } = get();
+    
+    if (!currentDocument) {
+      const firstPending = documents.find((doc: Document) => doc.validationStatus === 'PENDING');
+      if (firstPending) {
+        set({ currentDocument: firstPending });
+      }
+      return;
+    }
+
+    const currentIndex = documents.findIndex((doc: Document) => doc.id === currentDocument.id);
+    const remainingDocs = documents.slice(currentIndex + 1);
+    const nextPending = remainingDocs.find((doc: Document) => doc.validationStatus === 'PENDING');
+
+    if (nextPending) {
+      set({ currentDocument: nextPending });
+    }
+  },
+
+  moveToPreviousDocument: () => {
+    const { documents, currentDocument } = get();
+    
+    if (!currentDocument) {
+      const firstPending = documents.find((doc: Document) => doc.validationStatus === 'PENDING');
+      if (firstPending) {
+        set({ currentDocument: firstPending });
+      }
+      return;
+    }
+
+    const currentIndex = documents.findIndex((doc: Document) => doc.id === currentDocument.id);
+    const previousDocs = documents.slice(0, currentIndex);
+    const previousPending = previousDocs.reverse().find((doc: Document) => doc.validationStatus === 'PENDING');
+
+    if (previousPending) {
+      set({ currentDocument: previousPending });
+    }
+  },
+
+  getPendingDocuments: () => {
+    const { documents } = get();
+    return documents.filter((doc: Document) => doc.validationStatus === 'PENDING');
+  },
+});
 
 export const useValidationStore = create<ValidationState>()(
   devtools(
-    (set, get) => ({
-      // Initial state with proper default loading state
-      documents: [],
-      currentDocument: null,
-      postulant: null,
-      stats: null,
-      loading: true,  // Start with true by default
-      submitting: false,
-
-      // Basic setters
-      setDocuments: (documents) => set({ documents }),
-      setCurrentDocument: (document) => set({ currentDocument: document }),
-      setPostulant: (postulant: PostulantInfo) => {
-        if (!postulant) {
-          console.warn("⚠️ setPostulant llamado con postulant undefined");
-          return;
-        }
-        // Ensure all required fields are present with default values if needed
-        const enhancedPostulant: PostulantInfo = {
-          user: {
-            ...(postulant?.user || {}),
-            telefono: postulant?.user?.telefono || undefined,
-          },
-          inscription: {
-            ...postulant.inscription,
-            id: postulant.inscription.id || '', // Add default if missing
-          },
-          contest: {
-            id: postulant.contest.id || 0, // Add default if missing
-            title: postulant.contest.title || '',
-            category: postulant.contest.category || '',
-            position: postulant.contest.position || '',
-            department: postulant.contest.department || '',
-            contestClass: postulant.contest.contestClass || '',
-            status: postulant.contest.status || '',
-            statusDescription: postulant.contest.statusDescription || '',
-            inscriptionStartDate: postulant.contest.inscriptionStartDate || '',
-            inscriptionEndDate: postulant.contest.inscriptionEndDate || '',
-            dependency: postulant.contest.dependency,
-            location: postulant.contest.location,
-          },
-        };
-        set({ postulant: enhancedPostulant });
-      },
-      setStats: (stats) => set({ stats }),
-      setLoading: (loading) => set({ loading }),
-      setSubmitting: (submitting) => set({ submitting }),
-
-      // Document operations
-      approveDocument: async (documentId: string, comments?: string) => {
-        const { documents, updateStats } = get();
-        set({ submitting: true });
-
-        try {
-          const response = await fetch(apiUrl('documents/approve'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              documentId,
-              comments: comments?.trim() || undefined,
-              validatedBy: 'admin'
-            })
-          });
-
-          if (!response.ok) {
-            throw new Error('Failed to approve document');
-          }
-
-          // Update local state
-          const updatedDocuments = documents.map(doc =>
-            doc.id === documentId
-              ? {
-                ...doc,
-                validationStatus: 'APPROVED' as const,
-                comments: comments?.trim() || undefined,
-                validatedAt: new Date().toISOString(),
-                validatedBy: 'admin'
-              }
-              : doc
-          );
-
-          set({ documents: updatedDocuments });
-          updateStats();
-
-          // Auto-advance to next pending
-          get().goToNextPending();
-
-          return Promise.resolve();
-        } catch (error) {
-          console.error('Error approving document:', error);
-          throw error;
-        } finally {
-          set({ submitting: false });
-        }
-      },
-
-      rejectDocument: async (documentId: string, reason: string) => {
-        const { documents, updateStats } = get();
-        set({ submitting: true });
-
-        try {
-          const response = await fetch(apiUrl('documents/reject'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              documentId,
-              reason,
-              validatedBy: 'admin'
-            })
-          });
-
-          if (!response.ok) {
-            throw new Error('Failed to reject document');
-          }
-
-          // Update local state
-          const updatedDocuments = documents.map(doc =>
-            doc.id === documentId
-              ? {
-                ...doc,
-                validationStatus: 'REJECTED' as const,
-                rejectionReason: reason,
-                validatedAt: new Date().toISOString(),
-                validatedBy: 'admin'
-              }
-              : doc
-          );
-
-          set({ documents: updatedDocuments });
-          updateStats();
-
-          // Auto-advance to next pending
-          get().goToNextPending();
-
-          return Promise.resolve();
-        } catch (error) {
-          console.error('Error rejecting document:', error);
-          throw error;
-        } finally {
-          set({ submitting: false });
-        }
-      },
-
-      goToNextPending: () => {
-        const { documents, currentDocument } = get();
-
-        if (!currentDocument) {
-          const firstPending = documents.find(doc => doc.validationStatus === 'PENDING');
-          if (firstPending) {
-            set({ currentDocument: firstPending });
-          }
-          return;
-        }
-
-        const currentIndex = documents.findIndex(doc => doc.id === currentDocument.id);
-        const remainingDocs = documents.slice(currentIndex + 1);
-        const nextPending = remainingDocs.find(doc => doc.validationStatus === 'PENDING');
-
-        if (nextPending) {
-          set({ currentDocument: nextPending });
-        } else {
-          // If no more pending after current, go to first pending from beginning
-          const firstPending = documents.find(doc => doc.validationStatus === 'PENDING');
-          if (firstPending && firstPending.id !== currentDocument.id) {
-            set({ currentDocument: firstPending });
-          }
-        }
-      },
-
-      goToPreviousPending: () => {
-        const { documents, currentDocument } = get();
-
-        if (!currentDocument) return;
-
-        const currentIndex = documents.findIndex(doc => doc.id === currentDocument.id);
-        const previousDocs = documents.slice(0, currentIndex).reverse();
-        const previousPending = previousDocs.find(doc => doc.validationStatus === 'PENDING');
-
-        if (previousPending) {
-          set({ currentDocument: previousPending });
-        }
-      },
-
-      // Utility functions
-      getPendingDocuments: () => {
-        const { documents } = get();
-        return documents.filter(doc => doc.validationStatus === 'PENDING');
-      },
-
-      getApprovedDocuments: () => {
-        const { documents } = get();
-        return documents.filter(doc => doc.validationStatus === 'APPROVED');
-      },
-
-      getRejectedDocuments: () => {
-        const { documents } = get();
-        return documents.filter(doc => doc.validationStatus === 'REJECTED');
-      },
-
-      updateStats: () => {
-        const { documents } = get();
-
-        const total = documents.length;
-        const pending = documents.filter(doc => doc.validationStatus === 'PENDING').length;
-        const approved = documents.filter(doc => doc.validationStatus === 'APPROVED').length;
-        const rejected = documents.filter(doc => doc.validationStatus === 'REJECTED').length;
-        const required = documents.filter(doc => doc.isRequired).length;
-        const completionPercentage = total > 0 ? Math.round((approved / total) * 100) : 0;
-
-        set({
-          stats: {
-            total,
-            pending,
-            approved,
-            rejected,
-            required,
-            completionPercentage
-          }
-        });
-      },
-
-      reset: () => {
-        set({
-          documents: [],
-          currentDocument: null,
-          postulant: null,
-          stats: null,
-          loading: true, // Reset to true so UI shows loading again
-          submitting: false
-        });
-      }
-    }),
+    (set, get) => createValidationStore(
+      set as SetState,
+      get as GetState
+    ),
     {
       name: 'validation-store'
     }
   )
 );
-
-// Selectors for better performance
-export const useValidationDocuments = () => useValidationStore(state => state.documents);
-export const useCurrentDocument = () => useValidationStore(state => state.currentDocument);
-export const useValidationStats = () => useValidationStore(state => state.stats);
-export const useValidationLoading = () => useValidationStore(state => state.loading);
-export const useValidationSubmitting = () => useValidationStore(state => state.submitting);
-export const usePendingDocuments = () => useValidationStore(state => state.getPendingDocuments());
-export const useApprovedDocuments = () => useValidationStore(state => state.getApprovedDocuments());
-export const useRejectedDocuments = () => useValidationStore(state => state.getRejectedDocuments());

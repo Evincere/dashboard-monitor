@@ -3,20 +3,18 @@
 import { Progress } from '@/components/ui/progress';
 import { CheckCircle, Clock, XCircle } from 'lucide-react';
 
-interface ValidationProgressProps {
-  stats: {
-    total: number;
-    pending: number;
-    approved: number;
-    rejected: number;
-    completionPercentage: number;
-  };
+export interface ValidationProgressProps {
+  total: number;
+  current: number;
+  approved: number;
+  rejected: number;
+  pending: number;
   className?: string;
 }
 
-export function ValidationProgress({ stats, className = '' }: ValidationProgressProps) {
-  const completedCount = stats.approved + stats.rejected;
-  const progressPercentage = (completedCount / stats.total) * 100;
+export function ValidationProgress(props: ValidationProgressProps) {
+  const { total, current, approved, rejected, pending, className = '' } = props;
+  const progress = total > 0 ? (current / total) * 100 : 0;
 
   return (
     <div className={`space-y-4 ${className}`}>
@@ -27,12 +25,12 @@ export function ValidationProgress({ stats, className = '' }: ValidationProgress
             Progreso de Validación
           </span>
           <span className="text-slate-600 dark:text-slate-400">
-            {completedCount}/{stats.total} documentos
+            {current}/{total} documentos
           </span>
         </div>
-        <Progress value={progressPercentage} className="h-3" />
+        <Progress value={progress} className="h-3" />
         <div className="text-xs text-slate-500 dark:text-slate-400 text-center">
-          {Math.round(progressPercentage)}% completado
+          {Math.round(progress)}% completado
         </div>
       </div>
 
@@ -43,7 +41,7 @@ export function ValidationProgress({ stats, className = '' }: ValidationProgress
             <Clock className="w-4 h-4 text-blue-600 dark:text-blue-400" />
           </div>
           <div className="text-lg font-bold text-blue-700 dark:text-blue-300">
-            {stats.pending}
+            {pending}
           </div>
           <div className="text-xs text-blue-600 dark:text-blue-400">
             Pendientes
@@ -55,7 +53,7 @@ export function ValidationProgress({ stats, className = '' }: ValidationProgress
             <CheckCircle className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
           </div>
           <div className="text-lg font-bold text-emerald-700 dark:text-emerald-300">
-            {stats.approved}
+            {approved}
           </div>
           <div className="text-xs text-emerald-600 dark:text-emerald-400">
             Aprobados
@@ -67,7 +65,7 @@ export function ValidationProgress({ stats, className = '' }: ValidationProgress
             <XCircle className="w-4 h-4 text-red-600 dark:text-red-400" />
           </div>
           <div className="text-lg font-bold text-red-700 dark:text-red-300">
-            {stats.rejected}
+            {rejected}
           </div>
           <div className="text-xs text-red-600 dark:text-red-400">
             Rechazados
@@ -76,7 +74,7 @@ export function ValidationProgress({ stats, className = '' }: ValidationProgress
       </div>
 
       {/* Completion Status */}
-      {stats.pending === 0 && stats.total > 0 && (
+      {pending === 0 && total > 0 && (
         <div className="p-4 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg">
           <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
             <CheckCircle className="w-5 h-5" />

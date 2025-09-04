@@ -14,7 +14,31 @@ Dashboard web con funcionalidades de gestión de postulaciones, validación de d
 
 ### ✅ COMPLETADO - Problemas de Estilos y Layout
 
-#### 1. **Problema de Login Descentrado - RESUELTO**
+#### 1. **Problema del Validador de Documentos - RESUELTO**
+- **Issue:** El validador de documentos no utilizaba el ancho completo disponible y el loader aparecía descentrado
+- **Síntomas:**
+  - Espacio vacío en el lado derecho de la interfaz
+  - Loader pegado al sidebar en lugar de centrado en la pantalla
+  - Contenido restringido por el layout del dashboard
+- **Causa Raíz:** Conflicto entre la estructura del layout del dashboard y el sidebar
+- **Solución:**
+  - Modificación del layout base del dashboard para permitir contenido de ancho completo
+  - Actualización de SidebarInset para ocupar el ancho disponible
+  - Ajustes en las clases de Tailwind para optimizar el espacio
+  ```tsx
+  // src/app/(dashboard)/layout.tsx
+  <SidebarInset className="flex-1 w-full max-w-none">
+    <div className="w-full h-full">
+      {children}
+    </div>
+  </SidebarInset>
+  ```
+- **Impacto:** Mejora significativa en la experiencia de usuario del validador
+- **Notas para Futuros Desarrollos:**
+  - Al crear nuevas interfaces de ancho completo, usar esta estructura como referencia
+  - Considerar siempre la interacción entre el sidebar y el contenido principal
+
+#### 2. **Problema de Login Descentrado - RESUELTO**
 - **Issue:** Login aparecía en lado izquierdo por interferencia del SidebarProvider
 - **Solución:** Reestructuración de layouts
   - Removido `SidebarProvider` de `src/app/layout.tsx` 
@@ -569,4 +593,53 @@ El sistema ahora está listo para producción con:
 - 👁️ Navegación universal a cualquier postulación
 - 🛡️ Protecciones robustas contra errores
 - ⚡ Performance optimizada en todos los flujos
+
+
+### 🔀 RESOLUCIÓN DE MERGE CONFLICTS - feature/login
+
+#### **Conflicto Encontrado:**
+- **Archivo:** `src/app/api/proxy-backend/documents/route.ts`
+- **Problema:** Inconsistencia en nombre de parámetro API
+- **Conflicto:**
+  ```typescript
+  <<<<<<< HEAD
+  usuario: searchParams.get('usuarioId') || undefined,
+  =======
+  usuario: searchParams.get('usuario') || undefined,
+  >>>>>>> feature/login
+  ```
+
+#### **Resolución Aplicada:**
+- **✅ Elegida versión:** `feature/login` - `searchParams.get('usuario')`
+- **✅ Razón:** Consistencia con la interfaz del backend client
+- **✅ Efecto:** Parámetro de entrada coincide con parámetro enviado al backend
+
+#### **Correcciones Adicionales en Múltiples Archivos:**
+Aplicadas correcciones de `usuarioId:` → `usuario:` en:
+
+1. ✅ `./src/app/api/documents/[id]/download/route.ts`
+2. ✅ `./src/app/api/documents/diagnostics/route.ts`
+3. ✅ `./src/app/api/postulations/management/route-backup.ts`
+4. ✅ `./src/app/api/postulations/management/route-optimized.ts`
+5. ✅ `./src/app/api/validation/approve/route.ts`
+6. ✅ `./src/app/api/validation/comment/route.ts`
+7. ✅ `./src/app/api/documents/smart-download/route.ts`
+8. ✅ `./src/app/api/proxy-backend/documents/route.ts`
+
+#### **Estado Post-Merge:**
+- ✅ **Build exitoso:** Todos los errores de tipo resueltos
+- ✅ **Conflictos resueltos:** Merge completado exitosamente
+- ✅ **Consistencia API:** Nomenclatura unificada en todos los endpoints
+- ✅ **Working tree clean:** Sin cambios pendientes
+
+---
+**MERGE COMPLETADO:** 2025-09-01 - **✅ feature/login INTEGRADO EXITOSAMENTE**
+
+El sistema ahora incluye:
+- 🔐 Sistema de autenticación completo
+- 🔍 Búsqueda híbrida optimizada  
+- 👁️ Navegación universal a postulaciones
+- 🛡️ Validaciones defensivas contra errores
+- 🚀 Performance optimizada
+- ✅ APIs consistentes y sin errores de tipo
 

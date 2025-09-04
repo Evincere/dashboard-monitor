@@ -4,7 +4,8 @@ import backendClient from "@/lib/backend-client";
 
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useValidationStore } from "@/stores/validationStore";
+import { useValidationStore } from "@/stores/validations/validation-store";
+import { Document } from "@/stores/validations/validation-store";
 import { useValidationShortcuts } from "@/hooks/useKeyboardShortcuts";
 import {
   DocumentSkeleton,
@@ -63,22 +64,6 @@ import { DocumentTypeBadge } from "@/components/ui/document-type-badge";
 import ValidationCompletionModal from "@/components/validation/ValidationCompletionModal";
 import type { ReactNode } from "react";
 
-interface Document {
-  id: string;
-  fileName: string;
-  originalName: string;
-  filePath: string;
-  fileSize: number;
-  documentType: string;
-  validationStatus: "PENDING" | "APPROVED" | "REJECTED";
-  isRequired: boolean;
-  uploadDate: string;
-  validatedAt?: string;
-  validatedBy?: string;
-  comments?: string;
-  rejectionReason?: string;
-  thumbnailUrl?: string;
-}
 
 interface PostulantInfo {
   user: {
@@ -134,6 +119,10 @@ const REJECTION_REASONS = [
   "Otro (especificar en comentarios)",
 ];
 
+import './styles.css';
+
+import { ValidationLayout } from '@/components/validation/ValidationLayout';
+
 export default function DocumentValidationPage() {
   const params = useParams();
   const router = useRouter();
@@ -173,6 +162,38 @@ export default function DocumentValidationPage() {
   const [isProcessingApproval, setIsProcessingApproval] = useState(false);
 
   // Fetch all postulants list for navigation
+
+  // Force full width override for validation page
+  useEffect(() => {
+    const mainElement = document.querySelector("main");
+    if (mainElement) {
+      const originalStyles = {
+        margin: mainElement.style.margin,
+        maxWidth: mainElement.style.maxWidth,
+        width: mainElement.style.width,
+        borderRadius: mainElement.style.borderRadius,
+        boxShadow: mainElement.style.boxShadow
+      };
+      
+      mainElement.style.margin = "0";
+      mainElement.style.maxWidth = "none";
+      mainElement.style.width = "100%";
+      mainElement.style.borderRadius = "0";
+      mainElement.style.boxShadow = "none";
+      
+      return () => {
+        // Restore original styles when component unmounts
+        if (mainElement) {
+          mainElement.style.margin = originalStyles.margin;
+          mainElement.style.maxWidth = originalStyles.maxWidth;
+          mainElement.style.width = originalStyles.width;
+          mainElement.style.borderRadius = originalStyles.borderRadius;
+          mainElement.style.boxShadow = originalStyles.boxShadow;
+        }
+      };
+    }
+  }, []);
+
   const fetchAllPostulantsList = useCallback(async () => {
     console.log("🔄 fetchAllPostulantsList - Iniciando carga de lista de postulantes...");
     try {
@@ -299,6 +320,7 @@ export default function DocumentValidationPage() {
 
     // Cleanup on unmount
     return () => {
+
       console.log("🧹 Limpiando componente...");
       // reset(); // REMOVED: Causaba bucle infinito de re-renders
     };
@@ -437,6 +459,7 @@ export default function DocumentValidationPage() {
         }, 100);
 
         return () => clearTimeout(timeoutId);
+
       }
 
       // Caso 2: PENDING - Mostrar modal de completado SOLO si no está dismissed y no se está mostrando ya
@@ -481,6 +504,7 @@ export default function DocumentValidationPage() {
       if (result.success && result.data && result.data.content) {
         // Filtrar postulantes que necesiten validación (igual que fetchAllPostulantsList)
         const needsValidation = result.data.content.filter((p: any) => {
+
           return (
             p.userInfo?.fullName &&
             p.userInfo?.dni &&
@@ -713,6 +737,7 @@ export default function DocumentValidationPage() {
           if (result.success && result.data && result.data.content) {
             // Filtrar postulantes que necesitan validación
             const needsValidation = result.data.content.filter((p: any) => {
+
               return (
                 p.userInfo?.fullName &&
                 p.userInfo?.dni &&
@@ -990,6 +1015,7 @@ export default function DocumentValidationPage() {
 
   if (loading) {
     return (
+
       <div className="flex items-center justify-center h-screen">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
@@ -1001,6 +1027,7 @@ export default function DocumentValidationPage() {
 
   if (!postulant || !stats) {
     return (
+
       <div className="flex flex-col items-center justify-center h-screen">
         <AlertTriangle className="w-16 h-16 text-slate-400 mb-4" />
         <h2 className="text-2xl font-bold mb-2">Postulante no encontrado</h2>
@@ -1016,6 +1043,7 @@ export default function DocumentValidationPage() {
   }
 
   return (
+
     <div className="h-screen flex flex-col bg-background">
       {/* Header */}
       <div className="bg-card border-b border-border px-6 py-4">
@@ -1287,6 +1315,7 @@ function DocumentList({
   };
 
   return (
+
     <div className="h-full flex flex-col">
       {/* Progress Header */}
       <div className="p-4 border-b border-border">
@@ -1403,6 +1432,7 @@ function DocumentListItem({
   statusColor: string;
 }) {
   return (
+
     <div
       onClick={onClick}
       className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-md ${isActive
@@ -1491,6 +1521,7 @@ function DocumentViewer({
 
   if (!document) {
     return (
+
       <div className="h-full flex items-center justify-center">
         <div className="text-center">
           <FileText className="w-16 h-16 text-slate-400 mx-auto mb-4" />
@@ -1503,6 +1534,7 @@ function DocumentViewer({
   }
 
   return (
+
     <div className="h-full flex flex-col">
       {/* Viewer Header */}
       <div className="bg-card border-b border-border p-4">
@@ -1631,6 +1663,7 @@ function ValidationPanel({
 }) {
   if (!document) {
     return (
+
       <div className="h-full flex items-center justify-center p-6">
         <div className="text-center">
           <User className="w-16 h-16 text-slate-400 mx-auto mb-4" />
@@ -1643,6 +1676,7 @@ function ValidationPanel({
   }
 
   return (
+
     <div className="h-full flex flex-col">
       {/* Previous Validation Info - Only if exists */}
       {(document.validatedBy ||

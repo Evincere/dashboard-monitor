@@ -4,7 +4,8 @@ import backendClient from "@/lib/backend-client";
 
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { useValidationStore } from "@/stores/validationStore";
+import { useValidationStore } from "@/stores/validations/validation-store";
+import { Document } from "@/stores/validations/validation-store";
 import { useValidationShortcuts } from "@/hooks/useKeyboardShortcuts";
 import {
   DocumentSkeleton,
@@ -63,22 +64,6 @@ import { DocumentTypeBadge } from "@/components/ui/document-type-badge";
 import ValidationCompletionModal from "@/components/validation/ValidationCompletionModal";
 import type { ReactNode } from "react";
 
-interface Document {
-  id: string;
-  fileName: string;
-  originalName: string;
-  filePath: string;
-  fileSize: number;
-  documentType: string;
-  validationStatus: "PENDING" | "APPROVED" | "REJECTED";
-  isRequired: boolean;
-  uploadDate: string;
-  validatedAt?: string;
-  validatedBy?: string;
-  comments?: string;
-  rejectionReason?: string;
-  thumbnailUrl?: string;
-}
 
 interface PostulantInfo {
   user: {
@@ -187,12 +172,13 @@ export default function DocumentValidationPage() {
       });
 
       if (result.success && result.data && result.data.content) {
-        // SOLO incluir postulantes que necesiten validación (COMPLETED_WITH_DOCS o PENDING)
+        // 🔍 INCLUIR TODOS los postulantes para permitir navegación desde búsqueda
+        // Si necesita validación O es el postulante actual que estamos viendo
         const needsValidation = result.data.content.filter((p: any) => {
           const hasName = p.userInfo?.fullName;
           const hasDni = p.userInfo?.dni;
           const needsValidation =
-            p.state === "COMPLETED_WITH_DOCS" || p.state === "PENDING";
+            p.state === "COMPLETED_WITH_DOCS" || p.state === "PENDING" || p.userInfo?.dni === dni;
 
           console.log(
             `📝 Postulante ${p.userInfo?.fullName || "N/A"} (${p.userInfo?.dni || "N/A"
@@ -202,11 +188,11 @@ export default function DocumentValidationPage() {
           return hasName && hasDni && needsValidation;
         });
 
-        console.log("🔍 Postulantes que necesitan validación:", needsValidation.length);
+        console.log("🔍 Postulantes incluidos (pendientes + actual):", needsValidation.length);
 
         // Solo usar los que necesitan validación para la navegación
         if (needsValidation.length === 0) {
-          console.log("⚠️ No se encontraron postulantes pendientes de validación");
+          console.log("⚠️ No se encontraron postulantes");
           setAllPostulantsList([]);
           return;
         }
@@ -227,7 +213,7 @@ export default function DocumentValidationPage() {
         console.log(
           "✅ Lista de postulantes cargada exitosamente:",
           postulants.length,
-          "postulantes pendientes"
+          "postulantes incluidos"
         );
       } else {
         console.log("❌ API no devolvió datos válidos:", result);
@@ -483,7 +469,7 @@ export default function DocumentValidationPage() {
           return (
             p.userInfo?.fullName &&
             p.userInfo?.dni &&
-            (p.state === "COMPLETED_WITH_DOCS" || p.state === "PENDING")
+            (p.state === "COMPLETED_WITH_DOCS" || p.state === "PENDING" || p.userInfo?.dni === dni)
           );
         });
 
@@ -715,7 +701,7 @@ export default function DocumentValidationPage() {
               return (
                 p.userInfo?.fullName &&
                 p.userInfo?.dni &&
-                (p.state === "COMPLETED_WITH_DOCS" || p.state === "PENDING")
+                (p.state === "COMPLETED_WITH_DOCS" || p.state === "PENDING" || p.userInfo?.dni === dni)
               );
             });
 

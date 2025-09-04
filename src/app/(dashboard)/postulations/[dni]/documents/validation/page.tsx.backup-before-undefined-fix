@@ -1,0 +1,151 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
+import { useState } from "react";
+import { Document } from "@/stores/validations/validation-store";
+import { useDocumentValidation } from "./hooks/useDocumentValidation";
+import { useNavigationState } from "./hooks/useNavigationState";
+import { LoadingOverlay } from "@/components/ui/LoadingOverlay";
+import { Button } from "@/components/ui/button";
+import { AlertTriangle, ArrowLeft, Clock } from "lucide-react";
+
+// Components
+import { DocumentList } from "./components/DocumentList/DocumentList";
+import { DocumentViewer } from "./components/DocumentViewer/DocumentViewer";
+import { ValidationPanel } from "./components/ValidationPanel/ValidationPanel";
+import { NavigationHeader } from "./components/Navigation/NavigationHeader";
+import { NavigationFooter } from "./components/Navigation/NavigationFooter";
+
+function DocumentValidationPage() {
+  const router = useRouter();
+  const { dni } = useParams() as { dni: string };
+  
+  // Custom hooks
+  const {
+    documents,
+    currentDocument,
+    setCurrentDocument,
+    loading,
+    error,
+    stats,
+    submitting,
+    comments,
+    setComments,
+    handleApprove,
+    handleReject,
+    handleRevertStatus,
+    handleDownload
+  } = useDocumentValidation(dni);
+
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  
+  const navigation = useNavigationState(
+    documents,
+    currentDocument,
+    setCurrentDocument
+  );
+
+  // Loading state
+  if (loading) {
+    return <LoadingOverlay message="Cargando documentos..." />;
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen">
+        <AlertTriangle className="w-12 h-12 text-destructive mb-4" />
+        <h2 className="text-xl font-semibold mb-2">Error al cargar documentos</h2>
+        <p className="text-muted-foreground mb-4">{error.message}</p>
+        <Button
+          onClick={() => router.back()}
+          variant="outline"
+          className="flex items-center gap-2"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Volver
+        </Button>
+      </div>
+    );
+  }
+
+  // No documents state
+  if (!documents.length) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen">
+        <Clock className="w-12 h-12 text-muted-foreground mb-4" />
+        <h2 className="text-xl font-semibold mb-2">No hay documentos para validar</h2>
+        <Button
+          onClick={() => router.back()}
+          variant="outline"
+          className="flex items-center gap-2"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Volver
+        </Button>
+      </div>
+    );
+  }
+
+  const progress = {
+    current: navigation.currentIndex,
+    total: navigation.total,
+    approved: documents.filter(d => d.validationStatus === 'APPROVED').length,
+    rejected: documents.filter(d => d.validationStatus === 'REJECTED').length,
+    pending: documents.filter(d => d.validationStatus === 'PENDING').length,
+  };
+
+  return (
+    <div className="h-screen flex flex-col bg-background">
+      <NavigationHeader
+        onBack={() => router.back()}
+        onDownload={currentDocument ? handleDownload : undefined}
+        progress={progress}
+      />
+
+      <div className="flex-1 flex overflow-hidden">
+        <DocumentList
+          documents={documents}
+          currentDocument={currentDocument}
+          onDocumentSelect={setCurrentDocument}
+          stats={stats || {
+            total: 0,
+            pending: 0,
+            approved: 0,
+            rejected: 0,
+            required: 0,
+            completionPercentage: 0
+          }}
+        />
+        
+        <DocumentViewer
+          document={currentDocument}
+          isFullscreen={isFullscreen}
+          onFullscreenToggle={setIsFullscreen}
+        />
+
+        <ValidationPanel
+          document={currentDocument}
+          onApprove={handleApprove}
+          onReject={handleReject}
+          onRevertStatus={handleRevertStatus}
+          submitting={submitting}
+          comments={comments}
+          onCommentsChange={setComments}
+        />
+      </div>
+
+      <NavigationFooter 
+        currentIndex={navigation.currentIndex}
+        total={navigation.total}
+        onNext={navigation.navigateNext}
+        onPrev={navigation.navigatePrev}
+        canGoNext={navigation.canGoNext}
+        canGoPrev={navigation.canGoPrev}
+      />
+    </div>
+  );
+}
+
+export default DocumentValidationPage;

@@ -12,10 +12,12 @@ export default function DashboardLayout({
   return (
     <AuthGuard>
       <SidebarProvider>
-        <div className="flex min-h-screen">
+        <div className="flex min-h-screen w-full">
           <DashboardSidebar />
-          <SidebarInset>
-            {children}
+          <SidebarInset className="flex-1 w-full max-w-none">
+            <div className="w-full h-full">
+              {children}
+            </div>
           </SidebarInset>
         </div>
       </SidebarProvider>
