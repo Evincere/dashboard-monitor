@@ -1,7 +1,6 @@
 'use client';
 
 import React from 'react';
-import { useUserName } from "@/lib/user-utils";
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { 
@@ -111,7 +110,6 @@ export default function DocumentThumbnail({
   className = ''
 }: DocumentThumbnailProps) {
   const validationDisplay = getValidationStatusDisplay(document.validationStatus);
-  const validatorDisplayName = useUserName(document.validatedBy);
 
   if (viewMode === 'list') {
     return (
@@ -188,7 +186,7 @@ export default function DocumentThumbnail({
                   </p>
                   {document.validatedBy && document.validatedAt && (
                     <p className="text-xs text-slate-500 dark:text-slate-500 mt-2 font-medium">
-                      Por {validatorDisplayName} • {new Date(document.validatedAt).toLocaleString('es-ES')}
+                      Por {document.validatedBy} • {new Date(document.validatedAt).toLocaleString('es-ES')}
                     </p>
                   )}
                 </div>

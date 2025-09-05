@@ -25,6 +25,8 @@ interface Document {
   comments?: string;
   rejectionReason?: string;
   thumbnailUrl?: string;
+  fileSizeSource?: 'filesystem' | 'backend' | 'none';
+  fileSizeError?: string;
 }
 
 interface PostulantInfo {
@@ -151,78 +153,162 @@ const REQUIRED_DOCUMENT_TYPES = [
  */
 async function getFileSize(filePath: string, documentId?: string): Promise<number> {
   if (!filePath) {
-    console.warn(`📏 getFileSize: filePath is empty`);
-    return 0;
+    throw new Error('La ruta del archivo es requerida');
   }
 
-  try {
-    console.log(`📏 getFileSize: Processing filePath: "${filePath}" with documentId: "${documentId}"`);
+  // Extract DNI from filePath (e.g., "35515608/filename.pdf" -> "35515608")
+  const pathParts = filePath.split('/');
+  const dni = pathParts[0];
+  const fileName = pathParts[pathParts.length - 1];
 
-    // Extract DNI from filePath (e.g., "35515608/filename.pdf" -> "35515608")
-    const pathParts = filePath.split('/');
-    const dni = pathParts[0];
-    const fileName = pathParts[pathParts.length - 1];
+  if (!dni || !fileName) {
+    throw new Error('Formato de ruta inválido. Se espera: DNI/nombrearchivo');
+  }
 
-    console.log(`📏 getFileSize: Extracted DNI: "${dni}", fileName: "${fileName}"`);
+  console.log(`📏 getFileSize: Procesando archivo: DNI=${dni}, Archivo=${fileName}, DocumentId=${documentId}`);
 
-    // Get environment-aware document base paths
-    const possibleBasePaths = getDocumentBasePaths();
+  // Get environment-aware document base paths
+  const possibleBasePaths = getDocumentBasePaths();
 
-    console.log(`📏 getFileSize: Environment = ${NODE_ENV}, Checking ${possibleBasePaths.length} possible base paths`);
-
-    // First, try exact path matching
-    for (const basePath of possibleBasePaths) {
-      const exactPath = path.join(basePath, filePath);
+  // Función auxiliar para verificar el tamaño real del archivo
+  async function verifyFileSize(path: string): Promise<number> {
+    try {
+      const fileHandle = await fs.promises.open(path, 'r');
       try {
-        console.log(`📏 getFileSize: Trying exact path: "${exactPath}"`);
-        const stats = await fs.promises.stat(exactPath);
-        if (stats.isFile()) {
-          console.log(`✅ getFileSize: File found (exact match)! Size: ${stats.size} bytes at "${exactPath}"`);
-          return stats.size;
+        const { size } = await fileHandle.stat();
+        console.log(`📏 verifyFileSize: Tamaño del archivo ${path}: ${size} bytes`);
+        
+        // Verificación adicional del tamaño usando stream (solo para archivos pequeños)
+        if (size < 10 * 1024 * 1024) { // Solo para archivos menores a 10MB
+          const stream = fileHandle.createReadStream();
+          let actualSize = 0;
+          
+          await new Promise<void>((resolve, reject) => {
+            stream.on('data', (chunk: string | Buffer) => {
+              actualSize += Buffer.isBuffer(chunk) ? chunk.length : Buffer.from(chunk).length;
+            });
+            stream.on('end', () => resolve());
+            stream.on('error', (error: Error) => reject(error));
+          });
+
+          if (actualSize !== size) {
+            console.warn(`⚠️ Discrepancia en el tamaño del archivo ${path}: stats=${size}, actual=${actualSize}`);
+            return actualSize; // Usar el tamaño real contado
+          }
         }
-      } catch (err: any) {
-        console.log(`❌ getFileSize: Exact path failed: ${err.code || err.message}`);
+        return size;
+      } finally {
+        await fileHandle.close();
+      }
+    } catch (error) {
+      console.error(`❌ Error al verificar tamaño de archivo ${path}:`, error);
+      throw error;
+    }
+  }
+
+  // 1. Intentar ruta exacta
+  console.log(`🔍 getFileSize: Buscando archivo en rutas exactas...`);
+  for (const basePath of possibleBasePaths) {
+    const exactPath = path.join(basePath, filePath);
+    try {
+      const stats = await fs.promises.stat(exactPath);
+      if (stats.isFile()) {
+        console.log(`✅ getFileSize: Archivo encontrado en ruta exacta: ${exactPath}`);
+        return await verifyFileSize(exactPath);
+      }
+    } catch (err: unknown) {
+      if (err instanceof Error && 'code' in err && err.code !== 'ENOENT') {
+        console.error(`❌ Error al acceder a ${exactPath}:`, err);
+      }
+      continue;
+    }
+  }
+
+  // 2. Búsqueda difusa si tenemos documentId
+  if (documentId) {
+    console.log(`🔍 getFileSize: Buscando archivo con coincidencia difusa...`);
+    for (const basePath of possibleBasePaths) {
+      const userDir = path.join(basePath, dni);
+      try {
+        const files = await fs.promises.readdir(userDir);
+        console.log(`📁 getFileSize: Archivos encontrados en ${userDir}: ${files.length} archivos`);
+        
+        // Buscar coincidencias por documentId y nombre similar
+        const matchingFiles = files.filter(file => {
+          const normalizedFileName = file.toLowerCase();
+          const normalizedTargetFileName = fileName.toLowerCase();
+          const normalizedDocumentId = documentId.toLowerCase();
+          
+          const matches = (
+            file.startsWith(documentId) ||
+            normalizedFileName.includes(normalizedTargetFileName) ||
+            normalizedFileName.includes(normalizedDocumentId) ||
+            normalizedTargetFileName.includes(normalizedFileName.replace(/\.[^/.]+$/, ""))
+          );
+          
+          if (matches) {
+            console.log(`🎯 getFileSize: Coincidencia encontrada: ${file}`);
+          }
+          
+          return matches;
+        });
+
+        if (matchingFiles.length > 0) {
+          const bestMatch = matchingFiles[0]; // Tomar la primera coincidencia
+          const fullPath = path.join(userDir, bestMatch);
+          console.log(`✅ getFileSize: Archivo encontrado por coincidencia difusa: ${fullPath}`);
+          return await verifyFileSize(fullPath);
+        }
+      } catch (err: unknown) {
+        if (err instanceof Error && 'code' in err && err.code !== 'ENOENT') {
+          console.error(`❌ Error en búsqueda difusa en ${userDir}:`, err);
+        }
         continue;
       }
     }
+  }
 
-    // If exact match fails and we have a documentId, try fuzzy matching
-    if (documentId && dni) {
-      console.log(`📏 getFileSize: Exact match failed, trying fuzzy matching with documentId: ${documentId}`);
-
-      for (const basePath of possibleBasePaths) {
-        const userDir = path.join(basePath, dni);
+  // 3. Búsqueda adicional por nombre de archivo sin DNI
+  console.log(`🔍 getFileSize: Buscando archivo por nombre sin DNI...`);
+  for (const basePath of possibleBasePaths) {
+    try {
+      // Buscar en subdirectorios que contengan el DNI
+      const entries = await fs.promises.readdir(basePath, { withFileTypes: true });
+      const dirs = entries.filter(entry => entry.isDirectory() && entry.name.includes(dni));
+      
+      for (const dir of dirs) {
+        const dirPath = path.join(basePath, dir.name);
         try {
-          const files = await fs.promises.readdir(userDir);
-          console.log(`📏 getFileSize: Found ${files.length} files in "${userDir}"`);
-
-          // Look for files that start with the documentId
-          const matchingFile = files.find(file => file.startsWith(documentId));
-
-          if (matchingFile) {
-            const fullPath = path.join(userDir, matchingFile);
-            console.log(`📏 getFileSize: Found fuzzy match: "${matchingFile}"`);
-
-            const stats = await fs.promises.stat(fullPath);
-            if (stats.isFile()) {
-              console.log(`✅ getFileSize: File found (fuzzy match)! Size: ${stats.size} bytes at "${fullPath}"`);
-              return stats.size;
-            }
+          const files = await fs.promises.readdir(dirPath);
+          const matchingFiles = files.filter(file => 
+            file.toLowerCase().includes(fileName.toLowerCase()) ||
+            fileName.toLowerCase().includes(file.replace(/\.[^/.]+$/, "").toLowerCase())
+          );
+          
+          if (matchingFiles.length > 0) {
+            const bestMatch = matchingFiles[0];
+            const fullPath = path.join(dirPath, bestMatch);
+            console.log(`✅ getFileSize: Archivo encontrado en subdirectorio: ${fullPath}`);
+            return await verifyFileSize(fullPath);
           }
-        } catch (err: any) {
-          console.log(`❌ getFileSize: Fuzzy matching in "${userDir}" failed: ${err.code || err.message}`);
+        } catch (err) {
           continue;
         }
       }
+    } catch (err) {
+      continue;
     }
-
-    // If no file found, return 0
-    console.warn(`📏 getFileSize: Could not find file in any path for: ${filePath}`);
-    return 0;
-  } catch (error) {
-    console.error(`📏 getFileSize: Unexpected error for ${filePath}:`, error);
-    return 0;
   }
+
+  // Si no se encuentra el archivo, lanzar error con información detallada
+  const errorMessage = `No se pudo encontrar el archivo: ${filePath}
+    - DNI: ${dni}
+    - Nombre de archivo: ${fileName}
+    - Document ID: ${documentId}
+    - Rutas buscadas: ${possibleBasePaths.join(', ')}`;
+  
+  console.error(`❌ getFileSize: ${errorMessage}`);
+  throw new Error(errorMessage);
 }
 
 /**
@@ -231,20 +317,63 @@ async function getFileSize(filePath: string, documentId?: string): Promise<numbe
  * @returns Array of documents with calculated file sizes
  */
 async function calculateFileSizes(documents: Document[]): Promise<Document[]> {
-  console.log(`🔧 calculateFileSizes: Processing ${documents.length} documents`);
+  console.log(`🔧 calculateFileSizes: Procesando ${documents.length} documentos`);
 
-  const sizePromises = documents.map(async (doc, index) => {
-    console.log(`🔧 calculateFileSizes: Processing document ${index + 1}/${documents.length}: ID=${doc.id}, filePath="${doc.filePath}"`);
-    const calculatedFileSize = await getFileSize(doc.filePath, doc.id);
-    console.log(`🔧 calculateFileSizes: Document ${index + 1} result: ${calculatedFileSize} bytes`);
-    return {
-      ...doc,
-      fileSize: calculatedFileSize > 0 ? calculatedFileSize : doc.fileSize
-    };
-  });
+  const results = await Promise.all(
+    documents.map(async (doc, index) => {
+      console.log(`🔧 calculateFileSizes: Procesando documento ${index + 1}/${documents.length}: ID=${doc.id}, filePath="${doc.filePath}"`);
+      
+      // Si ya tenemos un tamaño válido del backend, usarlo como fallback
+      const backendFileSize = doc.fileSize || 0;
+      console.log(`📊 calculateFileSizes: Tamaño del backend para ${doc.id}: ${backendFileSize} bytes`);
+      
+      try {
+        const calculatedFileSize = await getFileSize(doc.filePath, doc.id);
+        console.log(`✅ calculateFileSizes: Documento ${index + 1} procesado: ${calculatedFileSize} bytes (calculado desde filesystem)`);
+        return {
+          ...doc,
+          fileSize: calculatedFileSize,
+          fileSizeSource: 'filesystem' as const
+        };
+      } catch (error) {
+        console.error(`❌ calculateFileSizes: Error al procesar documento ${doc.id}:`, error);
+        
+        // Si el backend tiene un tamaño válido (> 0), usarlo
+        if (backendFileSize > 0) {
+          console.log(`📊 calculateFileSizes: Usando tamaño del backend para ${doc.id}: ${backendFileSize} bytes`);
+          return {
+            ...doc,
+            fileSize: backendFileSize,
+            fileSizeSource: 'backend' as const,
+            fileSizeError: error instanceof Error ? error.message : 'Error desconocido'
+          };
+        }
+        
+        // Si no hay tamaño del backend, marcar como error pero mantener 0
+        console.warn(`⚠️ calculateFileSizes: Sin tamaño disponible para ${doc.id}, manteniendo 0 bytes`);
+        return {
+          ...doc,
+          fileSize: 0,
+          fileSizeSource: 'none' as const,
+          fileSizeError: error instanceof Error ? error.message : 'Error desconocido'
+        };
+      }
+    })
+  );
 
-  const results = await Promise.all(sizePromises);
-  console.log(`🔧 calculateFileSizes: Completed processing all documents`);
+  const successCount = results.filter(doc => !('fileSizeError' in doc)).length;
+  const backendCount = results.filter(doc => doc.fileSizeSource === 'backend').length;
+  const filesystemCount = results.filter(doc => doc.fileSizeSource === 'filesystem').length;
+  const errorCount = results.length - successCount;
+  
+  console.log(`
+    🔧 calculateFileSizes: Procesamiento completado
+    ✅ Éxitos: ${successCount}
+    📊 Desde filesystem: ${filesystemCount}
+    📊 Desde backend: ${backendCount}
+    ❌ Errores: ${errorCount}
+  `);
+
   return results;
 }
 

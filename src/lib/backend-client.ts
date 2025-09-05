@@ -19,6 +19,7 @@ export interface ApiResponse<T = any> {
   message?: string;
   error?: string;
   timestamp?: string;
+  status?: number;
 }
 
 interface LoginResponse {
@@ -606,7 +607,7 @@ class BackendClient {
 
   async approveInscription(inscriptionId: string, note?: string): Promise<ApiResponse<BackendInscription>> {
     return this.request<BackendInscription>(`/admin/inscriptions/${inscriptionId}/state`, {
-      method: 'POST',
+      method: 'PATCH',
       body: JSON.stringify({
         inscriptionId,
         newState: 'APPROVED',
@@ -617,7 +618,7 @@ class BackendClient {
 
   async rejectInscription(inscriptionId: string, note?: string): Promise<ApiResponse<BackendInscription>> {
     return this.request<BackendInscription>(`/admin/inscriptions/${inscriptionId}/state`, {
-      method: 'POST',
+      method: 'PATCH',
       body: JSON.stringify({
         inscriptionId,
         newState: 'REJECTED',
@@ -628,7 +629,7 @@ class BackendClient {
 
   async startValidation(inscriptionId: string, note?: string): Promise<ApiResponse<BackendInscription>> {
     return this.request<BackendInscription>(`/admin/inscriptions/${inscriptionId}/state`, {
-      method: 'POST',
+      method: 'PATCH',
       body: JSON.stringify({
         inscriptionId,
         newState: 'PENDING',

@@ -1,23 +1,18 @@
 import { create } from 'zustand';
 import { apiUrl } from '@/lib/utils';
 
-// Helper function for document type mapping
-const getDocumentTypeName = (documentTypeId: string): string => {
-  const DOCUMENT_TYPES: { [key: string]: string } = {
-    "9A1230C71E4E431380D4BD4F21CD8C7F": "DNI (Frontal)",
-    "2980B7A784E643F68D7C47AF4ACAF64B": "DNI (Dorso)",
-    "99EECC88ABCA4086B9E5CE6F63EECAB7": "Constancia de CUIL",
-    "9FA271051CDE476989CB08587C92E930": "Certificado de Antecedentes Penales",
-    "8C5FE4A7982D429081332CA24881A3B1": "Certificado de Antigüedad Profesional",
-    "E0022DE6F70D44A5930666F7059959D8": "Certificado Sin Sanciones Disciplinarias",
-    "EF5DEB6BAB24471CAF6DADBC4971DA29": "Título Universitario y Certificado Analítico",
-    "E089FA5DE81F4892862C0F3F08931451": "Certificado Ley Micaela",
-    "9A67E09E0FB64D108FCE99587974504B": "Documento Adicional"
-  };
-  return DOCUMENT_TYPES[documentTypeId] || "Tipo desconocido";
-};
-
 export type ValidationStatus = "PENDING" | "APPROVED" | "REJECTED";
+
+// Helper function to map status to action
+const getActionFromStatus = (status: ValidationStatus): string => {
+  switch (status) {
+    case "APPROVED": return "approve";
+    case "REJECTED": return "reject";
+    case "PENDING": return "revert";
+    default: throw new Error(`Estado de validación no soportado: ${status}`);
+
+  }
+};
 
 // Interface for document as returned by the API
 interface ApiDocument {
@@ -43,6 +38,8 @@ export interface Document {
   originalName: string;
   filePath: string;
   fileSize: number;
+  fileSizeSource?: 'filesystem' | 'backend' | 'none';  // Source of the file size information
+  fileSizeError?: string;  // Error message when file size cannot be determined
   documentType: string;
   validationStatus: ValidationStatus;  // Estado de validación del documento
   isRequired: boolean;
@@ -55,6 +52,7 @@ export interface Document {
   thumbnailUrl?: string;
   url?: string;  // URL para la vista previa o descarga
 }
+
 export interface PostulantInfo {
   user: {
     dni: string;
@@ -157,6 +155,10 @@ export const useValidationStore = create<ValidationState>((set, get) => ({
   
   // Setters
   setDocuments: (documents) => set({ documents }),
+  setCurrentDocument: (document) => set({ currentDocument: document }),
+  setPostulant: (postulant) => set({ postulant }),
+  setStats: (stats) => set({ stats }),
+  setLoading: (loading) => set({ loading }),
   setError: (error: Error | null) => set({ error }),
   
   // Document Operations
@@ -185,17 +187,9 @@ export const useValidationStore = create<ValidationState>((set, get) => ({
       console.log(`📄 Documentos encontrados: ${documentsList.length}`);
       
       // DEBUG: Ver estructura completa de documentos
-      console.log("🔍 DEBUG - Estructura de documentos:", JSON.stringify(documentsList[0], null, 2));
-      
-      // DEBUG: Ver qué documentTypeId están llegando
-      documentsList.forEach((doc: ApiDocument) => {
-        console.log(`📋 Debug documento:`, {
-          id: doc.id,
-          fileName: doc.nombreArchivo,
-          documentTypeId: doc.tipoDocumentoId,
-          mappedType: doc.tipoDocumento?.nombre || "Tipo desconocido"
-        });
-      });
+      if (documentsList.length > 0) {
+        console.log("🔍 DEBUG - Estructura de documentos:", JSON.stringify(documentsList[0], null, 2));
+      }
       
       // Mapear documentos al formato esperado por el store
       const mappedDocuments = documentsList.map((doc: ApiDocument) => ({
@@ -205,24 +199,28 @@ export const useValidationStore = create<ValidationState>((set, get) => ({
         originalName: doc.nombreArchivo || "Sin nombre",
         filePath: doc.filePath || "",
         fileSize: doc.fileSize || 0,
+        fileSizeSource: doc.fileSize && doc.fileSize > 0 ? 'backend' : 'none' as const,
+        fileSizeError: doc.fileSize === 0 ? 'File size not available' : undefined,
         documentType: doc.tipoDocumento?.nombre || "Tipo desconocido",
-        validationStatus: doc.estado === "APPROVED" ? "APPROVED" : 
-                         doc.estado === "REJECTED" ? "REJECTED" : "PENDING",
+        validationStatus: (
+          doc.estado === "APPROVED" ? "APPROVED" : 
+          doc.estado === "REJECTED" ? "REJECTED" : "PENDING"
+        ) as ValidationStatus,
         isRequired: doc.tipoDocumento?.code !== "CERTIFICADO_LEY_MICAELA" && doc.tipoDocumento?.code !== "DOCUMENTO_ADICIONAL",
         uploadDate: doc.fechaValidacion || new Date().toISOString(),
         validatedAt: doc.fechaValidacion,
         validatedBy: doc.validadoPor,
         comments: doc.comentarios,
-        rejectionReason: doc.comentarios
+        rejectionReason: doc.estado === "REJECTED" ? doc.comentarios : undefined
       }));
       
       // 🏗️ Construir información del postulante
-      const postulantInfo = {
+      const postulantInfo: PostulantInfo = {
         user: {
           dni: expediente.user?.dni || dni,
           fullName: expediente.user?.name || "Sin nombre",
           email: expediente.user?.email || "Sin email",
-          telefono: undefined // TODO: agregar si está disponible
+          telefono: expediente.user?.telefono
         },
         inscription: {
           id: expediente.inscription?.id || "unknown",
@@ -246,21 +244,27 @@ export const useValidationStore = create<ValidationState>((set, get) => ({
         }
       };
       
-      // 📊 Estadísticas de documentos
-      const stats = {
-        total: documentsList.length,
-        pending: expediente.documents?.pending || 0,
-        approved: expediente.documents?.approved || 0,
-        rejected: expediente.documents?.rejected || 0,
-        required: documentsList.length, // Asumiendo que todos son requeridos
-        completionPercentage: documentsList.length > 0 ? 
-          ((expediente.documents?.approved || 0) / documentsList.length) * 100 : 0
+      // 📊 Calcular estadísticas de documentos
+      const total = mappedDocuments.length;
+      const pending = mappedDocuments.filter((doc: Document) => doc.validationStatus === "PENDING").length;
+      const approved = mappedDocuments.filter((doc: Document) => doc.validationStatus === "APPROVED").length;
+      const rejected = mappedDocuments.filter((doc: Document) => doc.validationStatus === "REJECTED").length;
+      const required = mappedDocuments.filter((doc: Document) => doc.isRequired).length;
+      const completionPercentage = total > 0 ? ((approved + rejected) / total) * 100 : 0;
+      
+      const stats: ValidationStats = {
+        total,
+        pending,
+        approved,
+        rejected,
+        required,
+        completionPercentage
       };
       
       console.log(`✅ Datos procesados:`, {
         documentos: mappedDocuments.length,
         postulante: postulantInfo.user.fullName,
-        estado: expediente.currentValidationStatus
+        stats
       });
       
       set({ 
@@ -280,124 +284,65 @@ export const useValidationStore = create<ValidationState>((set, get) => ({
 
   updateDocument: async (documentId: string, status: Document['validationStatus'], comments?: string) => {
     try {
-      set({ submitting: true });
-      const response = await fetch(apiUrl(`documents/${documentId}/validate`), {
+      set({ submitting: true, error: null });
+      
+      console.log(`🔄 Actualizando documento ${documentId}`, { status, comments });
+      
+      const response = await fetch(apiUrl(`proxy-backend/documents/${documentId}/${getActionFromStatus(status)}`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status, comments })
+        credentials: 'include',
+        body: JSON.stringify({ motivo: comments })
       });
+      console.log("📤 Store enviando al endpoint:", { url: `proxy-backend/documents/${documentId}/${getActionFromStatus(status)}`, motivo: comments, motivoType: typeof comments });
       
       if (!response.ok) {
-        throw new Error(`Error updating document: ${response.status}`);
+        const errorData = await response.json();
+        console.error('Error en respuesta del servidor:', errorData);
+        throw new Error(errorData.message || `Error ${response.status} al actualizar documento`);
       }
 
+      const data = await response.json();
+      if (!data.success) {
+        console.error('Respuesta no exitosa:', data);
+        throw new Error(data.message || data.error || 'Error al actualizar documento');
+      }
+
+      // Actualizar estado local
       const { documents } = get();
       const updatedDocuments = documents.map((doc: Document) =>
         doc.id === documentId 
-          ? { ...doc, validationStatus: status, validatedAt: new Date().toISOString() }
+          ? { 
+              ...doc, 
+              validationStatus: status, 
+              validatedAt: new Date().toISOString(),
+              validatedBy: 'Admin', // TODO: obtener del contexto de usuario
+              comments: status === 'APPROVED' ? comments : undefined,
+              rejectionReason: status === 'REJECTED' ? comments : undefined
+            }
           : doc
       );
       
       set({ documents: updatedDocuments });
+      get().updateStats();
+      
+      console.log(`✅ Documento ${documentId} actualizado a ${status}`);
+      
     } catch (error) {
+      console.error('❌ Error actualizando documento:', error);
       set({ error: error as Error });
+      throw error;
     } finally {
       set({ submitting: false });
     }
   },
-  setCurrentDocument: (document) => set({ currentDocument: document }),
-  setPostulant: (postulant) => set({ postulant }),
-  setStats: (stats) => set({ stats }),
-  setLoading: (loading) => set({ loading }),
 
   approveDocument: async (documentId, comments) => {
-    set({ submitting: true });
-    try {
-      console.log(`✅ Approbando documento ${documentId}`, { comments });
-      
-      // Llamada real a la API
-      const result = await apiRequest('/api/documents/approve', {
-        method: 'POST',
-        body: JSON.stringify({
-          documentId,
-          comments: comments || undefined,
-          validatedBy: 'Admin' // TODO: Obtener del contexto de usuario
-        })
-      });
-
-      if (result.success) {
-        // Actualizar estado local
-        const { documents } = get();
-        const updatedDocuments = documents.map((doc: Document) => 
-          doc.id === documentId 
-            ? { 
-                ...doc, 
-                validationStatus: "APPROVED" as const, 
-                validatedAt: new Date().toISOString(),
-                validatedBy: 'Admin',
-                comments,
-                rejectionReason: undefined
-              }
-            : doc
-        );
-        set({ documents: updatedDocuments });
-        get().updateStats();
-        
-        console.log(`✅ Documento ${documentId} aprobado exitosamente`);
-      } else {
-        throw new Error(result.error || 'Error al aprobar documento');
-      }
-    } catch (error) {
-      console.error('❌ Error aprobando documento:', error);
-      throw error; // Re-throw para que el componente pueda manejarlo
-    } finally {
-      set({ submitting: false });
-    }
+    return get().updateDocument(documentId, "APPROVED", comments);
   },
 
   rejectDocument: async (documentId, reason) => {
-    set({ submitting: true });
-    try {
-      console.log(`❌ Rechazando documento ${documentId}`, { reason });
-      
-      // Llamada real a la API
-      const result = await apiRequest('/api/documents/reject', {
-        method: 'POST',
-        body: JSON.stringify({
-          documentId,
-          reason,
-          validatedBy: 'Admin' // TODO: Obtener del contexto de usuario
-        })
-      });
-
-      if (result.success) {
-        // Actualizar estado local
-        const { documents } = get();
-        const updatedDocuments = documents.map((doc: Document) => 
-          doc.id === documentId 
-            ? { 
-                ...doc, 
-                validationStatus: "REJECTED" as const, 
-                validatedAt: new Date().toISOString(),
-                validatedBy: 'Admin',
-                rejectionReason: reason,
-                comments: undefined
-              }
-            : doc
-        );
-        set({ documents: updatedDocuments });
-        get().updateStats();
-        
-        console.log(`❌ Documento ${documentId} rechazado exitosamente`);
-      } else {
-        throw new Error(result.error || 'Error al rechazar documento');
-      }
-    } catch (error) {
-      console.error('❌ Error rechazando documento:', error);
-      throw error; // Re-throw para que el componente pueda manejarlo
-    } finally {
-      set({ submitting: false });
-    }
+    return get().updateDocument(documentId, "REJECTED", reason);
   },
 
   goToNextPending: () => {
@@ -406,8 +351,15 @@ export const useValidationStore = create<ValidationState>((set, get) => ({
 
     const currentIndex = documents.findIndex(doc => doc.id === currentDocument.id);
     const nextPending = documents.slice(currentIndex + 1).find(doc => doc.validationStatus === "PENDING");
+    
     if (nextPending) {
       set({ currentDocument: nextPending });
+    } else {
+      // Si no hay más pendientes después del actual, buscar desde el principio
+      const firstPending = documents.find(doc => doc.validationStatus === "PENDING");
+      if (firstPending && firstPending.id !== currentDocument.id) {
+        set({ currentDocument: firstPending });
+      }
     }
   },
 
@@ -417,8 +369,15 @@ export const useValidationStore = create<ValidationState>((set, get) => ({
 
     const currentIndex = documents.findIndex(doc => doc.id === currentDocument.id);
     const previousPending = documents.slice(0, currentIndex).reverse().find(doc => doc.validationStatus === "PENDING");
+    
     if (previousPending) {
       set({ currentDocument: previousPending });
+    } else {
+      // Si no hay más pendientes antes del actual, buscar desde el final
+      const lastPending = documents.slice().reverse().find(doc => doc.validationStatus === "PENDING");
+      if (lastPending && lastPending.id !== currentDocument.id) {
+        set({ currentDocument: lastPending });
+      }
     }
   },
 
@@ -429,7 +388,7 @@ export const useValidationStore = create<ValidationState>((set, get) => ({
     const approved = documents.filter(doc => doc.validationStatus === "APPROVED").length;
     const rejected = documents.filter(doc => doc.validationStatus === "REJECTED").length;
     const required = documents.filter(doc => doc.isRequired).length;
-    const completionPercentage = total ? ((approved + rejected) / total) * 100 : 0;
+    const completionPercentage = total > 0 ? ((approved + rejected) / total) * 100 : 0;
 
     set({
       stats: {
@@ -450,7 +409,9 @@ export const useValidationStore = create<ValidationState>((set, get) => ({
       postulant: null,
       stats: null,
       loading: false,
+      error: null,
       submitting: false,
+      initialized: false
     });
   },
 }));

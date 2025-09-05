@@ -44,8 +44,20 @@ class SessionBackendClient {
     const token = await this.getSessionToken()
     
     if (!token) {
-      return { success: false, error: 'No valid session. Please login again.' }
+      console.error('❌ No valid session token found');
+      return { success: false, error: 'Error de autenticación', message: 'Se requiere autenticación para acceder a este recurso', status: 401 }
     }
+
+    // Asegurar que headers exista
+    if (!options.headers) {
+      options.headers = {};
+    }
+
+    // Asegurar que el token se envíe en cada petición
+    Object.assign(options.headers, {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    });
 
     try {
       console.log(`📡 SessionBackendClient request: ${options.method || 'GET'} ${endpoint}`)

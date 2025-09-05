@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState } from "react";
-import { useUserName } from "@/lib/user-utils";
 import {
   X,
   CheckCircle,
@@ -105,7 +104,6 @@ export default function DocumentViewer({
   const [showApprovalDialog, setShowApprovalDialog] = useState(false);
   const [showRejectionDialog, setShowRejectionDialog] = useState(false);
   const [comments, setComments] = useState("");
-  const validatorDisplayName = useUserName(document?.validatedBy);
   const [rejectionReason, setRejectionReason] = useState("");
   const [zoom, setZoom] = useState(100);
   const [rotation, setRotation] = useState(0);
@@ -387,7 +385,7 @@ export default function DocumentViewer({
                           Validado por:
                         </div>
                         <div className="text-sm text-foreground">
-                          {validatorDisplayName}
+                          {document.validatedBy}
                         </div>
                       </div>
                     )}

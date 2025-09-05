@@ -96,17 +96,6 @@ export default function ValidationCompletionModal({
   const [showEmailTemplate, setShowEmailTemplate] = useState(false);
   const [customEmailContent, setCustomEmailContent] = useState("");
 
-// Lista completa de documentos obligatorios del sistema
-const REQUIRED_DOCUMENT_TYPES = [
-  "DNI (Frontal)",
-  "DNI (Dorso)",
-  "Título Universitario y Certificado Analítico",
-  "Certificado de Antecedentes Penales",
-  "Certificado Sin Sanciones Disciplinarias",
-  "Certificado de Antigüedad Profesional",
-  "Constancia de CUIL"
-];
-
   // Calculate validation statistics
   const requiredDocs = documents.filter(doc => doc.isRequired);
   const approvedRequiredDocs = requiredDocs.filter(doc => doc.validationStatus === "APPROVED");
@@ -114,19 +103,8 @@ const REQUIRED_DOCUMENT_TYPES = [
   const pendingRequiredDocs = requiredDocs.filter(doc => doc.validationStatus === "PENDING");
   
   // Diferentes criterios para "completado"
-  // VALIDACIÓN CRÍTICA: Verificar que existan TODOS los 7 documentos obligatorios
-  const presentRequiredTypes = requiredDocs.map(doc => doc.documentType);
-  const missingRequiredTypes = REQUIRED_DOCUMENT_TYPES.filter(
-    type => !presentRequiredTypes.includes(type)
-  );
-  const hasAllRequiredDocuments = missingRequiredTypes.length === 0;
-  
-  const allRequiredApproved = hasAllRequiredDocuments && 
-    requiredDocs.length === REQUIRED_DOCUMENT_TYPES.length && 
-    approvedRequiredDocs.length === REQUIRED_DOCUMENT_TYPES.length;
-  const allRequiredValidated = hasAllRequiredDocuments && 
-    requiredDocs.length === REQUIRED_DOCUMENT_TYPES.length && 
-    pendingRequiredDocs.length === 0; // Aprobados O rechazados, no pendientes
+  const allRequiredApproved = requiredDocs.length > 0 && approvedRequiredDocs.length === requiredDocs.length;
+  const allRequiredValidated = requiredDocs.length > 0 && pendingRequiredDocs.length === 0; // Aprobados O rechazados, no pendientes
   const hasRejectedRequired = rejectedRequiredDocs.length > 0;
   
   console.log('📊 Modal validation stats:', {
@@ -433,32 +411,6 @@ Equipo de Validación de Documentos`;
               </p>
             </div>
           </div>
-          {/* Missing Required Documents Section */}
-          {missingRequiredTypes.length > 0 && (
-            <div className="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-lg border border-orange-200 dark:border-orange-800 mb-4">
-              <h3 className="font-semibold mb-3 flex items-center gap-2 text-orange-700 dark:text-orange-400">
-                <AlertTriangle className="w-5 h-5" />
-                Documentos Obligatorios Faltantes ({missingRequiredTypes.length}/{REQUIRED_DOCUMENT_TYPES.length})
-              </h3>
-              <div className="bg-background p-3 rounded border">
-                <div className="text-sm text-orange-600 dark:text-orange-400 mb-3">
-                  <strong>⚠️ No se puede aprobar la postulación:</strong> Faltan {missingRequiredTypes.length} documentos obligatorios.
-                </div>
-                <div className="grid grid-cols-1 gap-2">
-                  {missingRequiredTypes.map((type, index) => (
-                    <div key={index} className="flex items-center gap-2 p-2 bg-orange-100 dark:bg-orange-900/40 rounded">
-                      <XCircle className="w-4 h-4 text-orange-500 flex-shrink-0" />
-                      <span className="text-sm font-medium">{type}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-3 text-xs text-muted-foreground">
-                  💡 El postulante debe subir estos documentos antes de poder proceder con la aprobación.
-                </div>
-              </div>
-            </div>
-          )}
-
 
           {/* Rejected Documents Details (if any) */}
           {hasRejectedRequired && (
