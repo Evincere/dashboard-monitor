@@ -186,7 +186,18 @@ export async function getDatabaseMetadata(): Promise<any> {
 }
 
 export async function validateSchemaIntegrity(): Promise<any> {
-  return { isValid: true, issues: [], message: 'Schema validation temporarily disabled' };
+  // Mock implementation with complete structure
+  return {
+    isValid: true,
+    issues: [],
+    summary: {
+      totalIssues: 0,
+      errors: 0,
+      warnings: 0,
+      infos: 0
+    },
+    message: 'Schema validation temporarily using mock data'
+  };
 }
 
 export async function analyzeTableStorage(): Promise<any> {

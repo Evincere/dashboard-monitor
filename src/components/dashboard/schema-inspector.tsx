@@ -428,19 +428,19 @@ export function SchemaInspector() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
               <div>
                 <p className="text-sm font-medium">Total Issues</p>
-                <p className="text-2xl font-bold">{validation.summary.totalIssues}</p>
+                <p className="text-2xl font-bold">{validation?.summary?.totalIssues ?? 0}</p>
               </div>
               <div>
                 <p className="text-sm font-medium">Errors</p>
-                <p className="text-2xl font-bold text-red-600">{validation.summary.errors}</p>
+                <p className="text-2xl font-bold text-red-600">{validation?.summary?.errors ?? 0}</p>
               </div>
               <div>
                 <p className="text-sm font-medium">Warnings</p>
-                <p className="text-2xl font-bold text-yellow-600">{validation.summary.warnings}</p>
+                <p className="text-2xl font-bold text-yellow-600">{validation?.summary?.warnings ?? 0}</p>
               </div>
               <div>
                 <p className="text-sm font-medium">Info</p>
-                <p className="text-2xl font-bold text-blue-600">{validation.summary.infos}</p>
+                <p className="text-2xl font-bold text-blue-600">{validation?.summary?.infos ?? 0}</p>
               </div>
             </div>
             {validation.issues.length > 0 && (
